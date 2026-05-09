@@ -1285,8 +1285,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   const [modal,setModal]=useState(null);
   const [crystalClicks,setCrystalClicks]=useState(0);
   const addr = addresses.ETH||"";
-  const tgUserId = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-  const isAdmin = String(tgUserId) === "1192740493";
   const secs=[
     {t:"Security",items:[
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
@@ -1790,16 +1788,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     showToast(`Swapped ${fromAmt} ${fromSym} → ${toAmt.toFixed(6)} ${toSym}`,"success");
   }
 
-  // Check if user is admin
-  const tgUserId = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-  const isAdmin = String(tgUserId) === "1192740493";
-
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(isAdmin?[{id:"admin",Icon:Shield,l:"Admin"}]:[]),
+    {id:"admin",Icon:Shield,l:"Admin"},
   ];
 
   return (
