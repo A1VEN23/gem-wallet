@@ -2384,6 +2384,59 @@ function BackupScreen({ mnemonic, onDone }) {
   );
 }
 
+// ─── AVATAR HEADER COMPONENT ─────────────────────────────────────────────────
+function AvatarHeader({ liveStatus }) {
+  const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"crystal");
+  const [avatarBg,setAvatarBg]=useState(()=>localStorage.getItem(storageKey("avatarBg"))||"graphite");
+  
+  // Listen for storage changes
+  useEffect(()=>{
+    const handleStorage=()=>{
+      setAvatar(localStorage.getItem(storageKey("avatar"))||"crystal");
+      setAvatarBg(localStorage.getItem(storageKey("avatarBg"))||"graphite");
+    };
+    window.addEventListener("storage",handleStorage);
+    // Also check every second for changes from same tab
+    const interval=setInterval(handleStorage,1000);
+    return()=>{
+      window.removeEventListener("storage",handleStorage);
+      clearInterval(interval);
+    };
+  },[]);
+  
+  const bgOptions={
+    graphite:"linear-gradient(135deg,#374151,#1f2937)",
+    gradient:"linear-gradient(135deg,#2563eb,#7c3aed)",
+    purple:"linear-gradient(135deg,#7c3aed,#ec4899)",
+    green:"linear-gradient(135deg,#22C55E,#16a34a)",
+    orange:"linear-gradient(135deg,#F59E0B,#EF4444)",
+    dark:"linear-gradient(135deg,#1f2937,#111827)",
+    blue:"linear-gradient(135deg,#0ea5e9,#2563eb)",
+  };
+  const currentBg=bgOptions[avatarBg]||bgOptions.graphite;
+  
+  const avatarIcons={
+    crystal:<CrystalIcon size={28}/>,
+    gem:<GemLogo size={20}/>,
+    diamond:<Diamond size={20} color="#2563eb"/>,
+    user:<UserCircle size={20} color="#8B9CF7"/>,
+    zap:<Zap size={20} color="#F59E0B"/>,
+  };
+  const currentAvatar=avatarIcons[avatar]||avatarIcons.crystal;
+  
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:36,height:36,borderRadius:10,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.1)"}}>
+        {currentAvatar}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <span style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:"-0.02em"}}>Gem</span>
+        <div style={{width:6,height:6,borderRadius:"50%",background:liveStatus==="live"?"#22C55E":liveStatus==="loading"?"#F59E0B":"#555"}}/>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN WALLET APP ──────────────────────────────────────────────────────────
 function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [tab,setTab]=useState("wallet");
@@ -2530,11 +2583,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       <div style={{position:"sticky",top:0,zIndex:50,padding:"52px 20px 16px",
         background:"linear-gradient(to bottom,#000 80%,transparent)",
         display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <GemLogo size={24}/>
-          <span style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:"-0.02em"}}>Gem</span>
-          <div style={{width:6,height:6,borderRadius:"50%",background:liveStatus==="live"?"#22C55E":liveStatus==="loading"?"#F59E0B":"#555",marginLeft:4}}/>
-        </div>
+        <AvatarHeader liveStatus={liveStatus}/>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={onLock} style={{width:36,height:36,borderRadius:"50%",background:"#111",
             border:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
