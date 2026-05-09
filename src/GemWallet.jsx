@@ -2661,6 +2661,24 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [toast,setToast]=useState(null);
   const [liveStatus,setLiveStatus]=useState("idle"); // idle | loading | live | error
   const [error,setError]=useState(null);
+  const [isReady,setIsReady]=useState(false);
+
+  // Initialize with error handling
+  useEffect(()=>{
+    try {
+      // Validate required props
+      if(!addresses || Object.keys(addresses).length===0){
+        console.warn("[WalletApp] No addresses provided");
+      }
+      if(!mnemonic || mnemonic.length===0){
+        console.warn("[WalletApp] No mnemonic provided");
+      }
+      setIsReady(true);
+    } catch (e) {
+      console.error("[WalletApp] Init error:", e);
+      setError(e.message);
+    }
+  },[]);
 
   // Live state
   const [prices,setPrices]=useState({...INITIAL_PRICES});
@@ -2784,13 +2802,24 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"settings",Icon:Settings,l:"Settings"},
   ];
 
-  // Show error if one occurred
-  if(error){
+  // Show loading state while initializing
+  if (!isReady && !error) {
+    return (
+      <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+        <div style={{fontSize:48,marginBottom:16,animation:"spin 1s linear infinite"}}>💎</div>
+        <h2 style={{color:"#fff",marginBottom:12}}>Loading GemWallet...</h2>
+        <p style={{color:"rgba(255,255,255,0.6)"}}>Please wait</p>
+      </div>
+    );
+  }
+
+  // Show error state if there's an error
+  if (error) {
     return (
       <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
         <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
         <h2 style={{color:"#fff",marginBottom:12}}>Something went wrong</h2>
-        <p style={{color:"rgba(255,255,255,0.6)",textAlign:"center",marginBottom:24}}>{error}</p>
+        <p style={{color:"rgba(255,255,255,0.6)",textAlign:"center",marginBottom:24,maxWidth:"80%"}}>{error}</p>
         <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
           Reload App
         </button>
@@ -2966,6 +2995,15 @@ export default function GemWalletApp() {
         {screen==="pin_lock"&&<PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/>}
         {screen==="wallet"&&<WalletApp addresses={addresses} mnemonic={mnemonic} pin={pin}
           onChangePin={handleChangePin} onLock={handleLock}/>}
+        {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#fff",padding:24}}>
+            <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
+            <h3>Unknown Screen: {screen}</h3>
+            <button onClick={()=>setScreen("wallet")} style={{marginTop:16,padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
+              Go to Wallet
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
