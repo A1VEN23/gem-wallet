@@ -1614,10 +1614,34 @@ function ChangePinModal({ onClose, onChangePin }) {
 }
 
 // ─── WALLET TAB ───────────────────────────────────────────────────────────────
-function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh }) {
+function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances }) {
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
   const total = assets.reduce((s,a)=>s+a.balance*(prices[a.sym]||0),0);
+  
+  // Testnet faucet - add test funds
+  function addTestFunds() {
+    const testAmounts = {
+      ETH: 5.0,
+      BNB: 10.0,
+      SOL: 50.0,
+      TON: 100.0,
+      LTC: 5.0,
+      ARB: 50.0,
+      USDT: 1000.0
+    };
+    
+    setBalances(prev => {
+      const updated = {...prev};
+      Object.entries(testAmounts).forEach(([sym, amount]) => {
+        updated[sym] = (updated[sym] || 0) + amount;
+      });
+      return updated;
+    });
+    
+    // Show toast notification
+    alert("✅ Test funds added!\n\n+5 ETH\n+10 BNB\n+50 SOL\n+100 TON\n+5 LTC\n+50 ARB\n+1000 USDT");
+  }
   
   // Avatar state from localStorage (sync with SettingsTab)
   const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"crystal");
@@ -1688,7 +1712,7 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
       <div style={{display:"flex",justifyContent:"space-around",padding:"0 8px",marginBottom:32}}>
         <ActionBtn icon={<ArrowUpRight size={22} color="#fff"/>} label="Send" onClick={onSend} color="#2563EB"/>
         <ActionBtn icon={<ArrowDownLeft size={22} color="#fff"/>} label="Receive" onClick={onReceive} color="#7c3aed"/>
-        <ActionBtn icon={<CreditCard size={22} color="#fff"/>} label="Buy" onClick={onBuy} color="#059669"/>
+        <ActionBtn icon={<Plus size={22} color="#fff"/>} label="Test" onClick={addTestFunds} color="#22C55E"/>
         <ActionBtn icon={<ArrowLeftRight size={22} color="#fff"/>} label="Swap" onClick={onSwap} color="#D97706"/>
       </div>
       <span style={{fontSize:15,fontWeight:600,color:"#fff",display:"block",marginBottom:14,padding:"0 4px"}}>Assets</span>
@@ -2709,7 +2733,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       <div key={animKey}>
         {tab==="wallet"&&<WalletTab assets={assets} prices={prices} liveStatus={liveStatus}
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
-          onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}/>}
+          onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
+          balances={balances} setBalances={setBalances}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
