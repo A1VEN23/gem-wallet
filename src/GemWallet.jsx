@@ -1397,16 +1397,16 @@ function CancelConfirmModal({ tx, onConfirm, onClose }) {
 function TxDeclinedSuccessModal({ onClose }) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:101,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(10px)",animation:"fadeIn 0.3s ease"}}>
-      <div style={{background:"#1a1a1a",borderRadius:28,padding:"36px 28px",width:"90%",maxWidth:320,border:"1px solid rgba(239,68,68,0.3)",boxShadow:"0 20px 60px rgba(239,68,68,0.2)",textAlign:"center",animation:"slideUp 0.4s ease"}}>
-        <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#EF4444,#DC2626)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:"0 8px 32px rgba(239,68,68,0.4)",animation:"pulse 2s infinite"}}>
-          <X size={40} color="#fff" strokeWidth={3}/>
+      <div style={{background:"#1a1a1a",borderRadius:28,padding:"36px 28px",width:"90%",maxWidth:320,border:"1px solid rgba(34,197,94,0.3)",boxShadow:"0 20px 60px rgba(34,197,94,0.2)",textAlign:"center",animation:"slideUp 0.4s ease"}}>
+        <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22C55E,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:"0 8px 32px rgba(34,197,94,0.4)",animation:"pulse 2s infinite"}}>
+          <Check size={40} color="#fff" strokeWidth={3}/>
         </div>
-        <h3 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 10px"}}>Transaction Declined</h3>
+        <h3 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 10px"}}>Transaction Cancelled</h3>
         <p style={{fontSize:14,color:"rgba(255,255,255,0.5)",margin:"0 0 24px",lineHeight:1.5}}>
           Your transaction has been successfully cancelled. Funds have been returned to your wallet.
         </p>
         <button onClick={onClose}
-          style={{width:"100%",padding:"16px",borderRadius:16,border:"none",background:"#EF4444",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(239,68,68,0.3)"}}>
+          style={{width:"100%",padding:"16px",borderRadius:16,border:"none",background:"#22C55E",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(34,197,94,0.3)"}}>
           Got it
         </button>
       </div>
