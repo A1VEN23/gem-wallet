@@ -8,7 +8,7 @@ import {
   CheckCircle, Clock, AlertCircle, RotateCcw,
   Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
   Image, ChartLine, BellRing, Palette, UserCircle,
-  ShoppingCart
+  ShoppingCart, Crown, Rocket
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -52,6 +52,33 @@ const ASSET_META = [
   { id:"usdt", sym:"USDT", name:"Tether",    color:"#26A17B", bg:"#001A14", chg:0.01, icon:"₮",  chain:"eth"     },
 ];
 const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
+
+// ─── ADDRESS VALIDATION ─────────────────────────────────────────────────────
+// Validates crypto addresses - only accepts real address formats or similar
+function isValidAddress(address, sym) {
+  if (!address || typeof address !== 'string') return false;
+  const trimmed = address.trim();
+  if (trimmed.length < 10) return false; // Too short
+  
+  // ETH / BNB / ARB - 0x prefix + 40 hex chars
+  if (['ETH', 'BNB', 'ARB', 'USDT'].includes(sym)) {
+    return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+  }
+  // SOL - Base58, 32-44 chars
+  if (sym === 'SOL') {
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed);
+  }
+  // TON - EQ/UQ prefix + 48 chars
+  if (sym === 'TON') {
+    return /^(EQ|UQ)[a-zA-Z0-9_-]{46,48}$/.test(trimmed);
+  }
+  // LTC - L/M prefix
+  if (sym === 'LTC') {
+    return /^[LM][a-zA-Z0-9]{26,33}$/.test(trimmed);
+  }
+  // Generic fallback - accept if looks like address (alphanumeric, min length)
+  return /^[a-zA-Z0-9]{20,60}$/.test(trimmed);
+}
 
 // ─── PRICE FETCHER ────────────────────────────────────────────────────────────
 async function fetchLivePrices() {
@@ -670,6 +697,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const [sending,setSending]=useState(false);
   const [txHash,setTxHash]=useState("");
   const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
+  const [addrError,setAddrError]=useState("");
 
   const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
   const price = prices[sel.sym]||0;
@@ -683,8 +711,22 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     setSelectedNet(ASSET_NETWORKS[a.sym]?.[0]||null);
   }
 
+  function handleToChange(val) {
+    setTo(val);
+    if (val && !isValidAddress(val, sel.sym)) {
+      setAddrError(`Invalid ${sel.sym} address format`);
+    } else {
+      setAddrError("");
+    }
+  }
+
   function next() {
-    if(step===1&&to) setStep(2);
+    if(step===1){
+      if(!to){ setAddrError("Enter recipient address"); return; }
+      if(!isValidAddress(to, sel.sym)){ setAddrError(`Invalid ${sel.sym} address format`); return; }
+      setAddrError("");
+      setStep(2);
+    }
     else if(step===2&&amt) setStep(3);
     else if(step===3) {
       const num=parseFloat(amt);
@@ -717,10 +759,10 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   }
 
   return (
-    <Sheet onClose={onClose} title={done?"Sent! 🎉":"Send"}>
+    <Sheet onClose={onClose} title={done?"Sent!":"Send"}>
       {done?(
         <div style={{padding:"48px 24px",textAlign:"center"}}>
-          <div style={{fontSize:64,marginBottom:16}}>✅</div>
+          <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Check size={40} color="#fff"/></div>
           <p style={{color:"#22C55E",fontSize:20,fontWeight:700,margin:0}}>Transaction Sent!</p>
           <p style={{color:"rgba(255,255,255,0.4)",fontSize:13,marginTop:8}}>Broadcasting to network…</p>
         </div>
@@ -750,12 +792,13 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                 </div>
               )}
               <div style={{position:"relative"}}>
-                <input value={to} onChange={e=>setTo(e.target.value)}
+                <input value={to} onChange={e=>handleToChange(e.target.value)}
                   placeholder={curNet?.placeholder||"Recipient address"}
                   style={{width:"100%",padding:"16px",borderRadius:14,
-                    border:`1px solid ${curNet?curNet.color+"33":"rgba(255,255,255,0.1)"}`,
+                    border:`1px solid ${addrError?"#ef4444":curNet?curNet.color+"33":"rgba(255,255,255,0.1)"}`,
                     background:"#1a1a1a",color:"#fff",fontSize:14,outline:"none",
                     fontFamily:"monospace",boxSizing:"border-box",transition:"border-color 0.2s"}}/>
+                {addrError&&<p style={{color:"#ef4444",fontSize:12,margin:"6px 0 0"}}>{addrError}</p>}
                 {curNet&&(
                   <div style={{position:"absolute",top:10,right:12,
                     display:"flex",alignItems:"center",gap:4,
@@ -812,10 +855,10 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
               ))}
             </div>
           )}
-          <button onClick={next} disabled={(step===1&&!to)||(step===2&&!amt)||sending}
+          <button onClick={next} disabled={(step===1&&(!to||addrError))||(step===2&&!amt)||sending}
             style={{width:"100%",padding:"17px",borderRadius:16,border:"none",marginTop:24,
-              background:(step===1&&!to)||(step===2&&!amt)||sending?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#2563eb,#7c3aed)",
-              color:(step===1&&!to)||(step===2&&!amt)||sending?"rgba(255,255,255,0.3)":"#fff",
+              background:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#2563eb,#7c3aed)",
+              color:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.3)":"#fff",
               fontSize:16,fontWeight:600,cursor:"pointer",transition:"all 0.2s",
               display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
             {sending?<><RefreshCw size={18} style={{animation:"spin 1s linear infinite"}}/>Sending…</>:step===3?"Confirm & Send ✓":"Continue →"}
@@ -1122,7 +1165,7 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
   if(done) return (
     <Sheet onClose={onClose} title="">
       <div style={{padding:"48px 24px",textAlign:"center"}}>
-        <div style={{fontSize:64,marginBottom:16}}>✅</div>
+        <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Check size={40} color="#fff"/></div>
         <p style={{color:"#22C55E",fontSize:20,fontWeight:700,margin:0}}>Swap Complete!</p>
         <p style={{color:"rgba(255,255,255,0.6)",fontSize:15,margin:"10px 0 0"}}>
           {amt} {fromSym} → {toAmt} {toSym}
@@ -1227,7 +1270,7 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
             fontSize:16,fontWeight:600,cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           {swapping?<><RefreshCw size={18} style={{animation:"spin 1s linear infinite"}}/>Swapping…</>:
-            <>⚡ Swap {fromSym} → {toSym}</>}
+            <><Zap size={18} color="#f59e0b" style={{marginRight:6}}/>Swap {fromSym} → {toSym}</>}
         </button>
       </div>
     </Sheet>
@@ -1304,7 +1347,7 @@ function AdminModal({ onClose, prices }) {
   };
 
   return (
-    <Sheet onClose={onClose} title="👑 Admin Panel">
+    <Sheet onClose={onClose} title={<><Crown size={20} color="#f59e0b" style={{marginRight:8,verticalAlign:"middle"}}/>Admin Panel</>}>
       <div style={{padding:20,maxHeight:"80vh",overflow:"auto"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",borderRadius:12}}>
           <Shield size={28} color="#fff" />
@@ -2622,7 +2665,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
   }
 
   return (
-    <Sheet onClose={onClose} title="👑 Admin Panel">
+    <Sheet onClose={onClose} title={<><Crown size={20} color="#f59e0b" style={{marginRight:8,verticalAlign:"middle"}}/>Admin Panel</>}>
       <div style={{padding:"0 0 100px",maxHeight:"85vh",overflow:"auto"}}>
         {/* Progress Bar */}
         <div style={{padding:"16px 20px",background:"linear-gradient(135deg,#0f0a00 0%,#1a0f00 100%)"}}>
@@ -2792,7 +2835,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
             {/* Users Balance Table */}
             <div style={{background:"#111",borderRadius:16,padding:16,marginBottom:16,border:"1px solid rgba(255,255,255,0.08)"}}>
-              <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:"0 0 12px"}}>💰 User Balances</p>
+              <div style={{display:"flex",alignItems:"center",gap:8,margin:"0 0 12px"}}><Wallet size={16} color="#22c55e"/><p style={{fontSize:13,fontWeight:600,color:"#fff",margin:0}}>User Balances</p></div>
               <div style={{maxHeight:200,overflow:"auto"}}>
                 {selectedUsersList.map(u=> {
                   const userTokens=ASSET_META.filter(a=>(u.balances?.[a.sym]||0)>0.001);
@@ -3584,7 +3627,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       {modal==="buy"&&(
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
           <div style={{padding:"48px 24px",textAlign:"center"}}>
-            <p style={{fontSize:56,margin:"0 0 20px"}}>🚀</p>
+            <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><Rocket size={40} color="#fff"/></div>
             <h3 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 12px",letterSpacing:"-0.02em"}}>Coming Soon</h3>
             <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:32}}>
               Buying crypto directly in the wallet is coming soon. Stay tuned for updates!
