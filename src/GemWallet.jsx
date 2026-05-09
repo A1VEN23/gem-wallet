@@ -7,7 +7,7 @@ import {
   ExternalLink, TrendingUp, TrendingDown, Zap,
   CheckCircle, Clock, AlertCircle, RotateCcw,
   Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
-  Image, SquaresFour, ChartLine, BellRing, Palette, UserCircle
+  Image, ChartLine, BellRing, Palette, UserCircle
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -2300,7 +2300,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
-    {id:"nft",Icon:SquaresFour,l:"NFT"},
+    {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
   ];
 
