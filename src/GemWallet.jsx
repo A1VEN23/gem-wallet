@@ -2475,6 +2475,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
         id:`user_${Date.now()}_${i}`,
         name:names[i],
         address:genAddr("0x",40),
+        addresses:{ETH:genAddr("0x",40),TON:genAddr("EQ",40),BNB:genAddr("0x",40),LTC:genAddr("L",30),ARB:genAddr("0x",40),SOL:genAddr("",44),USDT:genAddr("0x",40)},
         balances:userBalances,
         status:Math.random()>0.2?"active":"inactive"
       });
@@ -2586,7 +2587,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
                   <div style={{textAlign:"right"}}>
                     {ASSET_META.slice(0,3).map(a=> (
                       <p key={a.sym} style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:0}}>
-                        {u.balances[a.sym]?.toFixed(2)} {a.sym}
+                        {u.balances?.[a.sym]?.toFixed(2) ?? "0.00"} {a.sym}
                       </p>
                     ))}
                   </div>
@@ -3231,12 +3232,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <AvatarHeader liveStatus={liveStatus}/>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {/* Admin button - always visible for testing */}
-          <button onClick={()=>setModal("admin")} style={{padding:"6px 12px",borderRadius:10,border:"none",
-            background:"linear-gradient(135deg,#DC2626,#991B1B)",color:"#fff",fontSize:11,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:4,fontWeight:600}}>
-            <Shield size={12}/> ADMIN
-          </button>
           <button onClick={onLock} style={{width:36,height:36,borderRadius:"50%",background:"#111",
             border:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
             <Lock size={14} color="rgba(255,255,255,0.4)"/>
@@ -3254,8 +3249,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
           onEnableAdmin={enableAdminMode} isAdmin={userIsAdmin}/>}
-        {tab==="admin"&&<AdminPanel prices={prices}/>}
-        {tab==="admin"&&<AdminPanel prices={prices}/>}
+        {tab==="admin"&&<AdminPanel addresses={addresses} balances={balances} setBalances={setBalances}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
