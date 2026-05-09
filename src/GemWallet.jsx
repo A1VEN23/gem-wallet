@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight,
-  Copy, Check, Eye, EyeOff, Settings, Wallet, Image, Activity,
+  Copy, Check, Eye, EyeOff, Settings, Wallet, Activity,
   ChevronRight, Shield, Key, HelpCircle, X,
   Plus, ChevronDown, RefreshCw, Globe, Lock, AlertTriangle, Bell,
   ExternalLink, TrendingUp, TrendingDown, Zap,
@@ -54,12 +54,12 @@ const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT:
 // ─── PRICE FETCHER ────────────────────────────────────────────────────────────
 async function fetchLivePrices() {
   try {
-    const ids = "ethereum,binancecoin,solana,toncoin,litecoin,arbitrum,tether";
+    const ids = "ethereum,binancecoin,solana,the-open-network,litecoin,arbitrum,tether";
     const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
     const data = await res.json();
     const map = {
       ethereum: "ETH", binancecoin: "BNB", solana: "SOL",
-      toncoin: "TON", litecoin: "LTC", arbitrum: "ARB", tether: "USDT"
+      "the-open-network": "TON", litecoin: "LTC", arbitrum: "ARB", tether: "USDT"
     };
     const prices = {}, changes = {};
     Object.entries(map).forEach(([cgId, sym]) => {
@@ -947,38 +947,6 @@ function TxDetail({ tx, onClose }) {
   );
 }
 
-// ─── NFT DETAIL ───────────────────────────────────────────────────────────────
-function NFTDetail({ nft, onClose, prices }) {
-  return (
-    <Sheet onClose={onClose} title={nft.name}>
-      <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{height:220,background:nft.img,borderRadius:20,
-          display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{width:120,height:120,borderRadius:20,background:`${nft.accent}22`,
-            border:`1px solid ${nft.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:56}}>🖼</div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[["Collection",nft.col],["Floor",`${nft.floor} ETH`],
-            ["Est. Value",`$${(parseFloat(nft.floor)*(prices.ETH||3241)).toLocaleString()}`],["Chain","Ethereum"]].map(([k,v])=>(
-            <div key={k} style={{background:"#1a1a1a",borderRadius:12,padding:"12px 14px"}}>
-              <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 3px"}}>{k}</p>
-              <p style={{fontSize:13,fontWeight:700,color:nft.accent,margin:0}}>{v}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <button style={{flex:1,padding:"16px",borderRadius:14,border:"none",
-            background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-            List for Sale
-          </button>
-          <button style={{flex:1,padding:"16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
-            background:"transparent",color:"#fff",fontSize:14,fontWeight:500,cursor:"pointer"}}>Transfer</button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
 // ─── SETTINGS MODALS ──────────────────────────────────────────────────────────
 function RecoveryModal({ onClose, mnemonic }) {
   const [rev,setRev]=useState(false);
@@ -1224,26 +1192,6 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
   );
 }
 
-// ─── NFT TAB ─────────────────────────────────────────────────────────────────
-function NFTTab({ prices }) {
-  const [sel,setSel]=useState(null);
-  return (
-    <div style={{padding:"0 16px 100px"}}>
-      {sel&&<NFTDetail nft={sel} onClose={()=>setSel(null)} prices={prices}/>}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,padding:"0 4px"}}>
-        <span style={{fontSize:15,fontWeight:600,color:"#fff"}}>My NFTs</span>
-        <span style={{fontSize:13,color:"rgba(255,255,255,0.35)"}}>0 items</span>
-      </div>
-      <div style={{textAlign:"center",padding:"48px 24px"}}>
-        <p style={{fontSize:32,margin:"0 0 12px"}}>🖼</p>
-        <p style={{color:"rgba(255,255,255,0.4)",fontSize:14,margin:0}}>У вас пока нет NFT</p>
-      </div>
-      <div style={{display:"none"}}>
-        {/* Placeholder to preserve NFTDetail reference */}
-      </div>
-    </div>
-  );
-}
 
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
 function ActivityTab({ txHistory }) {
@@ -1548,7 +1496,7 @@ function BackupScreen({ mnemonic, onDone }) {
       {rev&&step==="show"&&(
         <>
           <p style={{fontSize:13,color:"rgba(255,255,255,0.5)",textAlign:"center",marginBottom:16}}>
-            Verify 3 words to confirm you've written them down:
+            Verify 4 words to confirm you've written them down:
           </p>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
             {verifyWords.map((v,i)=>(
@@ -1669,7 +1617,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
-    {id:"nft",Icon:Image,l:"NFTs"},
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"settings",Icon:Settings,l:"Settings"},
   ];
@@ -1716,7 +1663,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="wallet"&&<WalletTab assets={assets} prices={prices} liveStatus={liveStatus}
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}/>}
-        {tab==="nft"&&<NFTTab prices={prices}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
