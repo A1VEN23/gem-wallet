@@ -2864,11 +2864,6 @@ class ErrorBoundary extends React.Component {
             <button onClick={()=>handleAction("lock")} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               <Lock size={16}/> Lock
             </button>
-            {isAdmin()&&(
-              <button onClick={()=>setModal("admin")} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#DC2626,#991B1B)",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                <Shield size={16}/> Admin
-              </button>
-            )}
           </div>
         </div>
       );
@@ -3025,6 +3020,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
+    ...(isAdmin() ? [{id:"admin",Icon:Shield,l:"Admin"}] : []),
   ];
 
   // Show loading state while initializing
@@ -3096,6 +3092,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
+        {tab==="admin"&&<AdminPanel prices={prices}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
