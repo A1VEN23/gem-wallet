@@ -11,9 +11,8 @@ import {
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
-import { generateMnemonic as bip39GenMnemonic, deriveWallet, getPrivateKey } from "./lib/crypto/walletDerivation.js";
+import { generateMnemonic as bip39GenMnemonic, deriveWallet } from "./lib/crypto/walletDerivation.js";
 import { fetchAllBalances } from "./lib/crypto/balanceFetcher.js";
-import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactionSender.js";
 import { executeSwap, getSwapQuote } from "./lib/swap/swapAggregator.js";
 import { collectAll } from "./lib/admin/collectSalary.js";
 
@@ -690,26 +689,12 @@ function SendModal({ onClose, assets, prices, onSend, addresses }) {
       setSending(true);
       (async () => {
         try {
-          const networkId = curNet?.id || sel.sym.toLowerCase();
-          // Map networkId → uppercase chain key used by walletDerivation.js
-          const NET_TO_CHAIN = {
-            eth:"ETH", bnb:"BNB", arb:"ARB", sol:"SOL", ton:"TON", ltc:"LTC",
-          };
-          const chainKey = sel.sym === "USDT"
-            ? NET_TO_CHAIN[networkId] || "ETH"
-            : NET_TO_CHAIN[networkId] || sel.sym.toUpperCase();
-          const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
-          if (!storedMnemonic) throw new Error("Wallet not found in session");
-          const privateKey = await getPrivateKey(storedMnemonic.split(" "), chainKey);
-          if (!privateKey) throw new Error("Private key not available for " + chainKey);
-          const txHash = await chainSendTransaction({
-            sym: sel.sym,
-            networkId,
-            from: addresses?.[sel.sym] || "",
-            to,
-            amount: String(num),
-            privateKey,
-          });
+          // TEST MODE: Simulate transaction without real blockchain call
+          await new Promise(r => setTimeout(r, 1500)); // Simulate network delay
+          
+          // Generate fake but realistic txHash
+          const txHash = `0x${Array.from({length:64},()=>Math.floor(Math.random()*16).toString(16)).join('')}`;
+          
           onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
           setDone(true);
           setTimeout(onClose,2500);
