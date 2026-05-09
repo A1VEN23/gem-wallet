@@ -246,6 +246,41 @@ function NftAddIcon({ size = 32 }) {
   );
 }
 
+// ─── CRYSTAL AVATAR ICON ────────────────────────────────────────────────────
+function CrystalIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="crystalTop" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#e0e7ff" />
+          <stop offset="50%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e0e7ff" />
+        </linearGradient>
+        <linearGradient id="crystalLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#c7d2fe" />
+          <stop offset="100%" stopColor="#a5b4fc" />
+        </linearGradient>
+        <linearGradient id="crystalRight" x1="100%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#c7d2fe" />
+          <stop offset="100%" stopColor="#818cf8" />
+        </linearGradient>
+        <linearGradient id="crystalCenter" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e0e7ff" />
+        </linearGradient>
+      </defs>
+      {/* Top facet */}
+      <path d="M24 4 L8 16 L24 16 L40 16 Z" fill="url(#crystalTop)"/>
+      {/* Left facet */}
+      <path d="M8 16 L24 16 L24 44 L4 24 Z" fill="url(#crystalLeft)"/>
+      {/* Right facet */}
+      <path d="M24 16 L40 16 L44 24 L24 44 Z" fill="url(#crystalRight)"/>
+      {/* Center facet */}
+      <path d="M24 16 L24 44 L4 24 L24 16 Z" fill="url(#crystalCenter)" opacity="0.9"/>
+    </svg>
+  );
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 // Fetch historical price data from CoinGecko
@@ -1673,45 +1708,25 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   const [priceAlertModal,setPriceAlertModal]=useState(false);
   const addr = addresses.ETH||"";
   
-  // Avatar & Background state
-  const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"gem");
-  const [avatarBg,setAvatarBg]=useState(()=>localStorage.getItem(storageKey("avatarBg"))||"gradient");
-  
-  // Price Alerts state
-  const [priceAlerts,setPriceAlerts]=useState(()=>{
-    const saved=localStorage.getItem(storageKey("priceAlerts"));
-    return saved?JSON.parse(saved):[];
-  });
-  const [newAlert,setNewAlert]=useState({sym:"ETH",targetPrice:"",condition:"above"});
+  // Avatar & Background state - default crystal + graphite
+  const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"crystal");
+  const [avatarBg,setAvatarBg]=useState(()=>localStorage.getItem(storageKey("avatarBg"))||"graphite");
 
   useEffect(()=>{
     localStorage.setItem(storageKey("avatar"),avatar);
     localStorage.setItem(storageKey("avatarBg"),avatarBg);
   },[avatar,avatarBg]);
 
-  useEffect(()=>{
-    localStorage.setItem(storageKey("priceAlerts"),JSON.stringify(priceAlerts));
-  },[priceAlerts]);
-
-  function addPriceAlert() {
-    if(!newAlert.targetPrice) return;
-    setPriceAlerts(prev=>[...prev,{...newAlert,id:Date.now(),createdAt:new Date().toISOString()}]);
-    setNewAlert({sym:"ETH",targetPrice:"",condition:"above"});
-  }
-
-  function removePriceAlert(id) {
-    setPriceAlerts(prev=>prev.filter(a=>a.id!==id));
-  }
-
   const avatarOptions=[
+    {id:"crystal",icon:<CrystalIcon size={28}/>,label:"Crystal"},
     {id:"gem",icon:<GemLogo size={28}/>,label:"Gem"},
     {id:"diamond",icon:<Diamond size={28} color="#2563eb"/>,label:"Diamond"},
     {id:"user",icon:<UserCircle size={28} color="#8B9CF7"/>,label:"User"},
     {id:"zap",icon:<Zap size={28} color="#F59E0B"/>,label:"Zap"},
-    {id:"shield",icon:<Shield size={28} color="#22C55E"/>,label:"Shield"},
   ];
 
   const bgOptions=[
+    {id:"graphite",style:"linear-gradient(135deg,#374151,#1f2937)",label:"Graphite"},
     {id:"gradient",style:"linear-gradient(135deg,#2563eb,#7c3aed)",label:"Ocean"},
     {id:"purple",style:"linear-gradient(135deg,#7c3aed,#ec4899)",label:"Sunset"},
     {id:"green",style:"linear-gradient(135deg,#22C55E,#16a34a)",label:"Forest"},
@@ -1769,7 +1784,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
             </div>
             
             <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px",fontWeight:600}}>AVATAR ICON</p>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:20}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginBottom:20}}>
               {avatarOptions.map(opt=> (
                 <button key={opt.id} onClick={()=>setAvatar(opt.id)}
                   style={{aspectRatio:"1",borderRadius:12,border:"none",background:avatar===opt.id?"#2563eb":"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
@@ -1779,7 +1794,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
             </div>
             
             <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px",fontWeight:600}}>BACKGROUND</p>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
               {bgOptions.map(bg=> (
                 <button key={bg.id} onClick={()=>setAvatarBg(bg.id)}
                   style={{padding:"12px",borderRadius:12,border:"2px solid "+(avatarBg===bg.id?"#2563eb":"transparent"),background:bg.style,cursor:"pointer"}}>
