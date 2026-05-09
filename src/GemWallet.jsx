@@ -7,7 +7,8 @@ import {
   ExternalLink, TrendingUp, TrendingDown, Zap,
   CheckCircle, Clock, AlertCircle, RotateCcw,
   Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
-  Image, ChartLine, BellRing, Palette, UserCircle
+  Image, ChartLine, BellRing, Palette, UserCircle,
+  ShoppingCart
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
