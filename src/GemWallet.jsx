@@ -247,19 +247,20 @@ function NftAddIcon({ size = 32 }) {
 }
 
 // ─── CRYSTAL AVATAR ICON ────────────────────────────────────────────────────
+// Crystal without background - background is set via CSS (graphite gradient)
 function CrystalIcon({ size = 52 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Blue background circle */}
-      <circle cx="26" cy="26" r="26" fill="#2563eb"/>
       {/* White crystal - top flat facet */}
-      <path d="M26 10 L12 20 L26 20 L40 20 Z" fill="#ffffff" opacity="0.95"/>
+      <path d="M26 8 L10 18 L26 18 L42 18 Z" fill="#ffffff" opacity="0.98"/>
       {/* White crystal - left facet */}
-      <path d="M12 20 L26 20 L26 42 L8 26 Z" fill="#e0e7ff" opacity="0.9"/>
+      <path d="M10 18 L26 18 L26 44 L6 24 Z" fill="#e0e7ff" opacity="0.92"/>
       {/* White crystal - right facet */}
-      <path d="M26 20 L40 20 L44 26 L26 42 Z" fill="#c7d2fe" opacity="0.85"/>
+      <path d="M26 18 L42 18 L46 24 L26 44 Z" fill="#c7d2fe" opacity="0.88"/>
       {/* White crystal - center bottom */}
-      <path d="M26 20 L26 42 L8 26 L26 20 Z" fill="#ffffff" opacity="0.8"/>
+      <path d="M26 18 L26 44 L6 24 L26 18 Z" fill="#ffffff" opacity="0.85"/>
+      {/* Subtle outline for visibility on dark backgrounds */}
+      <path d="M26 8 L10 18 L6 24 L26 44 L46 24 L42 18 Z" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" fill="none"/>
     </svg>
   );
 }
