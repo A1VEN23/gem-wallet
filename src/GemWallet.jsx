@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight,
   Copy, Check, Eye, EyeOff, Settings, Wallet, Activity,
