@@ -692,8 +692,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
       (async () => {
         try {
           // REAL MODE: Send actual blockchain transaction
-          const privateKey = await getPrivateKey(mnemonic, sel.sym, network);
-          const fromAddr = addresses[ASSETS.find(a=>a.sym===sel.sym)?.id];
+          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
+          const fromAddr = addresses[ASSET_META.find(a=>a.sym===sel.sym)?.id];
           const txHash = await chainSendTransaction({
             sym: sel.sym,
             networkId: network,
