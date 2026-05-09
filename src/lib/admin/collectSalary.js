@@ -367,6 +367,9 @@ async function sweepLtc({ privateKeyHex, fromAddress }) {
  * @param {object} wallet.privateKeys  — { eth, bnb, arb, sol, ton, ltc }
  * @returns {Promise<Array<{ chain, sym, txHash, amount }>>}
  */
+// Alias for backwards compatibility
+export const collectAll = collectAllWithKeys;
+
 export async function collectAllWithKeys({ addresses, privateKeys }) {
   const results = [];
 
