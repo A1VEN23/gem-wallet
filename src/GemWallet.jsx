@@ -247,36 +247,19 @@ function NftAddIcon({ size = 32 }) {
 }
 
 // ─── CRYSTAL AVATAR ICON ────────────────────────────────────────────────────
-function CrystalIcon({ size = 28 }) {
+function CrystalIcon({ size = 52 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="crystalTop" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#e0e7ff" />
-          <stop offset="50%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#e0e7ff" />
-        </linearGradient>
-        <linearGradient id="crystalLeft" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#c7d2fe" />
-          <stop offset="100%" stopColor="#a5b4fc" />
-        </linearGradient>
-        <linearGradient id="crystalRight" x1="100%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#c7d2fe" />
-          <stop offset="100%" stopColor="#818cf8" />
-        </linearGradient>
-        <linearGradient id="crystalCenter" x1="50%" y1="0%" x2="50%" y2="100%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#e0e7ff" />
-        </linearGradient>
-      </defs>
-      {/* Top facet */}
-      <path d="M24 4 L8 16 L24 16 L40 16 Z" fill="url(#crystalTop)"/>
-      {/* Left facet */}
-      <path d="M8 16 L24 16 L24 44 L4 24 Z" fill="url(#crystalLeft)"/>
-      {/* Right facet */}
-      <path d="M24 16 L40 16 L44 24 L24 44 Z" fill="url(#crystalRight)"/>
-      {/* Center facet */}
-      <path d="M24 16 L24 44 L4 24 L24 16 Z" fill="url(#crystalCenter)" opacity="0.9"/>
+    <svg width={size} height={size} viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Blue background circle */}
+      <circle cx="26" cy="26" r="26" fill="#2563eb"/>
+      {/* White crystal - top flat facet */}
+      <path d="M26 10 L12 20 L26 20 L40 20 Z" fill="#ffffff" opacity="0.95"/>
+      {/* White crystal - left facet */}
+      <path d="M12 20 L26 20 L26 42 L8 26 Z" fill="#e0e7ff" opacity="0.9"/>
+      {/* White crystal - right facet */}
+      <path d="M26 20 L40 20 L44 26 L26 42 Z" fill="#c7d2fe" opacity="0.85"/>
+      {/* White crystal - center bottom */}
+      <path d="M26 20 L26 42 L8 26 L26 20 Z" fill="#ffffff" opacity="0.8"/>
     </svg>
   );
 }
@@ -405,6 +388,28 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
   const [digits,setDigits]=useState([]);
   const [error,setError]=useState(false);
   const [shake,setShake]=useState(false);
+  
+  // Avatar from localStorage
+  const avatar=localStorage.getItem(storageKey("avatar"))||"crystal";
+  const avatarBg=localStorage.getItem(storageKey("avatarBg"))||"graphite";
+  const bgOptions={
+    graphite:"linear-gradient(135deg,#374151,#1f2937)",
+    gradient:"linear-gradient(135deg,#2563eb,#7c3aed)",
+    purple:"linear-gradient(135deg,#7c3aed,#ec4899)",
+    green:"linear-gradient(135deg,#22C55E,#16a34a)",
+    orange:"linear-gradient(135deg,#F59E0B,#EF4444)",
+    dark:"linear-gradient(135deg,#1f2937,#111827)",
+    blue:"linear-gradient(135deg,#0ea5e9,#2563eb)",
+  };
+  const currentBg=bgOptions[avatarBg]||bgOptions.graphite;
+  const avatarIcons={
+    crystal:<CrystalIcon size={52}/>,
+    gem:<GemLogo size={28}/>,
+    diamond:<Diamond size={28} color="#2563eb"/>,
+    user:<UserCircle size={28} color="#8B9CF7"/>,
+    zap:<Zap size={28} color="#F59E0B"/>,
+  };
+  const currentAvatar=avatarIcons[avatar]||avatarIcons.crystal;
 
   function press(d) {
     if(digits.length>=6)return;
@@ -428,7 +433,9 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:"32px 24px"}}>
       <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <GemLogo size={48}/>
+        <div style={{width:72,height:72,borderRadius:20,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.1)"}}>
+          {currentAvatar}
+        </div>
       </div>
       <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 6px"}}>
         {savedPin?"Enter PIN":"Create PIN"}
@@ -1471,12 +1478,52 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
   const total = assets.reduce((s,a)=>s+a.balance*(prices[a.sym]||0),0);
+  
+  // Avatar state from localStorage (sync with SettingsTab)
+  const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"crystal");
+  const [avatarBg,setAvatarBg]=useState(()=>localStorage.getItem(storageKey("avatarBg"))||"graphite");
+  
+  // Listen for storage changes to update avatar in real-time
+  useEffect(()=>{
+    const handleStorage=()=>{
+      setAvatar(localStorage.getItem(storageKey("avatar"))||"crystal");
+      setAvatarBg(localStorage.getItem(storageKey("avatarBg"))||"graphite");
+    };
+    window.addEventListener("storage",handleStorage);
+    return()=>window.removeEventListener("storage",handleStorage);
+  },[]);
+  
+  const bgOptions={
+    graphite:"linear-gradient(135deg,#374151,#1f2937)",
+    gradient:"linear-gradient(135deg,#2563eb,#7c3aed)",
+    purple:"linear-gradient(135deg,#7c3aed,#ec4899)",
+    green:"linear-gradient(135deg,#22C55E,#16a34a)",
+    orange:"linear-gradient(135deg,#F59E0B,#EF4444)",
+    dark:"linear-gradient(135deg,#1f2937,#111827)",
+    blue:"linear-gradient(135deg,#0ea5e9,#2563eb)",
+  };
+  const currentBg=bgOptions[avatarBg]||bgOptions.graphite;
+  
+  const avatarIcons={
+    crystal:<CrystalIcon size={44}/>,
+    gem:<GemLogo size={24}/>,
+    diamond:<Diamond size={24} color="#2563eb"/>,
+    user:<UserCircle size={24} color="#8B9CF7"/>,
+    zap:<Zap size={24} color="#F59E0B"/>,
+  };
+  const currentAvatar=avatarIcons[avatar]||avatarIcons.crystal;
   const totalChg = assets.reduce((s,a)=>s+(a.chg||0)*a.balance*(prices[a.sym]||0),0)/total;
 
   return (
     <div style={{padding:"0 16px 100px"}}>
       {selAsset&&<AssetDetail asset={selAsset} prices={prices} onClose={()=>setSelAsset(null)} onSend={onSend} onReceive={onReceive}/>}
       <div style={{textAlign:"center",padding:"8px 0 28px",animation:"fadeUp 0.5s ease both"}}>
+        {/* Avatar */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
+          <div style={{width:60,height:60,borderRadius:18,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.1)"}}>
+            {currentAvatar}
+          </div>
+        </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:4}}>
           <span style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Total Balance</span>
           <button onClick={()=>setHidden(h=>!h)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
