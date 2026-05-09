@@ -1042,7 +1042,7 @@ function ReceiveModal({ onClose, addresses }) {
 }
 
 // ─── SWAP MODAL ───────────────────────────────────────────────────────────────
-function SwapModal({ onClose, assets, prices, onSwap, addresses }) {
+function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, network }) {
   const [fromSym,setFromSym]=useState(assets[0]?.sym||"ETH");
   const [toSym,setToSym]=useState(assets[1]?.sym||"BNB");
   const [amt,setAmt]=useState("");
@@ -1078,9 +1078,8 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses }) {
           eth:"ETH", bnb:"BNB", arb:"ARB", sol:"SOL", ton:"TON", ltc:"LTC",
         };
         const chainKey = NET_TO_CHAIN[networkId] || fromSym.toUpperCase();
-        const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
-        if (!storedMnemonic) throw new Error("Wallet not found in session");
-        const privateKey = await getPrivateKey(storedMnemonic.split(" "), chainKey);
+        if (!mnemonic || mnemonic.length === 0) throw new Error("Wallet mnemonic not available");
+        const privateKey = await getPrivateKey(mnemonic.join(" "), chainKey);
         if (!privateKey) throw new Error("Private key not available for " + chainKey);
         const walletAddress = addresses?.[fromSym] || "";
         const { txHash } = await executeSwap({
@@ -2872,7 +2871,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
       {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network}/>}
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
-      {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses}/>}
+      {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
       {modal==="buy"&&(
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
           <div style={{padding:"48px 24px",textAlign:"center"}}>
