@@ -6,7 +6,7 @@ import {
   Plus, ChevronDown, RefreshCw, Globe, Lock, AlertTriangle, Bell,
   ExternalLink, TrendingUp, TrendingDown, Zap,
   CheckCircle, Clock, AlertCircle, RotateCcw,
-  Users, Download, Building2, LayoutGrid
+  Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -72,6 +72,43 @@ async function fetchLivePrices() {
   } catch {
     return null;
   }
+}
+
+// ─── GEM LOGO SVG COMPONENT ─────────────────────────────────────────────────
+function GemLogo({ size = 40, color = "#2563eb" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gemGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#2563eb" />
+          <stop offset="50%" stopColor="#7c3aed" />
+          <stop offset="100%" stopColor="#2563eb" />
+        </linearGradient>
+        <filter id="gemGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      {/* Diamond shape */}
+      <path 
+        d="M20 2 L35 12 L20 38 L5 12 Z" 
+        fill="url(#gemGradient)" 
+        stroke="rgba(255,255,255,0.3)" 
+        strokeWidth="1"
+        filter="url(#gemGlow)"
+      />
+      {/* Inner facets */}
+      <path d="M20 2 L20 12 L35 12 Z" fill="rgba(255,255,255,0.15)"/>
+      <path d="M20 2 L20 12 L5 12 Z" fill="rgba(255,255,255,0.1)"/>
+      <path d="M20 12 L35 12 L20 38 Z" fill="rgba(255,255,255,0.05)"/>
+      <path d="M20 12 L5 12 L20 38 Z" fill="rgba(255,255,255,0.08)"/>
+      {/* Center highlight */}
+      <circle cx="20" cy="18" r="3" fill="rgba(255,255,255,0.4)"/>
+    </svg>
+  );
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -175,7 +212,9 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
   return (
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:"32px 24px"}}>
-      <div style={{fontSize:36,marginBottom:16}}>💎</div>
+      <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <GemLogo size={48}/>
+      </div>
       <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 6px"}}>
         {savedPin?"Enter PIN":"Create PIN"}
       </h2>
@@ -1312,10 +1351,27 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       {(modal==="help"||modal==="about")&&(
         <Sheet onClose={()=>setModal(null)} title={modal==="help"?"Help Center":"About Gem"}>
           <div style={{padding:"24px",textAlign:"center"}}>
-            <p style={{fontSize:32,margin:"0 0 16px"}}>{modal==="help"?"🛟":"💎"}</p>
-            <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
-              {modal==="help"?"Visit support.gemwallet.io for guides and FAQs":"Gem Wallet v2.4.1 — Secure, non-custodial multi-chain wallet"}
-            </p>
+            <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {modal==="help"?<HelpCircle size={48} color="#2563eb"/>:<GemLogo size={48}/>}
+            </div>
+            {modal==="help"?(
+              <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
+                Visit support.gemwallet.io for guides and FAQs
+              </p>
+            ):(
+              <div style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
+                <p style={{margin:"0 0 12px",fontWeight:600,color:"#fff"}}>Gem Wallet v2.4.1</p>
+                <p style={{margin:"0 0 8px"}}>Secure, non-custodial multi-chain crypto wallet</p>
+                <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid rgba(255,255,255,0.1)",textAlign:"left"}}>
+                  <p style={{margin:"0 0 8px",fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:600}}>OFFICIAL DEVELOPERS:</p>
+                  <p style={{margin:"0 0 4px",fontSize:13}}>• Gem Foundation Ltd.</p>
+                  <p style={{margin:"0 0 4px",fontSize:13}}>• CEO: Alexander Petrov (@Homyak_investorr)</p>
+                  <p style={{margin:"0 0 4px",fontSize:13}}>• Telegram: @gemwallet_support</p>
+                  <p style={{margin:"0 0 4px",fontSize:13}}>• Website: gemwallet.io</p>
+                  <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:8}}>© 2024 Gem Foundation. All rights reserved.</p>
+                </div>
+              </div>
+            )}
             <button onClick={()=>setModal(null)} style={{width:"100%",padding:"16px",borderRadius:16,border:"none",marginTop:20,
               background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer"}}>
               Got it
@@ -1326,7 +1382,9 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       <div style={{display:"flex",alignItems:"center",gap:14,padding:"20px 16px",background:"#111",
         borderRadius:20,border:"1px solid rgba(255,255,255,0.06)",marginBottom:20,animation:"fadeUp 0.4s ease both"}}>
         <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>💎</div>
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <GemLogo size={32}/>
+        </div>
         <div>
           <p style={{fontSize:16,fontWeight:700,color:"#fff",margin:0}}>My Gem Wallet</p>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0",fontFamily:"monospace"}}>{shortAddr(addr)} · 6 assets</p>
@@ -1633,7 +1691,9 @@ function OnboardScreen({ onCreate, onImport }) {
         background:"radial-gradient(circle,#7c3aed33 0%,transparent 70%)",pointerEvents:"none"}}/>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,marginBottom:48,animation:"fadeUp 0.6s ease both"}}>
         <div style={{width:80,height:80,borderRadius:24,background:"#111",border:"1px solid rgba(255,255,255,0.1)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,boxShadow:"0 0 40px #2563eb33"}}>💎</div>
+          display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px #2563eb33"}}>
+          <GemLogo size={48}/>
+        </div>
         <h1 style={{fontSize:30,fontWeight:700,color:"#fff",margin:0,letterSpacing:"-0.03em"}}>Gem Wallet</h1>
         <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",margin:0,textAlign:"center",maxWidth:240,lineHeight:1.6}}>
           Your secure, non-custodial multi-chain crypto wallet
@@ -1683,7 +1743,11 @@ function BackupScreen({ mnemonic, onDone }) {
   if(step==="done") return (
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:"32px 24px"}}>
-      <div style={{fontSize:64,marginBottom:20}}>🔐</div>
+      <div style={{marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22C55E,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Shield size={40} color="#fff"/>
+        </div>
+      </div>
       <h2 style={{fontSize:24,fontWeight:700,color:"#fff",margin:"0 0 12px"}}>Wallet Secured!</h2>
       <p style={{fontSize:14,color:"rgba(255,255,255,0.5)",textAlign:"center",marginBottom:32}}>Your recovery phrase is backed up.</p>
       <button onClick={onDone} style={{width:"100%",maxWidth:320,padding:"17px",borderRadius:16,border:"none",
@@ -1696,14 +1760,21 @@ function BackupScreen({ mnemonic, onDone }) {
   return (
     <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px"}}>
       <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{fontSize:36,marginBottom:12}}>🌱</div>
+        <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#F59E0B,#d97706)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Sprout size={30} color="#fff"/>
+          </div>
+        </div>
         <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 8px"}}>Back Up Your Wallet</h2>
         <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:0,lineHeight:1.6}}>
           Write down these 12 words in order. This is the only way to recover your wallet.
         </p>
       </div>
       <div style={{background:"#0f0a00",borderRadius:12,padding:14,border:"1px solid rgba(245,158,11,0.2)",marginBottom:20}}>
-        <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>⚠ Never share this with anyone. Store it offline safely.</p>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <AlertTriangle size={14} color="rgba(245,158,11,0.8)"/>
+          <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>Never share this with anyone. Store it offline safely.</p>
+        </div>
       </div>
       <div style={{background:"#0a0a0a",borderRadius:16,padding:16,position:"relative",overflow:"hidden",marginBottom:20}}>
         {!rev&&(
@@ -1905,7 +1976,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         background:"linear-gradient(to bottom,#000 80%,transparent)",
         display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:20}}>💎</span>
+          <GemLogo size={24}/>
           <span style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:"-0.02em"}}>Gem</span>
           <div style={{width:6,height:6,borderRadius:"50%",background:liveStatus==="live"?"#22C55E":liveStatus==="loading"?"#F59E0B":"#555",marginLeft:4}}/>
         </div>
