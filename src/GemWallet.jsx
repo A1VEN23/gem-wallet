@@ -2652,6 +2652,35 @@ function AvatarHeader({ liveStatus }) {
   );
 }
 
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("[ErrorBoundary]", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
+          <h2 style={{color:"#fff",marginBottom:12}}>Something went wrong</h2>
+          <p style={{color:"rgba(255,255,255,0.6)",textAlign:"center",marginBottom:24}}>{this.state.error?.message || "Unknown error"}</p>
+          <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── MAIN WALLET APP ──────────────────────────────────────────────────────────
 function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [tab,setTab]=useState("wallet");
@@ -2993,8 +3022,12 @@ export default function GemWalletApp() {
         {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone}/>}
         {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
         {screen==="pin_lock"&&<PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/>}
-        {screen==="wallet"&&<WalletApp addresses={addresses} mnemonic={mnemonic} pin={pin}
-          onChangePin={handleChangePin} onLock={handleLock}/>}
+        {screen==="wallet"&&(
+          <ErrorBoundary>
+            <WalletApp addresses={addresses} mnemonic={mnemonic} pin={pin}
+              onChangePin={handleChangePin} onLock={handleLock}/>
+          </ErrorBoundary>
+        )}
         {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#fff",padding:24}}>
             <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
