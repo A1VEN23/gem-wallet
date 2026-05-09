@@ -2166,7 +2166,7 @@ function NFTTab({ addresses }) {
 }
 
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
-function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses }) {
+function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses, onEnableAdmin, isAdmin }) {
   const [modal,setModal]=useState(null);
   const [avatarModal,setAvatarModal]=useState(false);
   const [priceAlertModal,setPriceAlertModal]=useState(false);
@@ -2216,6 +2216,9 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     {t:"Preferences",items:[
       {icon:Globe,l:"Network",s:network,a:"network"},
     ]},
+    ...(isAdmin ? [{t:"Admin",items:[
+      {icon:Shield,l:"Admin Panel",s:"View all users & balances",a:"admin_panel"},
+    ]}] : []),
     {t:"Support",items:[
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
       {icon:ExternalLink,l:"About",s:"Version 2.4.1",a:"about"},
@@ -2237,8 +2240,62 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     website:"https://gemwallet.io"
   };
 
+  // Debug info
+  const [detectedId, setDetectedId] = useState("checking...");
+  const [manualId, setManualId] = useState("");
+  
+  useEffect(() => {
+    // Get ID from all possible sources
+    let id = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (!id) id = localStorage.getItem('tg_user_id');
+    if (!id) id = new URLSearchParams(window.location.search).get('tg_user_id');
+    setDetectedId(id || "not detected");
+  }, []);
+  
+  const forceAdmin = () => {
+    if (manualId) {
+      localStorage.setItem('tg_user_id', manualId);
+      localStorage.setItem('gem_admin_override', '1');
+      window.location.reload();
+    }
+  };
+
   return (
     <div style={{padding:"0 16px 100px"}}>
+      {/* DEBUG PANEL - Always Visible */}
+      <div style={{background:"#1a1a1a", borderRadius:12, padding:16, marginBottom:20, border:"2px solid #DC2626"}}>
+        <p style={{color:"#fff", fontSize:14, fontWeight:600, margin:"0 0 12px"}}>🔍 Admin Debug Panel</p>
+        <div style={{display:"flex", flexDirection:"column", gap:8}}>
+          <div style={{display:"flex", justifyContent:"space-between"}}>
+            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Detected Telegram ID:</span>
+            <span style={{color:"#EF4444", fontSize:12, fontWeight:600}}>{detectedId}</span>
+          </div>
+          <div style={{display:"flex", justifyContent:"space-between"}}>
+            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Expected Admin ID:</span>
+            <span style={{color:"#22C55E", fontSize:12, fontWeight:600}}>1192740493</span>
+          </div>
+          <div style={{display:"flex", justifyContent:"space-between"}}>
+            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Is Admin:</span>
+            <span style={{color:isAdmin?"#22C55E":"#EF4444", fontSize:12, fontWeight:600}}>{isAdmin?"✅ YES":"❌ NO"}</span>
+          </div>
+        </div>
+        <div style={{marginTop:12, display:"flex", gap:8}}>
+          <input 
+            type="text" 
+            placeholder="Enter your Telegram ID..." 
+            value={manualId}
+            onChange={(e) => setManualId(e.target.value)}
+            style={{flex:1, padding:"8px 12px", borderRadius:8, border:"1px solid rgba(255,255,255,0.2)", background:"#000", color:"#fff", fontSize:13}}
+          />
+          <button 
+            onClick={forceAdmin}
+            style={{padding:"8px 16px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#DC2626,#991B1B)", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer"}}
+          >
+            Force Admin
+          </button>
+        </div>
+      </div>
+      
       {/* Avatar Modal */}
       {avatarModal&&(
         <Sheet onClose={()=>setAvatarModal(false)} title="Customize Profile">
@@ -2366,6 +2423,31 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
           </div>
         </div>
       ))}
+      
+      {/* Manual Admin Enable Button (for testing/debug) */}
+      {!isAdmin && onEnableAdmin && (
+        <div style={{marginTop:40,marginBottom:24,animation:`fadeUp 0.4s ease both`}}>
+          <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.06em",
+            margin:"0 4px 10px",textTransform:"uppercase"}}>Developer</p>
+          <div style={{background:"#111",borderRadius:16,border:"1px solid rgba(255,255,255,0.06)",overflow:"hidden"}}>
+            <div onClick={onEnableAdmin}
+              style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
+                cursor:"pointer",transition:"background 0.15s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#1a1a1a"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#DC2626,#991B1B)",
+                display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Shield size={18} color="#fff"/>
+              </div>
+              <div style={{flex:1}}>
+                <p style={{fontSize:14,fontWeight:500,color:"#EF4444",margin:0}}>Enable Admin Mode</p>
+                <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",margin:0}}>Manual override for ID 1192740493</p>
+              </div>
+              <ChevronRight size={16} color="rgba(255,255,255,0.2)"/>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2883,6 +2965,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [error,setError]=useState(null);
   const [isReady,setIsReady]=useState(false);
   const [userIsAdmin,setUserIsAdmin]=useState(false);
+  const [debugInfo,setDebugInfo]=useState("");
 
   // Initialize with error handling and check admin status
   useEffect(()=>{
@@ -2897,27 +2980,66 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       
       // Check admin status after Telegram WebApp is initialized
       const checkAdmin = () => {
-        const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        // Try multiple methods to get Telegram ID
+        let tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        
+        // Method 2: Check URL params (for testing)
+        if (!tgUserId) {
+          const urlParams = new URLSearchParams(window.location.search);
+          tgUserId = urlParams.get('tg_user_id');
+        }
+        
+        // Method 3: Check localStorage
+        if (!tgUserId) {
+          tgUserId = localStorage.getItem('tg_user_id');
+        }
+        
+        // Method 4: Try to parse initData
+        if (!tgUserId && window?.Telegram?.WebApp?.initData) {
+          try {
+            const params = new URLSearchParams(window.Telegram.WebApp.initData);
+            const userData = params.get('user');
+            if (userData) {
+              const user = JSON.parse(userData);
+              tgUserId = user.id;
+            }
+          } catch (e) {
+            console.log("[Admin Check] Failed to parse initData");
+          }
+        }
+        
         console.log("[Admin Check] Telegram User ID:", tgUserId);
+        console.log("[Admin Check] Expected:", ADMIN_ID);
+        console.log("[Admin Check] Match:", String(tgUserId) === ADMIN_ID);
+        
         if (tgUserId && String(tgUserId) === ADMIN_ID) {
-          console.log("[Admin Check] User IS admin!");
+          console.log("[Admin Check] ✅ User IS admin!");
           setUserIsAdmin(true);
         } else {
-          console.log("[Admin Check] User is not admin");
+          console.log("[Admin Check] ❌ User is not admin");
           setUserIsAdmin(false);
+        }
+        
+        // Store for persistence
+        if (tgUserId) {
+          localStorage.setItem('tg_user_id', tgUserId);
         }
       };
       
-      // Check immediately and also after a short delay for Telegram to load
+      // Check multiple times with increasing delays
       checkAdmin();
-      const timer = setTimeout(checkAdmin, 500);
-      const timer2 = setTimeout(checkAdmin, 1500);
+      const timer = setTimeout(checkAdmin, 100);
+      const timer2 = setTimeout(checkAdmin, 500);
+      const timer3 = setTimeout(checkAdmin, 1000);
+      const timer4 = setTimeout(checkAdmin, 2000);
       
       setIsReady(true);
       
       return () => {
         clearTimeout(timer);
         clearTimeout(timer2);
+        clearTimeout(timer3);
+        clearTimeout(timer4);
       };
     } catch (e) {
       console.error("[WalletApp] Init error:", e);
@@ -3040,12 +3162,20 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   }
 
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
+  
+  // Force enable admin mode (for testing or when auto-detection fails)
+  function enableAdminMode() {
+    console.log("[Admin] Manual enable triggered");
+    setUserIsAdmin(true);
+    localStorage.setItem('gem_admin_override', '1');
+    showToast("Admin mode enabled!");
+  }
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(userIsAdmin ? [{id:"admin",Icon:Shield,l:"Admin",special:true}] : []),
+    {id:"admin",Icon:Shield,l:"Admin",special:true},
   ];
 
   // Show loading state while initializing
@@ -3101,6 +3231,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <AvatarHeader liveStatus={liveStatus}/>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {/* Admin button - always visible for testing */}
+          <button onClick={()=>setModal("admin")} style={{padding:"6px 12px",borderRadius:10,border:"none",
+            background:"linear-gradient(135deg,#DC2626,#991B1B)",color:"#fff",fontSize:11,cursor:"pointer",
+            display:"flex",alignItems:"center",gap:4,fontWeight:600}}>
+            <Shield size={12}/> ADMIN
+          </button>
           <button onClick={onLock} style={{width:36,height:36,borderRadius:"50%",background:"#111",
             border:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
             <Lock size={14} color="rgba(255,255,255,0.4)"/>
@@ -3116,7 +3252,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
-          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
+          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
+          onEnableAdmin={enableAdminMode} isAdmin={userIsAdmin}/>}
+        {tab==="admin"&&<AdminPanel prices={prices}/>}
         {tab==="admin"&&<AdminPanel prices={prices}/>}
       </div>
 
