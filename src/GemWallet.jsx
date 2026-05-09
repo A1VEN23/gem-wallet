@@ -1076,31 +1076,31 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
               <RefreshCw size={24} color="rgba(255,255,255,0.3)" className="spin"/>
             </div>
           ):chartPath?(
-            <svg width="100%" viewBox="0 0 260 100" preserveAspectRatio="none" style={{height:100}}>
-              <defs>
-                <linearGradient id={`chartGrad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={chartColor} stopOpacity="0.4"/>
-                  <stop offset="100%" stopColor={chartColor} stopOpacity="0"/>
-                </linearGradient>
-              </defs>
-              <polygon points={`0,100 ${chartPath} 260,100`} fill={`url(#chartGrad-${asset.id})`}/>
-              <polyline points={chartPath} fill="none" stroke={chartColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              {/* Current price dot */}
-              {chartData&&(
-                <circle cx="260" cy={100-((chartData[chartData.length-1].price-Math.min(...chartData.map(d=>d.price)))/(Math.max(...chartData.map(d=>d.price))-Math.min(...chartData.map(d=>d.price))||1))*80-10} r="4" fill={chartColor} stroke="#fff" strokeWidth="2"/>
+            <>
+              <svg width="100%" viewBox="0 0 260 100" preserveAspectRatio="none" style={{height:100}}>
+                <defs>
+                  <linearGradient id={`chartGrad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={chartColor} stopOpacity="0.4"/>
+                    <stop offset="100%" stopColor={chartColor} stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                <polygon points={`0,100 ${chartPath} 260,100`} fill={`url(#chartGrad-${asset.id})`}/>
+                <polyline points={chartPath} fill="none" stroke={chartColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {chartData&&(
+                  <circle cx="260" cy={100-((chartData[chartData.length-1].price-Math.min(...chartData.map(d=>d.price)))/(Math.max(...chartData.map(d=>d.price))-Math.min(...chartData.map(d=>d.price))||1))*80-10} r="4" fill={chartColor} stroke="#fff" strokeWidth="2"/>
+                )}
+              </svg>
+              {chartData&&chartData.length>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{"$"}{Math.min(...chartData.map(d=>d.price)).toFixed(2)}</span>
+                  <span style={{fontSize:11,color:chartColor,fontWeight:600}}>{isChartPositive?"↗":"↘"} {((chartData[chartData.length-1].price-chartData[0].price)/chartData[0].price*100).toFixed(2)}%</span>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{"$"}{Math.max(...chartData.map(d=>d.price)).toFixed(2)}</span>
+                </div>
               )}
-            </svg>
+            </>
           ):(
             <div style={{height:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <p style={{color:"rgba(255,255,255,0.3)",fontSize:12}}>Chart data unavailable</p>
-            </div>
-          )}
-          
-          {chartData&&chartData.length>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}>${Math.min(...chartData.map(d=>d.price)).toFixed(2)}</span>
-              <span style={{fontSize:11,color:chartColor,fontWeight:600}}>{isChartPositive?"↗":"↘"} {((chartData[chartData.length-1].price-chartData[0].price)/chartData[0].price*100).toFixed(2)}%</span>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}>${Math.max(...chartData.map(d=>d.price)).toFixed(2)}</span>
             </div>
           )}
         </div>
