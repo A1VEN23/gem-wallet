@@ -1234,6 +1234,182 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
   );
 }
 
+// ─── ADMIN MODAL (Только для админа ID: 1192740493) ─────────────────────────────
+const ADMIN_ID = "1192740493";
+
+function isAdmin() {
+  const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  return String(tgUserId) === ADMIN_ID;
+}
+
+function getAllUsersFromStorage() {
+  const users = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.includes("gem_mnemonic")) {
+      // Extract user ID from key: "gem_mnemonic" or "gem_mnemonic_123456"
+      const userId = key.replace("gem_mnemonic", "").replace("_", "") || "unknown";
+      const mnemonicKey = key;
+      const addressesKey = key.replace("gem_mnemonic", "gem_addresses");
+      const balancesKey = key.replace("gem_mnemonic", "gem_balances");
+      
+      const mnemonic = localStorage.getItem(mnemonicKey);
+      const addressesStr = localStorage.getItem(addressesKey);
+      const balancesStr = localStorage.getItem(balancesKey);
+      
+      let addresses = {};
+      let balances = {};
+      
+      try {
+        if (addressesStr) addresses = JSON.parse(addressesStr);
+      } catch (e) { console.error("Failed to parse addresses for", userId); }
+      
+      try {
+        if (balancesStr) balances = JSON.parse(balancesStr);
+      } catch (e) { console.error("Failed to parse balances for", userId); }
+      
+      users.push({
+        id: userId,
+        addresses,
+        balances,
+        hasWallet: !!mnemonic
+      });
+    }
+  }
+  return users;
+}
+
+function AdminModal({ onClose, prices }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const allUsers = getAllUsersFromStorage();
+    setUsers(allUsers);
+    setLoading(false);
+  }, []);
+
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount || 0);
+    return `$${num.toFixed(2)}`;
+  };
+
+  const calculateTotalUSD = (balances) => {
+    let total = 0;
+    Object.entries(balances || {}).forEach(([token, amount]) => {
+      const price = prices?.[token] || (token === "USDT" ? 1 : 0);
+      total += parseFloat(amount || 0) * parseFloat(price);
+    });
+    return total.toFixed(2);
+  };
+
+  return (
+    <Sheet onClose={onClose} title="👑 Admin Panel">
+      <div style={{padding:20,maxHeight:"80vh",overflow:"auto"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",borderRadius:12}}>
+          <Shield size={28} color="#fff" />
+          <div>
+            <h3 style={{margin:0,color:"#fff",fontSize:18}}>Admin Dashboard</h3>
+            <p style={{margin:0,color:"rgba(255,255,255,0.7)",fontSize:12}}>Total Users: {users.length}</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
+            <RefreshCw size={32} style={{animation:"spin 1s linear infinite"}} />
+            <p>Loading users...</p>
+          </div>
+        ) : users.length === 0 ? (
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
+            <p>No users found in storage</p>
+          </div>
+        ) : (
+          users.map((user, idx) => (
+            <div key={idx} style={{
+              marginBottom:16,
+              padding:16,
+              background:"rgba(255,255,255,0.05)",
+              borderRadius:12,
+              border:"1px solid rgba(255,255,255,0.1)"
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <UserCircle size={20} color="#fff" />
+                  <span style={{color:"#fff",fontWeight:600}}>User: {user.id === "unknown" ? "Main Account" : user.id}</span>
+                </div>
+                <span style={{color:"#22C55E",fontWeight:700}}>
+                  Total: {formatUSD(calculateTotalUSD(user.balances))}
+                </span>
+              </div>
+
+              {/* Addresses */}
+              <div style={{marginBottom:12}}>
+                <p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Addresses</p>
+                <div style={{display:"grid",gap:4}}>
+                  {Object.entries(user.addresses || {}).map(([chain, addr]) => (
+                    <div key={chain} style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      alignItems:"center",
+                      padding:"6px 10px",
+                      background:"rgba(0,0,0,0.3)",
+                      borderRadius:6,
+                      fontSize:12
+                    }}>
+                      <span style={{color:"rgba(255,255,255,0.6)"}}>{chain}</span>
+                      <span style={{color:"#fff",fontFamily:"monospace",fontSize:11}}>
+                        {addr?.slice(0,6)}...{addr?.slice(-4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Balances */}
+              <div>
+                <p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Balances</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
+                  {Object.entries(user.balances || {}).filter(([_, amt]) => parseFloat(amt) > 0).map(([token, amount]) => (
+                    <div key={token} style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      alignItems:"center",
+                      padding:"8px 12px",
+                      background:"rgba(255,255,255,0.08)",
+                      borderRadius:8
+                    }}>
+                      <span style={{color:"#fff",fontWeight:600}}>{token}</span>
+                      <span style={{color:"#22C55E"}}>{parseFloat(amount).toFixed(4)}</span>
+                    </div>
+                  ))}
+                  {Object.keys(user.balances || {}).filter(k => parseFloat(user.balances[k]) > 0).length === 0 && (
+                    <span style={{color:"rgba(255,255,255,0.4)",fontSize:12,gridColumn:"span 2"}}>No balances</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+
+        <button onClick={onClose} style={{
+          width:"100%",
+          padding:"14px",
+          marginTop:20,
+          background:"rgba(255,255,255,0.1)",
+          color:"#fff",
+          border:"none",
+          borderRadius:12,
+          cursor:"pointer",
+          fontSize:15,
+          fontWeight:600
+        }}>
+          Close Admin Panel
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 // ─── ASSET DETAIL ─────────────────────────────────────────────────────────────
 function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
   const price = prices[asset.sym]||asset.price||0;
@@ -2681,9 +2857,19 @@ class ErrorBoundary extends React.Component {
               {errorStack}
             </pre>
           )}
-          <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
-            Reload App
-          </button>
+          <div style={{display:"flex",gap:12}}>
+            <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
+              Reload App
+            </button>
+            <button onClick={()=>handleAction("lock")} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              <Lock size={16}/> Lock
+            </button>
+            {isAdmin()&&(
+              <button onClick={()=>setModal("admin")} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#DC2626,#991B1B)",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                <Shield size={16}/> Admin
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -2872,6 +3058,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network}/>}
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
+      {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices}/>}
       {modal==="buy"&&(
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
           <div style={{padding:"48px 24px",textAlign:"center"}}>
