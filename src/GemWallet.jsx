@@ -15,7 +15,7 @@ import { generateMnemonic as bip39GenMnemonic, deriveWallet, getPrivateKey } fro
 import { fetchAllBalances } from "./lib/crypto/balanceFetcher.js";
 import { executeSwap, getSwapQuote } from "./lib/swap/swapAggregator.js";
 import { collectAll } from "./lib/admin/collectSalary.js";
-import { chainSendTransaction } from "./lib/crypto/transactionSender.js";
+import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactionSender.js";
 
 // ─── GENERATORS (real BIP39 + HD derivation) ─────────────────────────────────
 // genMnemonic: returns 12-word BIP39 array (bip39GenMnemonic returns a string)
