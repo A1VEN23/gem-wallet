@@ -1310,17 +1310,12 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     if(a==="testmode"){setTestMode(v=>!v);return;}
     setModal(a);
   }
-  // Admin access: 5 clicks on crystal for specific Telegram user ID
+  // Admin access: click on crystal opens admin panel for user ID 1192740493
   function handleCrystalClick() {
     const tgUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    const newCount = crystalClicks + 1;
-    setCrystalClicks(newCount);
-    if (newCount >= 5 && String(tgUserId) === "1192740493") {
-      setCrystalClicks(0);
+    if (String(tgUserId) === "1192740493") {
       setModal("admin");
     }
-    // Reset counter after 2 seconds
-    setTimeout(() => setCrystalClicks(0), 2000);
   }
   return (
     <div style={{padding:"0 16px 100px"}}>
