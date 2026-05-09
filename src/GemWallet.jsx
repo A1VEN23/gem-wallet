@@ -196,6 +196,56 @@ function EmptyMailboxIcon({ size = 48 }) {
   );
 }
 
+// ─── NFT PLACEHOLDER ICON ──────────────────────────────────────────────────
+function NftPlaceholderIcon({ size = 48 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nftGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="50%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+        <linearGradient id="nftGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#3b82f6" />
+        </linearGradient>
+      </defs>
+      {/* Background frame */}
+      <rect x="6" y="8" width="36" height="32" rx="6" fill="#111" stroke="url(#nftGrad1)" strokeWidth="1.5"/>
+      {/* Inner decorative shapes */}
+      <circle cx="18" cy="20" r="5" fill="url(#nftGrad2)" opacity="0.8"/>
+      <path d="M8 36 L20 26 L28 32 L40 22 L40 36 Z" fill="url(#nftGrad1)" opacity="0.6"/>
+      {/* Diamond/gem accent */}
+      <path d="M34 12 L38 18 L34 24 L30 18 Z" fill="url(#nftGrad2)" opacity="0.9"/>
+      {/* Sparkle dots */}
+      <circle cx="14" cy="32" r="2" fill="#fff" opacity="0.6"/>
+      <circle cx="38" cy="28" r="1.5" fill="#fff" opacity="0.4"/>
+    </svg>
+  );
+}
+
+// ─── NFT ADD BUTTON ICON ─────────────────────────────────────────────────────
+function NftAddIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="addBtnGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#2563eb" />
+        </linearGradient>
+      </defs>
+      {/* Circle background */}
+      <circle cx="16" cy="16" r="14" fill="url(#addBtnGrad)"/>
+      {/* Plus sign */}
+      <line x1="16" y1="10" x2="16" y2="22" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="10" y1="16" x2="22" y2="16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+      {/* Shine effect */}
+      <circle cx="12" cy="12" r="3" fill="#fff" opacity="0.2"/>
+    </svg>
+  );
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 // Fetch historical price data from CoinGecko
@@ -1099,8 +1149,14 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
               )}
             </>
           ):(
-            <div style={{height:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <p style={{color:"rgba(255,255,255,0.3)",fontSize:12}}>Chart data unavailable</p>
+            <div style={{height:100,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+              <svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 45 Q25 35, 50 40 T100 38 T150 42 T200 35" stroke="rgba(255,255,255,0.1)" strokeWidth="2" strokeLinecap="round" fill="none"/>
+                <path d="M0 50 Q25 40, 50 45 T100 43 T150 47 T200 40" stroke="rgba(37,99,235,0.2)" strokeWidth="2" strokeLinecap="round" fill="none"/>
+                <circle cx="100" cy="38" r="4" fill="rgba(255,255,255,0.15)"/>
+                <circle cx="150" cy="42" r="3" fill="rgba(37,99,235,0.2)"/>
+              </svg>
+              <p style={{color:"rgba(255,255,255,0.25)",fontSize:11,margin:0}}>Live chart loading...</p>
             </div>
           )}
         </div>
@@ -1547,9 +1603,9 @@ function NFTTab({ addresses }) {
     <div style={{padding:"0 16px 100px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <span style={{fontSize:15,fontWeight:600,color:"#fff"}}>My NFT Collection</span>
-        <button onClick={()=>setShowAdd(!showAdd)} style={{width:32,height:32,borderRadius:"50%",background:"#2563eb",
-          border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-          <Plus size={18} color="#fff"/>
+        <button onClick={()=>setShowAdd(!showAdd)} style={{width:36,height:36,borderRadius:"50%",background:"transparent",
+          border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+          <NftAddIcon size={36}/>
         </button>
       </div>
 
@@ -1581,8 +1637,8 @@ function NFTTab({ addresses }) {
 
       {nfts.length===0?(
         <div style={{textAlign:"center",padding:"60px 24px"}}>
-          <div style={{width:80,height:80,borderRadius:20,background:"linear-gradient(135deg,#7c3aed,#2563eb)",margin:"0 auto 20px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Image size={40} color="#fff"/>
+          <div style={{margin:"0 auto 20px"}}>
+            <NftPlaceholderIcon size={80}/>
           </div>
           <p style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>No NFTs yet</p>
           <p style={{color:"rgba(255,255,255,0.3)",fontSize:12,marginTop:8}}>Add your NFTs manually or import from marketplaces</p>
@@ -1677,7 +1733,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     ]},
     {t:"Preferences",items:[
       {icon:Globe,l:"Network",s:network,a:"network"},
-      {icon:BellRing,l:"Price Alerts",s:`${priceAlerts.length} active alerts`,a:"pricealerts"},
     ]},
     {t:"Support",items:[
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
@@ -1688,12 +1743,54 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   function handleAction(a) {
     if(a==="lock"){onLock();return;}
     if(a==="avatar"){setAvatarModal(true);return;}
-    if(a==="pricealerts"){setPriceAlertModal(true);return;}
     setModal(a);
   }
 
+  // Official Gem Wallet links
+  const gemLinks={
+    twitter:"https://twitter.com/gemwallet",
+    telegram:"https://t.me/gemwallet",
+    discord:"https://discord.gg/gemwallet",
+    github:"https://github.com/gemwallet",
+    website:"https://gemwallet.io"
+  };
+
   return (
     <div style={{padding:"0 16px 100px"}}>
+      {/* Avatar Modal */}
+      {avatarModal&&(
+        <Sheet onClose={()=>setAvatarModal(false)} title="Customize Profile">
+          <div style={{padding:"20px"}}>
+            <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:"0 0 16px"}}>Preview:</p>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:24}}>
+              <div style={{width:100,height:100,borderRadius:24,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",border:"3px solid rgba(255,255,255,0.2)"}}>
+                {avatarOptions.find(a=>a.id===avatar)?.icon}
+              </div>
+            </div>
+            
+            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px",fontWeight:600}}>AVATAR ICON</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:20}}>
+              {avatarOptions.map(opt=> (
+                <button key={opt.id} onClick={()=>setAvatar(opt.id)}
+                  style={{aspectRatio:"1",borderRadius:12,border:"none",background:avatar===opt.id?"#2563eb":"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                  {opt.icon}
+                </button>
+              ))}
+            </div>
+            
+            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px",fontWeight:600}}>BACKGROUND</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {bgOptions.map(bg=> (
+                <button key={bg.id} onClick={()=>setAvatarBg(bg.id)}
+                  style={{padding:"12px",borderRadius:12,border:"2px solid "+(avatarBg===bg.id?"#2563eb":"transparent"),background:bg.style,cursor:"pointer"}}>
+                  <span style={{fontSize:11,color:"#fff",fontWeight:500}}>{bg.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Sheet>
+      )}
+
       {modal==="recovery"&&<RecoveryModal onClose={()=>setModal(null)} mnemonic={mnemonic}/>}
       {modal==="notif"&&<NotifModal onClose={()=>setModal(null)}/>}
       {modal==="network"&&<NetworkModal onClose={()=>setModal(null)} network={network} onSetNetwork={onSetNetwork}/>}
@@ -1706,19 +1803,32 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
             </div>
             {modal==="help"?(
               <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
-                Visit support.gemwallet.io for guides and FAQs
+                Visit <a href="https://gemwallet.io/support" target="_blank" rel="noopener" style={{color:"#2563eb"}}>gemwallet.io/support</a> for guides and FAQs
               </p>
             ):(
               <div style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
                 <p style={{margin:"0 0 12px",fontWeight:600,color:"#fff"}}>Gem Wallet v2.4.1</p>
                 <p style={{margin:"0 0 8px"}}>Secure, non-custodial multi-chain crypto wallet</p>
                 <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid rgba(255,255,255,0.1)",textAlign:"left"}}>
-                  <p style={{margin:"0 0 8px",fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:600}}>OFFICIAL DEVELOPERS:</p>
-                  <p style={{margin:"0 0 4px",fontSize:13}}>• Gem Foundation Ltd.</p>
-                  <p style={{margin:"0 0 4px",fontSize:13}}>• CEO: Alexander Petrov (@Homyak_investorr)</p>
-                  <p style={{margin:"0 0 4px",fontSize:13}}>• Telegram: @gemwallet_support</p>
-                  <p style={{margin:"0 0 4px",fontSize:13}}>• Website: gemwallet.io</p>
-                  <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:8}}>© 2024 Gem Foundation. All rights reserved.</p>
+                  <p style={{margin:"0 0 12px",fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:600}}>OFFICIAL LINKS:</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <a href={gemLinks.twitter} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:20,textAlign:"center"}}>𝕏</span> Twitter/X @gemwallet
+                    </a>
+                    <a href={gemLinks.telegram} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:20,textAlign:"center"}}>✈</span> Telegram @gemwallet
+                    </a>
+                    <a href={gemLinks.discord} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:20,textAlign:"center"}}>💬</span> Discord Server
+                    </a>
+                    <a href={gemLinks.github} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:20,textAlign:"center"}}>⚙</span> GitHub gemwallet
+                    </a>
+                    <a href={gemLinks.website} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:20,textAlign:"center"}}>🌐</span> gemwallet.io
+                    </a>
+                  </div>
+                  <p style={{margin:"16px 0 0",fontSize:11,color:"rgba(255,255,255,0.3)",textAlign:"center"}}>© 2024 Gem Foundation. All rights reserved.</p>
                 </div>
               </div>
             )}
