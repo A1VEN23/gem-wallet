@@ -1393,15 +1393,42 @@ function CancelConfirmModal({ tx, onConfirm, onClose }) {
   );
 }
 
+// ─── TX DECLINED SUCCESS MODAL ───────────────────────────────────────────────
+function TxDeclinedSuccessModal({ onClose }) {
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:101,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(10px)",animation:"fadeIn 0.3s ease"}}>
+      <div style={{background:"#1a1a1a",borderRadius:28,padding:"36px 28px",width:"90%",maxWidth:320,border:"1px solid rgba(239,68,68,0.3)",boxShadow:"0 20px 60px rgba(239,68,68,0.2)",textAlign:"center",animation:"slideUp 0.4s ease"}}>
+        <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#EF4444,#DC2626)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",boxShadow:"0 8px 32px rgba(239,68,68,0.4)",animation:"pulse 2s infinite"}}>
+          <X size={40} color="#fff" strokeWidth={3}/>
+        </div>
+        <h3 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 10px"}}>Transaction Declined</h3>
+        <p style={{fontSize:14,color:"rgba(255,255,255,0.5)",margin:"0 0 24px",lineHeight:1.5}}>
+          Your transaction has been successfully cancelled. Funds have been returned to your wallet.
+        </p>
+        <button onClick={onClose}
+          style={{width:"100%",padding:"16px",borderRadius:16,border:"none",background:"#EF4444",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(239,68,68,0.3)"}}>
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
 function TxDetail({ tx, onClose, onCancel }) {
   const [copied,setCopied]=useState(false);
   const [showCancelConfirm,setShowCancelConfirm]=useState(false);
+  const [showDeclinedSuccess,setShowDeclinedSuccess]=useState(false);
   const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const Icon=icons[tx.type]||ArrowUpRight;
   const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
   const status = tx.status||"confirmed";
+  
+  function handleCancel() {
+    onCancel(tx.id);
+    setShowDeclinedSuccess(true);
+  }
 
   useEffect(()=>{
     if(tx.status!=="pending"||!tx.cancelTime)return;
@@ -1446,8 +1473,11 @@ function TxDetail({ tx, onClose, onCancel }) {
         {showCancelConfirm&&(
           <CancelConfirmModal 
             tx={tx} 
-            onConfirm={()=>onCancel(tx.id)} 
+            onConfirm={handleCancel} 
             onClose={()=>setShowCancelConfirm(false)}/>
+        )}
+        {showDeclinedSuccess&&(
+          <TxDeclinedSuccessModal onClose={()=>{setShowDeclinedSuccess(false);onClose();}}/>
         )}
         {status==="pending"&&onCancel&&(
           <button onClick={()=>setShowCancelConfirm(true)}
