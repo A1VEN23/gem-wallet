@@ -265,6 +265,117 @@ function CrystalIcon({ size = 52 }) {
   );
 }
 
+// ─── BEAUTIFUL AVATAR ICONS ───────────────────────────────────────────────────
+function AvatarDiamondIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="diamondGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="50%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#2563eb" />
+        </linearGradient>
+      </defs>
+      {/* Diamond shape with gradient */}
+      <path d="M16 4 L28 12 L16 28 L4 12 Z" fill="url(#diamondGrad)"/>
+      {/* Top facet highlight */}
+      <path d="M16 4 L22 10 L16 10 L10 10 Z" fill="#93c5fd" opacity="0.8"/>
+      {/* Shine effect */}
+      <circle cx="12" cy="10" r="2" fill="#fff" opacity="0.6"/>
+    </svg>
+  );
+}
+
+function AvatarUserIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="userGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#f472b6" />
+          <stop offset="100%" stopColor="#db2777" />
+        </linearGradient>
+      </defs>
+      {/* Head */}
+      <circle cx="16" cy="12" r="7" fill="url(#userGrad)"/>
+      {/* Body */}
+      <path d="M6 26 Q16 18 26 26 L26 30 L6 30 Z" fill="url(#userGrad)" opacity="0.8"/>
+      {/* Face highlight */}
+      <circle cx="14" cy="11" r="2" fill="#fff" opacity="0.3"/>
+    </svg>
+  );
+}
+
+function AvatarZapIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="zapGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="50%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#d97706" />
+        </linearGradient>
+      </defs>
+      {/* Lightning bolt */}
+      <path d="M18 4 L10 14 L16 14 L14 28 L22 16 L16 16 Z" fill="url(#zapGrad)"/>
+      {/* Glow effect */}
+      <circle cx="16" cy="16" r="12" stroke="url(#zapGrad)" strokeWidth="1" opacity="0.3" fill="none"/>
+    </svg>
+  );
+}
+
+function AvatarShieldIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#34d399" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      {/* Shield shape */}
+      <path d="M16 4 L26 8 L26 15 Q26 24 16 28 Q6 24 6 15 L6 8 Z" fill="url(#shieldGrad)"/>
+      {/* Checkmark */}
+      <path d="M12 16 L15 19 L20 12" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function AvatarFireIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="fireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stopColor="#ef4444" />
+          <stop offset="50%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#fbbf24" />
+        </linearGradient>
+      </defs>
+      {/* Flame shape */}
+      <path d="M16 28 Q10 24 10 18 Q10 14 13 10 Q12 14 14 16 Q14 12 16 8 Q18 12 18 16 Q20 14 19 10 Q22 14 22 18 Q22 24 16 28" fill="url(#fireGrad)"/>
+      {/* Inner flame */}
+      <path d="M16 24 Q13 21 13 18 Q13 16 15 14 Q14 16 16 17 Q16 15 16 13 Q18 15 18 17 Q19 16 18 14 Q19 16 19 18 Q19 21 16 24" fill="#fff" opacity="0.4"/>
+    </svg>
+  );
+}
+
+function AvatarMoonIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="moonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#a78bfa" />
+          <stop offset="100%" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      {/* Crescent moon */}
+      <path d="M18 4 Q26 8 26 16 Q26 24 18 28 Q22 24 22 16 Q22 8 18 4" fill="url(#moonGrad)"/>
+      {/* Stars */}
+      <circle cx="8" cy="10" r="1.5" fill="#fff" opacity="0.8"/>
+      <circle cx="10" cy="22" r="1" fill="#fff" opacity="0.6"/>
+    </svg>
+  );
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 // Fetch historical price data from CoinGecko with fallback
@@ -1794,21 +1905,24 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   },[avatar,avatarBg]);
 
   const avatarOptions=[
-    {id:"crystal",icon:<CrystalIcon size={28}/>,label:"Crystal"},
-    {id:"gem",icon:<GemLogo size={28}/>,label:"Gem"},
-    {id:"diamond",icon:<Diamond size={28} color="#2563eb"/>,label:"Diamond"},
-    {id:"user",icon:<UserCircle size={28} color="#8B9CF7"/>,label:"User"},
-    {id:"zap",icon:<Zap size={28} color="#F59E0B"/>,label:"Zap"},
+    {id:"crystal",icon:<CrystalIcon size={32}/>,label:"Crystal"},
+    {id:"diamond",icon:<AvatarDiamondIcon size={32}/>,label:"Diamond"},
+    {id:"user",icon:<AvatarUserIcon size={32}/>,label:"Person"},
+    {id:"zap",icon:<AvatarZapIcon size={32}/>,label:"Energy"},
+    {id:"shield",icon:<AvatarShieldIcon size={32}/>,label:"Secure"},
+    {id:"fire",icon:<AvatarFireIcon size={32}/>,label:"Fire"},
+    {id:"moon",icon:<AvatarMoonIcon size={32}/>,label:"Night"},
   ];
 
   const bgOptions=[
-    {id:"graphite",style:"linear-gradient(135deg,#374151,#1f2937)",label:"Graphite"},
-    {id:"gradient",style:"linear-gradient(135deg,#2563eb,#7c3aed)",label:"Ocean"},
-    {id:"purple",style:"linear-gradient(135deg,#7c3aed,#ec4899)",label:"Sunset"},
-    {id:"green",style:"linear-gradient(135deg,#22C55E,#16a34a)",label:"Forest"},
-    {id:"orange",style:"linear-gradient(135deg,#F59E0B,#EF4444)",label:"Fire"},
-    {id:"dark",style:"linear-gradient(135deg,#1f2937,#111827)",label:"Midnight"},
-    {id:"blue",style:"linear-gradient(135deg,#0ea5e9,#2563eb)",label:"Sky"},
+    {id:"graphite",style:"linear-gradient(145deg,#3d4550,#252b33)",label:"Graphite"},
+    {id:"midnight",style:"linear-gradient(145deg,#1e293b,#0f172a)",label:"Midnight"},
+    {id:"ocean",style:"linear-gradient(145deg,#0c4a6e,#0284c7)",label:"Ocean"},
+    {id:"royal",style:"linear-gradient(145deg,#312e81,#4c1d95)",label:"Royal"},
+    {id:"emerald",style:"linear-gradient(145deg,#064e3b,#059669)",label:"Emerald"},
+    {id:"sunset",style:"linear-gradient(145deg,#7c2d12,#c2410c)",label:"Sunset"},
+    {id:"rose",style:"linear-gradient(145deg,#881337,#be123c)",label:"Rose"},
+    {id:"slate",style:"linear-gradient(145deg,#475569,#334155)",label:"Slate"},
   ];
 
   const currentBg=bgOptions.find(b=>b.id===avatarBg)?.style||bgOptions[0].style;
@@ -1860,7 +1974,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
             </div>
             
             <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px",fontWeight:600}}>AVATAR ICON</p>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginBottom:20}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,marginBottom:20}}>
               {avatarOptions.map(opt=> (
                 <button key={opt.id} onClick={()=>setAvatar(opt.id)}
                   style={{aspectRatio:"1",borderRadius:12,border:"none",background:avatar===opt.id?"#2563eb":"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
