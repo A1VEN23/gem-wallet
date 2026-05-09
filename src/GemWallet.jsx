@@ -6,7 +6,8 @@ import {
   Plus, ChevronDown, RefreshCw, Globe, Lock, AlertTriangle, Bell,
   ExternalLink, TrendingUp, TrendingDown, Zap,
   CheckCircle, Clock, AlertCircle, RotateCcw,
-  Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout
+  Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
+  Image, SquaresFour, ChartLine, BellRing, Palette, UserCircle
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -196,6 +197,51 @@ function EmptyMailboxIcon({ size = 48 }) {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+// Fetch historical price data from CoinGecko
+async function fetchPriceHistory(sym, days=7) {
+  try {
+    const idMap={ETH:"ethereum",BNB:"binancecoin",SOL:"solana",TON:"the-open-network",LTC:"litecoin",ARB:"arbitrum",USDT:"tether"};
+    const id=idMap[sym];
+    if(!id) return null;
+    const res=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`);
+    const data=await res.json();
+    return data.prices?.map(p=>({timestamp:p[0],price:p[1]}))||null;
+  }catch{return null;}
+}
+
+// SVG Mini Chart Component
+function MiniPriceChart({ data, color="#22C55E", width=120, height=40 }) {
+  if(!data||data.length<2) return <div style={{width,height,background:"#1a1a1a",borderRadius:4}}/>;
+  
+  const prices=data.map(d=>d.price);
+  const min=Math.min(...prices);
+  const max=Math.max(...prices);
+  const range=max-min||1;
+  
+  const points=data.map((d,i)=>{
+    const x=(i/(data.length-1))*width;
+    const y=height-((d.price-min)/range)*height;
+    return `${x},${y}`;
+  }).join(" ");
+  
+  const isPositive=data[data.length-1].price>=data[0].price;
+  const lineColor=isPositive?"#22C55E":"#EF4444";
+  
+  return (
+    <svg width={width} height={height} style={{borderRadius:4}}>
+      <defs>
+        <linearGradient id={`grad-${color.replace("#","")}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.3"/>
+          <stop offset="100%" stopColor={lineColor} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <polygon points={`0,${height} ${points} ${width},${height}`} fill={`url(#grad-${color.replace("#","")})`} opacity="0.3"/>
+    </svg>
+  );
+}
+
 function CoinIcon({ asset, size=42 }) {
   return (
     <div style={{width:size,height:size,borderRadius:"50%",background:asset.bg,
@@ -967,10 +1013,38 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
   const price = prices[asset.sym]||asset.price||0;
   const val = asset.balance*price;
   const pos = asset.chg>=0;
-  const pts = Array.from({length:20},(_,i)=>{
-    const y=50+Math.sin(i*0.7)*15+(pos?i*1.5:-i);
-    return `${(i/19)*260},${Math.max(10,Math.min(90,y))}`;
-  }).join(" ");
+  const [chartData,setChartData]=useState(null);
+  const [chartDays,setChartDays]=useState(7);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    setLoading(true);
+    fetchPriceHistory(asset.sym,chartDays).then(data=>{
+      setChartData(data);
+      setLoading(false);
+    });
+  },[asset.sym,chartDays]);
+
+  // Build SVG path from real data
+  const chartPath=useMemo(()=>{
+    if(!chartData||chartData.length<2) return null;
+    const prices=chartData.map(d=>d.price);
+    const min=Math.min(...prices);
+    const max=Math.max(...prices);
+    const range=max-min||1;
+    const width=260;
+    const height=100;
+    
+    return chartData.map((d,i)=>{
+      const x=(i/(chartData.length-1))*width;
+      const y=height-((d.price-min)/range)*(height-20)-10;
+      return `${x},${y}`;
+    }).join(" ");
+  },[chartData]);
+
+  const isChartPositive=chartData&&chartData.length>1?chartData[chartData.length-1].price>=chartData[0].price:pos;
+  const chartColor=isChartPositive?"#22C55E":"#EF4444";
+
   return (
     <Sheet onClose={onClose} title={asset.name}>
       <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
@@ -983,16 +1057,54 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
             </p>
           </div>
         </div>
-        <div style={{background:"#0d0d0d",borderRadius:16,padding:"16px 8px"}}>
-          <svg width="100%" viewBox="0 0 260 100" preserveAspectRatio="none" style={{height:80}}>
-            <defs><linearGradient id={`g${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={asset.color} stopOpacity="0.3"/>
-              <stop offset="100%" stopColor={asset.color} stopOpacity="0"/>
-            </linearGradient></defs>
-            <polygon points={`0,100 ${pts} 260,100`} fill={`url(#g${asset.id})`}/>
-            <polyline points={pts} fill="none" stroke={asset.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+
+        {/* Real Price Chart */}
+        <div style={{background:"#0d0d0d",borderRadius:16,padding:"16px"}}>
+          {/* Time range selector */}
+          <div style={{display:"flex",gap:8,marginBottom:12}}>
+            {[1,7,30].map(days=> (
+              <button key={days} onClick={()=>setChartDays(days)}
+                style={{padding:"4px 12px",borderRadius:8,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",
+                  background:chartDays===days?"#2563eb":"#1a1a1a",color:chartDays===days?"#fff":"rgba(255,255,255,0.5)"}}>
+                {days===1?"24H":days===7?"7D":"30D"}
+              </button>
+            ))}
+          </div>
+          
+          {loading?(
+            <div style={{height:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <RefreshCw size={24} color="rgba(255,255,255,0.3)" className="spin"/>
+            </div>
+          ):chartPath?(
+            <svg width="100%" viewBox="0 0 260 100" preserveAspectRatio="none" style={{height:100}}>
+              <defs>
+                <linearGradient id={`chartGrad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={chartColor} stopOpacity="0.4"/>
+                  <stop offset="100%" stopColor={chartColor} stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              <polygon points={`0,100 ${chartPath} 260,100`} fill={`url(#chartGrad-${asset.id})`}/>
+              <polyline points={chartPath} fill="none" stroke={chartColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              {/* Current price dot */}
+              {chartData&&(
+                <circle cx="260" cy={100-((chartData[chartData.length-1].price-Math.min(...chartData.map(d=>d.price)))/(Math.max(...chartData.map(d=>d.price))-Math.min(...chartData.map(d=>d.price))||1))*80-10} r="4" fill={chartColor} stroke="#fff" strokeWidth="2"/>
+              )}
+            </svg>
+          ):(
+            <div style={{height:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <p style={{color:"rgba(255,255,255,0.3)",fontSize:12}}>Chart data unavailable</p>
+            </div>
+          )}
+          
+          {chartData&&chartData.length>0&&(
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}>${Math.min(...chartData.map(d=>d.price)).toFixed(2)}</span>
+              <span style={{fontSize:11,color:chartColor,fontWeight:600}}>{isChartPositive?"↗":"↘"} {((chartData[chartData.length-1].price-chartData[0].price)/chartData[0].price*100).toFixed(2)}%</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}>${Math.max(...chartData.map(d=>d.price)).toFixed(2)}</span>
+            </div>
+          )}
         </div>
+
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[["Price",fmtUSD(price)],["24h",`${pos?"+":""}${asset.chg?.toFixed(2)}%`],
             ["Balance",`${fmt(asset.balance,6)} ${asset.sym}`],["Value",fmtUSD(val)]].map(([k,v])=>(
@@ -1405,11 +1517,159 @@ function ActivityTab({ txHistory, onCancelTx }) {
   );
 }
 
+// ─── NFT TAB ─────────────────────────────────────────────────────────────────
+function NFTTab({ addresses }) {
+  const [nfts,setNfts]=useState(()=>{
+    const saved=localStorage.getItem(storageKey("nfts"));
+    return saved?JSON.parse(saved):[];
+  });
+  const [showAdd,setShowAdd]=useState(false);
+  const [newNft,setNewNft]=useState({name:"",contract:"",tokenId:"",network:"ETH",image:""});
+
+  useEffect(()=>{
+    localStorage.setItem(storageKey("nfts"),JSON.stringify(nfts));
+  },[nfts]);
+
+  function addNft() {
+    if(!newNft.name||!newNft.contract) return;
+    setNfts(prev=>[...prev,{...newNft,id:Date.now(),addedAt:new Date().toISOString()}]);
+    setNewNft({name:"",contract:"",tokenId:"",network:"ETH",image:""});
+    setShowAdd(false);
+  }
+
+  function removeNft(id) {
+    setNfts(prev=>prev.filter(n=>n.id!==id));
+  }
+
+  const networks=["ETH","BNB","SOL","ARB","TON"];
+
+  return (
+    <div style={{padding:"0 16px 100px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:15,fontWeight:600,color:"#fff"}}>My NFT Collection</span>
+        <button onClick={()=>setShowAdd(!showAdd)} style={{width:32,height:32,borderRadius:"50%",background:"#2563eb",
+          border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+          <Plus size={18} color="#fff"/>
+        </button>
+      </div>
+
+      {showAdd&&(
+        <div style={{background:"#111",borderRadius:16,padding:16,marginBottom:16,border:"1px solid rgba(255,255,255,0.08)"}}>
+          <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:"0 0 12px"}}>Add NFT Manually</p>
+          <input placeholder="NFT Name" value={newNft.name} onChange={e=>setNewNft({...newNft,name:e.target.value})}
+            style={{width:"100%",padding:10,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",marginBottom:8,fontSize:13}}/>
+          <input placeholder="Contract Address" value={newNft.contract} onChange={e=>setNewNft({...newNft,contract:e.target.value})}
+            style={{width:"100%",padding:10,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",marginBottom:8,fontSize:13}}/>
+          <input placeholder="Token ID" value={newNft.tokenId} onChange={e=>setNewNft({...newNft,tokenId:e.target.value})}
+            style={{width:"100%",padding:10,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",marginBottom:8,fontSize:13}}/>
+          <input placeholder="Image URL (optional)" value={newNft.image} onChange={e=>setNewNft({...newNft,image:e.target.value})}
+            style={{width:"100%",padding:10,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",marginBottom:8,fontSize:13}}/>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+            {networks.map(n=> (
+              <button key={n} onClick={()=>setNewNft({...newNft,network:n})}
+                style={{padding:"6px 12px",borderRadius:8,border:"none",fontSize:12,
+                  background:newNft.network===n?"#2563eb":"#333",color:"#fff",cursor:"pointer"}}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <button onClick={addNft} style={{width:"100%",padding:12,background:"#22C55E",border:"none",borderRadius:10,color:"#fff",fontWeight:600,cursor:"pointer"}}>
+            Add NFT
+          </button>
+        </div>
+      )}
+
+      {nfts.length===0?(
+        <div style={{textAlign:"center",padding:"60px 24px"}}>
+          <div style={{width:80,height:80,borderRadius:20,background:"linear-gradient(135deg,#7c3aed,#2563eb)",margin:"0 auto 20px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Image size={40} color="#fff"/>
+          </div>
+          <p style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>No NFTs yet</p>
+          <p style={{color:"rgba(255,255,255,0.3)",fontSize:12,marginTop:8}}>Add your NFTs manually or import from marketplaces</p>
+        </div>
+      ): (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {nfts.map(nft=> (
+            <div key={nft.id} style={{background:"#111",borderRadius:16,overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{aspectRatio:"1",background:nft.image?`url(${nft.image}) center/cover`:"linear-gradient(135deg,#1e3a8a,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {!nft.image&&<Image size={32} color="rgba(255,255,255,0.3)"/>}
+              </div>
+              <div style={{padding:12}}>
+                <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:"0 0 4px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nft.name}</p>
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 4px"}}>{nft.network} • #{nft.tokenId||"-"}</p>
+                <p style={{fontSize:10,color:"rgba(255,255,255,0.3)",margin:0,fontFamily:"monospace"}}>{shortAddr(nft.contract)}</p>
+                <button onClick={()=>removeNft(nft.id)} style={{marginTop:10,width:"100%",padding:8,background:"#EF444422",border:"1px solid #EF444444",borderRadius:8,color:"#EF4444",fontSize:12,cursor:"pointer"}}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
 function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses }) {
   const [modal,setModal]=useState(null);
+  const [avatarModal,setAvatarModal]=useState(false);
+  const [priceAlertModal,setPriceAlertModal]=useState(false);
   const addr = addresses.ETH||"";
+  
+  // Avatar & Background state
+  const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"gem");
+  const [avatarBg,setAvatarBg]=useState(()=>localStorage.getItem(storageKey("avatarBg"))||"gradient");
+  
+  // Price Alerts state
+  const [priceAlerts,setPriceAlerts]=useState(()=>{
+    const saved=localStorage.getItem(storageKey("priceAlerts"));
+    return saved?JSON.parse(saved):[];
+  });
+  const [newAlert,setNewAlert]=useState({sym:"ETH",targetPrice:"",condition:"above"});
+
+  useEffect(()=>{
+    localStorage.setItem(storageKey("avatar"),avatar);
+    localStorage.setItem(storageKey("avatarBg"),avatarBg);
+  },[avatar,avatarBg]);
+
+  useEffect(()=>{
+    localStorage.setItem(storageKey("priceAlerts"),JSON.stringify(priceAlerts));
+  },[priceAlerts]);
+
+  function addPriceAlert() {
+    if(!newAlert.targetPrice) return;
+    setPriceAlerts(prev=>[...prev,{...newAlert,id:Date.now(),createdAt:new Date().toISOString()}]);
+    setNewAlert({sym:"ETH",targetPrice:"",condition:"above"});
+  }
+
+  function removePriceAlert(id) {
+    setPriceAlerts(prev=>prev.filter(a=>a.id!==id));
+  }
+
+  const avatarOptions=[
+    {id:"gem",icon:<GemLogo size={28}/>,label:"Gem"},
+    {id:"diamond",icon:<Diamond size={28} color="#2563eb"/>,label:"Diamond"},
+    {id:"user",icon:<UserCircle size={28} color="#8B9CF7"/>,label:"User"},
+    {id:"zap",icon:<Zap size={28} color="#F59E0B"/>,label:"Zap"},
+    {id:"shield",icon:<Shield size={28} color="#22C55E"/>,label:"Shield"},
+  ];
+
+  const bgOptions=[
+    {id:"gradient",style:"linear-gradient(135deg,#2563eb,#7c3aed)",label:"Ocean"},
+    {id:"purple",style:"linear-gradient(135deg,#7c3aed,#ec4899)",label:"Sunset"},
+    {id:"green",style:"linear-gradient(135deg,#22C55E,#16a34a)",label:"Forest"},
+    {id:"orange",style:"linear-gradient(135deg,#F59E0B,#EF4444)",label:"Fire"},
+    {id:"dark",style:"linear-gradient(135deg,#1f2937,#111827)",label:"Midnight"},
+    {id:"blue",style:"linear-gradient(135deg,#0ea5e9,#2563eb)",label:"Sky"},
+  ];
+
+  const currentBg=bgOptions.find(b=>b.id===avatarBg)?.style||bgOptions[0].style;
+
   const secs=[
+    {t:"Profile",items:[
+      {icon:UserCircle,l:"Avatar & Background",s:"Customize your wallet",a:"avatar"},
+    ]},
     {t:"Security",items:[
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
       {icon:Lock,l:"Change PIN",s:"Update your PIN code",a:"pin"},
@@ -1417,17 +1677,21 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     ]},
     {t:"Preferences",items:[
       {icon:Globe,l:"Network",s:network,a:"network"},
-      {icon:Bell,l:"Notifications",s:"Push enabled",a:"notif"},
+      {icon:BellRing,l:"Price Alerts",s:`${priceAlerts.length} active alerts`,a:"pricealerts"},
     ]},
     {t:"Support",items:[
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
       {icon:ExternalLink,l:"About",s:"Version 2.4.1",a:"about"},
     ]},
   ];
+
   function handleAction(a) {
     if(a==="lock"){onLock();return;}
+    if(a==="avatar"){setAvatarModal(true);return;}
+    if(a==="pricealerts"){setPriceAlertModal(true);return;}
     setModal(a);
   }
+
   return (
     <div style={{padding:"0 16px 100px"}}>
       {modal==="recovery"&&<RecoveryModal onClose={()=>setModal(null)} mnemonic={mnemonic}/>}
@@ -1467,14 +1731,17 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       )}
       <div style={{display:"flex",alignItems:"center",gap:14,padding:"20px 16px",background:"#111",
         borderRadius:20,border:"1px solid rgba(255,255,255,0.06)",marginBottom:20,animation:"fadeUp 0.4s ease both"}}>
-        <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",
-          display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <GemLogo size={32}/>
+        <div style={{width:52,height:52,borderRadius:16,background:currentBg,
+          display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}} onClick={()=>setAvatarModal(true)}>
+          {avatarOptions.find(a=>a.id===avatar)?.icon}
         </div>
-        <div>
+        <div style={{flex:1}}>
           <p style={{fontSize:16,fontWeight:700,color:"#fff",margin:0}}>My Gem Wallet</p>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0",fontFamily:"monospace"}}>{shortAddr(addr)} · 6 assets</p>
         </div>
+        <button onClick={()=>setAvatarModal(true)} style={{padding:8,background:"#1a1a1a",border:"none",borderRadius:8,cursor:"pointer"}}>
+          <Palette size={16} color="rgba(255,255,255,0.5)"/>
+        </button>
       </div>
       {secs.map((sec,si)=>(
         <div key={sec.t} style={{marginBottom:24,animation:`fadeUp 0.4s ${0.1*si}s ease both`,opacity:0,animationFillMode:"forwards"}}>
@@ -2033,6 +2300,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
+    {id:"nft",Icon:SquaresFour,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
   ];
 
@@ -2079,6 +2347,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
+        {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
       </div>
