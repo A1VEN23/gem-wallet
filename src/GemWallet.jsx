@@ -75,46 +75,87 @@ async function fetchLivePrices() {
 }
 
 // ─── GEM LOGO SVG COMPONENT ─────────────────────────────────────────────────
+// Realistic 3D crystal gem with multiple facets
 function GemLogo({ size = 40 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="gemGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#2563eb" />
-          <stop offset="30%" stopColor="#7c3aed" />
-          <stop offset="70%" stopColor="#2563eb" />
-          <stop offset="100%" stopColor="#1d4ed8" />
+        {/* Main crystal gradient */}
+        <linearGradient id="crystalMain" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="40%" stopColor="#3b82f6" />
+          <stop offset="60%" stopColor="#2563eb" />
+          <stop offset="100%" stopColor="#1e40af" />
         </linearGradient>
-        <linearGradient id="gemShine" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+        {/* Side facets gradient */}
+        <linearGradient id="crystalLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#93c5fd" />
+          <stop offset="50%" stopColor="#60a5fa" />
+          <stop offset="100%" stopColor="#3b82f6" />
+        </linearGradient>
+        <linearGradient id="crystalRight" x1="100%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#818cf8" />
+          <stop offset="50%" stopColor="#6366f1" />
+          <stop offset="100%" stopColor="#4f46e5" />
+        </linearGradient>
+        {/* Bottom point gradient */}
+        <linearGradient id="crystalBottom" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#2563eb" />
+          <stop offset="100%" stopColor="#1e3a8a" />
+        </linearGradient>
+        {/* Inner facet gradients */}
+        <linearGradient id="facetShine" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.5)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </linearGradient>
-        <filter id="gemGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+        {/* Glow filter */}
+        <filter id="crystalGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1" result="blur"/>
           <feComposite in="SourceGraphic" in2="blur" operator="over"/>
         </filter>
       </defs>
-      {/* Main diamond shape */}
-      <path 
-        d="M20 3 L34 13 L20 37 L6 13 Z" 
-        fill="url(#gemGradient)" 
-        stroke="rgba(255,255,255,0.25)" 
-        strokeWidth="0.5"
-        filter="url(#gemGlow)"
-      />
-      {/* Top triangle facets */}
-      <path d="M20 3 L20 13 L34 13 Z" fill="rgba(255,255,255,0.2)"/>
-      <path d="M20 3 L20 13 L6 13 Z" fill="rgba(255,255,255,0.12)"/>
-      {/* Bottom facets */}
-      <path d="M20 13 L34 13 L20 37 Z" fill="url(#gemShine)"/>
-      <path d="M20 13 L6 13 L20 37 Z" fill="rgba(0,0,0,0.1)"/>
-      {/* Center cross facet lines */}
-      <path d="M20 3 L20 37" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
-      <path d="M6 13 L34 13" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
-      {/* Top highlight */}
-      <ellipse cx="20" cy="8" rx="6" ry="3" fill="rgba(255,255,255,0.3)"/>
-      {/* Bottom glow point */}
-      <circle cx="20" cy="28" r="4" fill="rgba(255,255,255,0.15)"/>
+      
+      {/* Outer glow */}
+      <ellipse cx="24" cy="42" rx="12" ry="4" fill="rgba(37,99,235,0.2)" filter="url(#crystalGlow)"/>
+      
+      {/* Main crystal body - complex 3D shape */}
+      {/* Top table (flat top) */}
+      <polygon points="24,2 36,8 24,14 12,8" fill="#bfdbfe" stroke="rgba(255,255,255,0.6)" strokeWidth="0.3"/>
+      
+      {/* Upper girdle facets - left side */}
+      <polygon points="12,8 24,14 20,20 6,14" fill="url(#crystalLeft)" stroke="rgba(255,255,255,0.3)" strokeWidth="0.3"/>
+      <polygon points="6,14 20,20 18,28 4,20" fill="url(#crystalLeft)" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3"/>
+      
+      {/* Upper girdle facets - right side */}
+      <polygon points="36,8 24,14 28,20 42,14" fill="url(#crystalRight)" stroke="rgba(255,255,255,0.3)" strokeWidth="0.3"/>
+      <polygon points="42,14 28,20 30,28 44,20" fill="url(#crystalRight)" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3"/>
+      
+      {/* Center/main facet front */}
+      <polygon points="24,14 20,20 24,36 28,20" fill="url(#crystalMain)" stroke="rgba(255,255,255,0.4)" strokeWidth="0.3"/>
+      
+      {/* Lower pavilion facets - left */}
+      <polygon points="20,20 18,28 24,36 24,20" fill="#4f46e5" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3"/>
+      <polygon points="18,28 8,32 24,36" fill="#4338ca" stroke="rgba(255,255,255,0.15)" strokeWidth="0.3"/>
+      
+      {/* Lower pavilion facets - right */}
+      <polygon points="28,20 30,28 24,36" fill="#6366f1" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3"/>
+      <polygon points="30,28 40,32 24,36" fill="#4f46e5" stroke="rgba(255,255,255,0.15)" strokeWidth="0.3"/>
+      
+      {/* Side pavilion facets */}
+      <polygon points="4,20 18,28 8,32" fill="#1e40af" stroke="rgba(255,255,255,0.1)" strokeWidth="0.3"/>
+      <polygon points="44,20 30,28 40,32" fill="#3730a3" stroke="rgba(255,255,255,0.1)" strokeWidth="0.3"/>
+      
+      {/* Bottom culet */}
+      <polygon points="8,32 24,36 40,32 24,44" fill="url(#crystalBottom)" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3"/>
+      
+      {/* Highlights and sparkles */}
+      <ellipse cx="24" cy="10" rx="5" ry="2" fill="rgba(255,255,255,0.4)"/>
+      <circle cx="20" cy="18" r="1.5" fill="rgba(255,255,255,0.8)"/>
+      <circle cx="26" cy="24" r="1" fill="rgba(255,255,255,0.6)"/>
+      <ellipse cx="22" cy="32" rx="2" ry="1" fill="rgba(255,255,255,0.3)"/>
+      
+      {/* Top bright reflection */}
+      <polygon points="18,6 24,4 30,6 24,10" fill="rgba(255,255,255,0.5)"/>
     </svg>
   );
 }
