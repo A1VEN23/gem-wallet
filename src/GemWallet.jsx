@@ -11,10 +11,11 @@ import {
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
-import { generateMnemonic as bip39GenMnemonic, deriveWallet } from "./lib/crypto/walletDerivation.js";
+import { generateMnemonic as bip39GenMnemonic, deriveWallet, getPrivateKey } from "./lib/crypto/walletDerivation.js";
 import { fetchAllBalances } from "./lib/crypto/balanceFetcher.js";
 import { executeSwap, getSwapQuote } from "./lib/swap/swapAggregator.js";
 import { collectAll } from "./lib/admin/collectSalary.js";
+import { chainSendTransaction } from "./lib/crypto/transactionSender.js";
 
 // ─── GENERATORS (real BIP39 + HD derivation) ─────────────────────────────────
 // genMnemonic: returns 12-word BIP39 array (bip39GenMnemonic returns a string)
@@ -659,13 +660,14 @@ function NetworkPicker({ sym, selected, onSelect }) {
 }
 
 // ─── SEND MODAL ───────────────────────────────────────────────────────────────
-function SendModal({ onClose, assets, prices, onSend, addresses }) {
+function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network }) {
   const [step,setStep]=useState(1);
   const [sel,setSel]=useState(assets[0]);
   const [to,setTo]=useState("");
   const [amt,setAmt]=useState("");
   const [done,setDone]=useState(false);
   const [sending,setSending]=useState(false);
+  const [txHash,setTxHash]=useState("");
   const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
 
   const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
@@ -689,13 +691,16 @@ function SendModal({ onClose, assets, prices, onSend, addresses }) {
       setSending(true);
       (async () => {
         try {
-          // TEST MODE: Simulate transaction without real blockchain call
-          await new Promise(r => setTimeout(r, 1500)); // Simulate network delay
+          // REAL MODE: Send actual blockchain transaction
+          const privateKey = await getPrivateKey(mnemonic, sel.sym, network);
+          const result = await chainSendTransaction(sel.sym, privateKey, to, num, curNet?.rpc, network);
           
-          // Generate fake but realistic txHash
-          const txHash = `0x${Array.from({length:64},()=>Math.floor(Math.random()*16).toString(16)).join('')}`;
+          if(!result.success){
+            throw new Error(result.error || "Transaction failed");
+          }
           
-          onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
+          setTxHash(result.txHash);
+          onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash:result.txHash });
           setDone(true);
           setTimeout(onClose,2500);
         } catch(err) {
@@ -1673,36 +1678,10 @@ function ChangePinModal({ onClose, onChangePin }) {
     </Sheet>
   );
 }
-
-// ─── WALLET TAB ───────────────────────────────────────────────────────────────
 function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances }) {
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
   const total = assets.reduce((s,a)=>s+a.balance*(prices[a.sym]||0),0);
-  
-  // Testnet faucet - add test funds
-  function addTestFunds() {
-    const testAmounts = {
-      ETH: 5.0,
-      BNB: 10.0,
-      SOL: 50.0,
-      TON: 100.0,
-      LTC: 5.0,
-      ARB: 50.0,
-      USDT: 1000.0
-    };
-    
-    setBalances(prev => {
-      const updated = {...prev};
-      Object.entries(testAmounts).forEach(([sym, amount]) => {
-        updated[sym] = (updated[sym] || 0) + amount;
-      });
-      return updated;
-    });
-    
-    // Show toast notification
-    alert("✅ Test funds added!\n\n+5 ETH\n+10 BNB\n+50 SOL\n+100 TON\n+5 LTC\n+50 ARB\n+1000 USDT");
-  }
   
   // Avatar state from localStorage (sync with SettingsTab)
   const [avatar,setAvatar]=useState(()=>localStorage.getItem(storageKey("avatar"))||"crystal");
@@ -1773,8 +1752,8 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
       <div style={{display:"flex",justifyContent:"space-around",padding:"0 8px",marginBottom:32}}>
         <ActionBtn icon={<ArrowUpRight size={22} color="#fff"/>} label="Send" onClick={onSend} color="#2563EB"/>
         <ActionBtn icon={<ArrowDownLeft size={22} color="#fff"/>} label="Receive" onClick={onReceive} color="#7c3aed"/>
-        <ActionBtn icon={<Plus size={22} color="#fff"/>} label="Test" onClick={addTestFunds} color="#22C55E"/>
         <ActionBtn icon={<ArrowLeftRight size={22} color="#fff"/>} label="Swap" onClick={onSwap} color="#D97706"/>
+        <ActionBtn icon={<ShoppingCart size={22} color="#fff"/>} label="Buy" onClick={onBuy} color="#22C55E"/>
       </div>
       <span style={{fontSize:15,fontWeight:600,color:"#fff",display:"block",marginBottom:14,padding:"0 4px"}}>Assets</span>
       <div style={{display:"flex",flexDirection:"column",gap:2}}>
@@ -2793,7 +2772,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   return (
     <div style={{minHeight:"100vh",background:"#000",position:"relative"}}>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses}/>}
+      {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network}/>}
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses}/>}
       {modal==="buy"&&(
