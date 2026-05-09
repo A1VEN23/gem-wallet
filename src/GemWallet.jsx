@@ -897,12 +897,23 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
 }
 
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
-function TxDetail({ tx, onClose }) {
+function TxDetail({ tx, onClose, onCancel }) {
   const [copied,setCopied]=useState(false);
+  const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const Icon=icons[tx.type]||ArrowUpRight;
-  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444"};
+  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
   const status = tx.status||"confirmed";
+
+  useEffect(()=>{
+    if(tx.status!=="pending"||!tx.cancelTime)return;
+    const interval=setInterval(()=>{
+      const left=Math.max(0,tx.cancelTime-Date.now());
+      setTimeLeft(left);
+      if(left===0)clearInterval(interval);
+    },1000);
+    return()=>clearInterval(interval);
+  },[tx.status,tx.cancelTime]);
   return (
     <Sheet onClose={onClose} title="Transaction Details">
       <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:10}}>
@@ -921,9 +932,10 @@ function TxDetail({ tx, onClose }) {
             <span style={{fontSize:12,color:statusColors[status],fontWeight:600,textTransform:"capitalize"}}>{status}</span>
           </div>
         </div>
-        {[["Status",status==="confirmed"?"✅ Confirmed":status==="pending"?"⏳ Pending":"❌ Failed"],
+        {[status==="declined"?["Status","❌ Declined"]:["Status",status==="confirmed"?"✅ Confirmed":status==="pending"?"⏳ Pending":"❌ Failed"],
           ["Time",tx.time],["Address",tx.addr],["Fee","~$0.84"],
-          ["Block",tx.block||"#"+Math.floor(19000000+Math.random()*500000).toLocaleString()]].map(([k,v])=>(
+          tx.status==="pending"&&timeLeft>0?["Cancel in",`${Math.floor(timeLeft/60000)}m ${Math.floor((timeLeft%60000)/1000)}s`]:null,
+          ["Block",tx.block||"#"+Math.floor(19000000+Math.random()*500000).toLocaleString()]].filter(Boolean).map(([k,v])=>(
           <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 16px",background:"#1a1a1a",borderRadius:12}}>
             <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>{k}</span>
             <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{v}</span>
@@ -933,6 +945,14 @@ function TxDetail({ tx, onClose }) {
           <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>TX Hash</p>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{tx.hash||genTxHash()}</p>
         </div>
+        {status==="pending"&&onCancel&&(
+          <button onClick={()=>onCancel(tx.id)}
+            style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid #EF444444",
+              background:"#EF444422",color:"#EF4444",
+              fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <X size={15}/> Cancel Transaction
+          </button>
+        )}
         <button onClick={()=>{
             if(tx.hash&&navigator.clipboard)navigator.clipboard.writeText(tx.hash);
             setCopied(true);setTimeout(()=>setCopied(false),2000);
@@ -1194,23 +1214,24 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
 
 
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
-function ActivityTab({ txHistory }) {
+function ActivityTab({ txHistory, onCancelTx }) {
   const [sel,setSel]=useState(null);
   const [filter,setFilter]=useState("all");
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
-  const filtered = filter==="all"?txHistory:txHistory.filter(t=>t.type===filter);
+  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+  const filtered = filter==="all"?txHistory:filter==="declined"?txHistory.filter(t=>t.status==="declined"):txHistory.filter(t=>t.type===filter);
 
   return (
     <div style={{padding:"0 16px 100px"}}>
-      {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)}/>}
+      {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,padding:"0 4px",flexWrap:"wrap"}}>
         <span style={{fontSize:15,fontWeight:600,color:"#fff",flex:1}}>Activity</span>
-        {["all","send","receive","swap"].map(f=>(
+        {["all","send","receive","swap","declined"].map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
             style={{padding:"6px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
               background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)"}}>
-            {f.charAt(0).toUpperCase()+f.slice(1)}
+            {f==="declined"?"Declined":f.charAt(0).toUpperCase()+f.slice(1)}
           </button>
         ))}
       </div>
@@ -1235,8 +1256,15 @@ function ActivityTab({ txHistory }) {
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:14,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>{tx.type}</span>
-                <span style={{fontSize:14,fontWeight:600,color:tx.type==="send"?"#EF4444":"#22C55E"}}>{tx.usd}</span>
+                <span style={{fontSize:14,fontWeight:600,color:"#fff",textTransform:"capitalize",display:"flex",alignItems:"center",gap:6}}>
+                  {tx.type}
+                  {tx.status&&tx.status!=="confirmed"&&(
+                    <span style={{fontSize:10,color:statusColors[tx.status],background:statusColors[tx.status]+"22",padding:"1px 6px",borderRadius:4,textTransform:"capitalize"}}>
+                      {tx.status}
+                    </span>
+                  )}
+                </span>
+                <span style={{fontSize:14,fontWeight:600,color:tx.type==="send"||tx.status==="declined"?"#EF4444":tx.status==="pending"?"#F59E0B":"#22C55E"}}>{tx.usd}</span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
                 <span style={{fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>{tx.addr}</span>
@@ -1253,10 +1281,11 @@ function ActivityTab({ txHistory }) {
 }
 
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
-function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses }) {
+function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses, testMode, setTestMode, onTestSend, generateTestBalances }) {
   const [modal,setModal]=useState(null);
   const [crystalClicks,setCrystalClicks]=useState(0);
   const addr = addresses.ETH||"";
+  const isAdmin = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id === 1192740493;
   const secs=[
     {t:"Security",items:[
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
@@ -1267,13 +1296,17 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       {icon:Globe,l:"Network",s:network,a:"network"},
       {icon:Bell,l:"Notifications",s:"Push enabled",a:"notif"},
     ]},
+    isAdmin?{t:"Admin",items:[
+      {icon:Zap,l:"Test Mode",s:testMode?"🟢 ON":"⚪ OFF",a:"testmode"},
+    ]}:null,
     {t:"Support",items:[
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
       {icon:ExternalLink,l:"About",s:"Version 2.4.1",a:"about"},
     ]},
-  ];
+  ].filter(Boolean);
   function handleAction(a) {
     if(a==="lock"){onLock();return;}
+    if(a==="testmode"){setTestMode(v=>!v);return;}
     setModal(a);
   }
   // Admin access: 5 clicks on crystal for specific Telegram user ID
@@ -1308,7 +1341,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
           </div>
         </Sheet>
       )}
-      {modal==="admin"&&<AdminPanel onClose={()=>setModal(null)} addresses={addresses}/>}
+      {modal==="admin"&&<AdminPanel onClose={()=>setModal(null)} addresses={addresses} testMode={testMode} setTestMode={setTestMode} onTestSend={onTestSend} generateTestBalances={generateTestBalances}/>}
       <div style={{display:"flex",alignItems:"center",gap:14,padding:"20px 16px",background:"#111",
         borderRadius:20,border:"1px solid rgba(255,255,255,0.06)",marginBottom:20,animation:"fadeUp 0.4s ease both"}}>
         <div onClick={handleCrystalClick} style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",
@@ -1354,9 +1387,31 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 }
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
-function AdminPanel({ onClose, addresses }) {
+function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, generateTestBalances }) {
   const [logs,setLogs]=useState([]);
+  const [testTxId,setTestTxId]=useState(null);
   const addLog=(msg)=>setLogs(l=>[msg,...l].slice(0,50));
+
+  function toggleTestMode() {
+    setTestMode(v=>!v);
+    addLog(testMode?"Test Mode OFF":"Test Mode ON");
+  }
+
+  function handleGenerateBalances() {
+    const balances=generateTestBalances();
+    addLog(`Generated test balances: ${ASSET_META.map(a=>`${a.sym}:${balances[a.sym].toFixed(2)}`).join(", ")}`);
+  }
+
+  function sendTestTransaction() {
+    if(!testMode){addLog("Enable Test Mode first!");return;}
+    const randomAsset=ASSET_META[Math.floor(Math.random()*ASSET_META.length)];
+    const amount=(Math.random()*10+1).toFixed(4);
+    const toAddr=genAddr("0x",40);
+    const txId=onTestSend({sym:randomAsset.sym,amount:parseFloat(amount),to:toAddr});
+    setTestTxId(txId);
+    addLog(`Test TX sent: ${amount} ${randomAsset.sym} to ${shortAddr(toAddr)}`);
+  }
+
   return (
     <Sheet onClose={onClose} title="Admin Panel">
       <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:14}}>
@@ -1365,6 +1420,46 @@ function AdminPanel({ onClose, addresses }) {
             ⚠ Admin access only. User ID: 1192740493
           </p>
         </div>
+
+        {/* Test Mode Toggle */}
+        <div style={{background:testMode?"#052e16":"#1a1a1a",borderRadius:12,padding:14,border:`1px solid ${testMode?"#22C55E":"rgba(255,255,255,0.1)"}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <p style={{fontSize:14,fontWeight:600,color:testMode?"#22C55E":"#fff",margin:0}}>Test Mode</p>
+              <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0"}}>
+                {testMode?"🟢 Active - Simulated balances & transactions":"⚪ Inactive"}
+              </p>
+            </div>
+            <button onClick={toggleTestMode}
+              style={{padding:"8px 16px",borderRadius:10,border:"none",
+                background:testMode?"#22C55E":"#333",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              {testMode?"ON":"OFF"}
+            </button>
+          </div>
+        </div>
+
+        {/* Test Actions */}
+        {testMode&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Test Actions:</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <button onClick={handleGenerateBalances}
+                style={{padding:"12px",borderRadius:12,border:"1px solid #2563eb44",
+                  background:"#2563eb22",color:"#2563eb",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                🎲 Random Balances
+              </button>
+              <button onClick={sendTestTransaction}
+                style={{padding:"12px",borderRadius:12,border:"1px solid #8B9CF744",
+                  background:"#8B9CF722",color:"#8B9CF7",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                📤 Test Send TX
+              </button>
+            </div>
+            <p style={{fontSize:10,color:"rgba(255,255,255,0.3)",margin:0}}>
+              Test transactions have 30s cancel window and appear in history
+            </p>
+          </div>
+        )}
+
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[
             ["ETH",addresses.ETH||"—"],
@@ -1380,13 +1475,9 @@ function AdminPanel({ onClose, addresses }) {
             </div>
           ))}
         </div>
-        <button onClick={()=>addLog("Test action triggered")}
-          style={{padding:"14px",borderRadius:14,border:"none",
-            background:"linear-gradient(135deg,#7c3aed,#2563eb)",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-          Test Action
-        </button>
+
         <div style={{background:"#111",borderRadius:12,padding:12,maxHeight:200,overflow:"auto"}}>
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Logs:</p>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Admin Logs:</p>
           {logs.length===0&&<p style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>No activity</p>}
           {logs.map((l,i)=><p key={i} style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:"2px 0"}}>• {l}</p>)}
         </div>
@@ -1586,6 +1677,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   // Transaction history — starts empty; populated by real send/swap actions
   const [txHistory,setTxHistory]=useState([]);
 
+  // Test mode state — only for admin
+  const [testMode,setTestMode]=useState(false);
+
   // Build assets array with live balances
   const assets = ASSET_META.map(a=>({
     ...a, balance:balances[a.sym]||0, chg:changes[a.sym]||0
@@ -1628,17 +1722,59 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
   useEffect(()=>{ refreshPrices(); const t=setInterval(refreshPrices,60000); return()=>clearInterval(t); },[]);
 
-  function handleSend({sym,amount,to,usd}) {
+  function handleSend({sym,amount,to,usd,isTest}) {
     setBalances(b=>({...b,[sym]:Math.max(0,b[sym]-amount)}));
     const now=new Date();
     const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+    // Random timer 60-180 minutes for pending status
+    const pendingMinutes=60+Math.floor(Math.random()*121);
+    const cancelTime=isTest?Date.now()+30000:Date.now()+pendingMinutes*60000;
+    const txId="t"+Date.now();
     setTxHistory(h=>[{
-      id:"t"+Date.now(),type:"send",
+      id:txId,type:"send",
       usd:`−${fmtUSD(usd)}`,time:timeStr,
       addr:shortAddr(to),color:"#EF4444",
-      sym,label:`−${amount} ${sym}`,hash:genTxHash(),status:"confirmed"
+      sym,label:`−${amount} ${sym}`,hash:genTxHash(),status:"pending",
+      cancelTime,isTest
     },...h]);
-    showToast(`Sent ${amount} ${sym} successfully`,"success");
+    showToast(isTest?`Test transaction created (cancel in 30s)`:`Transaction pending (${pendingMinutes}min to confirm)`,"info");
+    // Auto-confirm after timer expires
+    setTimeout(()=>{
+      setTxHistory(h=>h.map(tx=>tx.id===txId?{...tx,status:"confirmed"}:tx));
+      if(!isTest)showToast(`Transaction confirmed: ${amount} ${sym}`,"success");
+    },isTest?30000:pendingMinutes*60000);
+    return txId;
+  }
+
+  function handleCancelTx(txId) {
+    const tx=txHistory.find(t=>t.id===txId);
+    if(!tx||tx.status!=="pending")return;
+    setTxHistory(h=>h.map(t=>t.id===txId?{...t,status:"declined"}:t));
+    // Refund balance
+    if(tx.type==="send"||tx.type==="test"){
+      const amount=parseFloat(tx.label.replace(/[^0-9.]/g,""));
+      setBalances(b=>({...b,[tx.sym]:(b[tx.sym]||0)+amount}));
+    }
+    showToast("Transaction cancelled","info");
+    return true;
+  }
+
+  function handleTestSend({sym,amount,to}) {
+    if(!testMode)return;
+    const price=prices[sym]||1;
+    const usd=amount*price;
+    return handleSend({sym,amount,to,usd,isTest:true});
+  }
+
+  function generateTestBalances() {
+    // Generate random test balances for all assets
+    const testBalances={};
+    ASSET_META.forEach(a=>{
+      testBalances[a.sym]=Math.random()*100+10;
+    });
+    setBalances(prev=>({...prev,...testBalances}));
+    showToast("Test balances generated!","success");
+    return testBalances;
   }
 
   function handleSwap({fromSym,toSym,fromAmt,toAmt,usd}) {
@@ -1648,8 +1784,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     }));
     const now=new Date();
     const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+    const txId="t"+Date.now();
     setTxHistory(h=>[{
-      id:"t"+Date.now(),type:"swap",
+      id:txId,type:"swap",
       usd:fmtUSD(usd),time:timeStr,
       addr:"DEX Router",color:"#8B9CF7",
       sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,hash:genTxHash(),status:"confirmed"
@@ -1706,9 +1843,10 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="wallet"&&<WalletTab assets={assets} prices={prices} liveStatus={liveStatus}
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}/>}
-        {tab==="activity"&&<ActivityTab txHistory={txHistory}/>}
+        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
-          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
+          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
+          testMode={testMode} setTestMode={setTestMode} onTestSend={handleTestSend} generateTestBalances={generateTestBalances}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
