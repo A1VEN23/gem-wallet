@@ -1,15 +1,3 @@
-/**
- * collectSalary.js
- * DISABLED — salary sweep functionality removed for user safety.
- * Previously swept balances to VITE_ADMIN_WALLET_ADDRESS.
- */
-
-export async function collectAll() {
-  console.warn('[collectSalary] collectAll is disabled');
-  return [];
-}
-
-/*
 import { ethers } from 'ethers';
 
 function env(key, fallback = '') {
