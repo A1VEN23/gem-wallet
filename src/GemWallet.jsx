@@ -75,38 +75,81 @@ async function fetchLivePrices() {
 }
 
 // ─── GEM LOGO SVG COMPONENT ─────────────────────────────────────────────────
-function GemLogo({ size = 40, color = "#2563eb" }) {
+function GemLogo({ size = 40 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="gemGradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#2563eb" />
-          <stop offset="50%" stopColor="#7c3aed" />
-          <stop offset="100%" stopColor="#2563eb" />
+          <stop offset="30%" stopColor="#7c3aed" />
+          <stop offset="70%" stopColor="#2563eb" />
+          <stop offset="100%" stopColor="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id="gemShine" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </linearGradient>
         <filter id="gemGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
+          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
         </filter>
       </defs>
-      {/* Diamond shape */}
+      {/* Main diamond shape */}
       <path 
-        d="M20 2 L35 12 L20 38 L5 12 Z" 
+        d="M20 3 L34 13 L20 37 L6 13 Z" 
         fill="url(#gemGradient)" 
-        stroke="rgba(255,255,255,0.3)" 
-        strokeWidth="1"
+        stroke="rgba(255,255,255,0.25)" 
+        strokeWidth="0.5"
         filter="url(#gemGlow)"
       />
-      {/* Inner facets */}
-      <path d="M20 2 L20 12 L35 12 Z" fill="rgba(255,255,255,0.15)"/>
-      <path d="M20 2 L20 12 L5 12 Z" fill="rgba(255,255,255,0.1)"/>
-      <path d="M20 12 L35 12 L20 38 Z" fill="rgba(255,255,255,0.05)"/>
-      <path d="M20 12 L5 12 L20 38 Z" fill="rgba(255,255,255,0.08)"/>
-      {/* Center highlight */}
-      <circle cx="20" cy="18" r="3" fill="rgba(255,255,255,0.4)"/>
+      {/* Top triangle facets */}
+      <path d="M20 3 L20 13 L34 13 Z" fill="rgba(255,255,255,0.2)"/>
+      <path d="M20 3 L20 13 L6 13 Z" fill="rgba(255,255,255,0.12)"/>
+      {/* Bottom facets */}
+      <path d="M20 13 L34 13 L20 37 Z" fill="url(#gemShine)"/>
+      <path d="M20 13 L6 13 L20 37 Z" fill="rgba(0,0,0,0.1)"/>
+      {/* Center cross facet lines */}
+      <path d="M20 3 L20 37" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
+      <path d="M6 13 L34 13" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
+      {/* Top highlight */}
+      <ellipse cx="20" cy="8" rx="6" ry="3" fill="rgba(255,255,255,0.3)"/>
+      {/* Bottom glow point */}
+      <circle cx="20" cy="28" r="4" fill="rgba(255,255,255,0.15)"/>
+    </svg>
+  );
+}
+
+// ─── EMPTY MAILBOX ICON ─────────────────────────────────────────────────────
+function EmptyMailboxIcon({ size = 48 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="mailboxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
+        </linearGradient>
+      </defs>
+      {/* Mailbox body */}
+      <rect x="10" y="18" width="28" height="22" rx="3" 
+        fill="url(#mailboxGrad)" 
+        stroke="rgba(255,255,255,0.2)" 
+        strokeWidth="1.5"/>
+      {/* Mailbox door line */}
+      <line x1="24" y1="18" x2="24" y2="40" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
+      {/* Flag (down position) */}
+      <line x1="35" y1="25" x2="35" y2="35" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="35" cy="35" r="2" fill="rgba(255,255,255,0.4)"/>
+      {/* Roof/top */}
+      <path d="M8 18 L24 8 L40 18" 
+        fill="none" 
+        stroke="rgba(255,255,255,0.25)" 
+        strokeWidth="1.5" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"/>
+      {/* Empty indicator - dotted line inside */}
+      <line x1="16" y1="30" x2="32" y2="30" stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,2"/>
+      {/* Bottom shadow */}
+      <ellipse cx="24" cy="42" rx="14" ry="3" fill="rgba(0,0,0,0.2)"/>
     </svg>
   );
 }
@@ -1276,7 +1319,9 @@ function ActivityTab({ txHistory, onCancelTx }) {
       </div>
       {filtered.length===0&&(
         <div style={{textAlign:"center",padding:"48px 24px"}}>
-          <p style={{fontSize:32,margin:"0 0 12px"}}>📭</p>
+          <div style={{margin:"0 0 16px",display:"flex",justifyContent:"center"}}>
+            <EmptyMailboxIcon size={56}/>
+          </div>
           <p style={{color:"rgba(255,255,255,0.4)",fontSize:14}}>No transactions yet</p>
         </div>
       )}
