@@ -693,14 +693,18 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
         try {
           // REAL MODE: Send actual blockchain transaction
           const privateKey = await getPrivateKey(mnemonic, sel.sym, network);
-          const result = await chainSendTransaction(sel.sym, privateKey, to, num, curNet?.rpc, network);
+          const fromAddr = addresses[ASSETS.find(a=>a.sym===sel.sym)?.id];
+          const txHash = await chainSendTransaction({
+            sym: sel.sym,
+            networkId: network,
+            from: fromAddr,
+            to: to,
+            amount: num,
+            privateKey: privateKey
+          });
           
-          if(!result.success){
-            throw new Error(result.error || "Transaction failed");
-          }
-          
-          setTxHash(result.txHash);
-          onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash:result.txHash });
+          setTxHash(txHash);
+          onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
           setDone(true);
           setTimeout(onClose,2500);
         } catch(err) {
