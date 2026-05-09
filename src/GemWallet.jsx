@@ -2882,8 +2882,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [liveStatus,setLiveStatus]=useState("idle"); // idle | loading | live | error
   const [error,setError]=useState(null);
   const [isReady,setIsReady]=useState(false);
+  const [userIsAdmin,setUserIsAdmin]=useState(false);
 
-  // Initialize with error handling
+  // Initialize with error handling and check admin status
   useEffect(()=>{
     try {
       // Validate required props
@@ -2893,7 +2894,31 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       if(!mnemonic || mnemonic.length===0){
         console.warn("[WalletApp] No mnemonic provided");
       }
+      
+      // Check admin status after Telegram WebApp is initialized
+      const checkAdmin = () => {
+        const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        console.log("[Admin Check] Telegram User ID:", tgUserId);
+        if (tgUserId && String(tgUserId) === ADMIN_ID) {
+          console.log("[Admin Check] User IS admin!");
+          setUserIsAdmin(true);
+        } else {
+          console.log("[Admin Check] User is not admin");
+          setUserIsAdmin(false);
+        }
+      };
+      
+      // Check immediately and also after a short delay for Telegram to load
+      checkAdmin();
+      const timer = setTimeout(checkAdmin, 500);
+      const timer2 = setTimeout(checkAdmin, 1500);
+      
       setIsReady(true);
+      
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(timer2);
+      };
     } catch (e) {
       console.error("[WalletApp] Init error:", e);
       setError(e.message);
@@ -3020,7 +3045,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(isAdmin() ? [{id:"admin",Icon:Shield,l:"Admin"}] : []),
+    ...(userIsAdmin ? [{id:"admin",Icon:Shield,l:"Admin",special:true}] : []),
   ];
 
   // Show loading state while initializing
@@ -3099,19 +3124,20 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         background:"linear-gradient(to top,#000 60%,transparent)"}}>
         <div style={{display:"flex",background:"#111",borderRadius:22,
           border:"1px solid rgba(255,255,255,0.08)",padding:"6px",backdropFilter:"blur(20px)"}}>
-          {tabs.map(({id,Icon,l})=>(
+          {tabs.map(({id,Icon,l,special})=>(
             <button key={id} onClick={()=>switchTab(id)} style={{flex:1,display:"flex",flexDirection:"column",
               alignItems:"center",gap:4,padding:"10px 4px",borderRadius:16,border:"none",
-              background:tab===id?"#1e1e1e":"transparent",cursor:"pointer",transition:"all 0.2s",
+              background:tab===id?(special?"linear-gradient(135deg,#DC2626,#991B1B)":"#1e1e1e"):"transparent",
+              cursor:"pointer",transition:"all 0.2s",
               position:"relative"}}>
               <Icon size={20}
-                color={id==="admin"?(tab===id?"#7c3aed":"rgba(124,58,237,0.5)"):tab===id?"#2563eb":"rgba(255,255,255,0.35)"}
+                color={special?(tab===id?"#fff":"#EF4444"):tab===id?"#2563eb":"rgba(255,255,255,0.35)"}
                 strokeWidth={tab===id?2.5:1.5}/>
               <span style={{fontSize:11,fontWeight:tab===id?600:400,
-                color:id==="admin"?(tab===id?"#7c3aed":"rgba(124,58,237,0.5)"):tab===id?"#2563eb":"rgba(255,255,255,0.35)"}}>{l}</span>
-              {id==="admin"&&<div style={{position:"absolute",top:6,right:"50%",transform:"translateX(10px)",
-                width:7,height:7,borderRadius:"50%",background:"#7c3aed",
-                boxShadow:"0 0 6px #7c3aed"}}/>}
+                color:special?(tab===id?"#fff":"#EF4444"):tab===id?"#2563eb":"rgba(255,255,255,0.35)"}}>{l}</span>
+              {special&&<div style={{position:"absolute",top:4,right:"50%",transform:"translateX(12px)",
+                width:8,height:8,borderRadius:"50%",background:"#EF4444",
+                boxShadow:"0 0 8px #EF4444",animation:"pulse 2s infinite"}}/>}
             </button>
           ))}
         </div>
