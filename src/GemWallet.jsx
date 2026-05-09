@@ -2666,11 +2666,21 @@ class ErrorBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
+      const errorMsg = this.state.error?.toString?.() || this.state.error?.message || "Unknown error";
+      const errorStack = this.state.error?.stack || "";
+      console.error("[ERROR DETAILS]", errorMsg, errorStack);
       return (
-        <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+        <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,overflow:"auto"}}>
           <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
           <h2 style={{color:"#fff",marginBottom:12}}>Something went wrong</h2>
-          <p style={{color:"rgba(255,255,255,0.6)",textAlign:"center",marginBottom:24}}>{this.state.error?.message || "Unknown error"}</p>
+          <div style={{color:"#ff6b6b",textAlign:"center",marginBottom:24,fontFamily:"monospace",fontSize:14,maxWidth:"90%",wordBreak:"break-word",padding:16,background:"rgba(255,0,0,0.1)",borderRadius:8}}>
+            {errorMsg}
+          </div>
+          {errorStack && (
+            <pre style={{color:"rgba(255,255,255,0.5)",fontSize:11,maxWidth:"90%",maxHeight:"40vh",overflow:"auto",textAlign:"left",padding:16,background:"rgba(0,0,0,0.3)",borderRadius:8,marginBottom:24}}>
+              {errorStack}
+            </pre>
+          )}
           <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
             Reload App
           </button>
