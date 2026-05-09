@@ -2660,6 +2660,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [network,setNetwork]=useState("mainnet");
   const [toast,setToast]=useState(null);
   const [liveStatus,setLiveStatus]=useState("idle"); // idle | loading | live | error
+  const [error,setError]=useState(null);
 
   // Live state
   const [prices,setPrices]=useState({...INITIAL_PRICES});
@@ -2668,6 +2669,16 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
   // Transaction history — starts empty; populated by real send/swap actions
   const [txHistory,setTxHistory]=useState([]);
+
+  // Error boundary effect
+  useEffect(()=>{
+    const handleError=(e)=>{
+      console.error("[WalletApp Error]", e);
+      setError(e.message || "Unknown error");
+    };
+    window.addEventListener("error", handleError);
+    return()=>window.removeEventListener("error", handleError);
+  },[]);
 
   // Build assets array with live balances
   const assets = ASSET_META.map(a=>({
@@ -2772,6 +2783,20 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
   ];
+
+  // Show error if one occurred
+  if(error){
+    return (
+      <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+        <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
+        <h2 style={{color:"#fff",marginBottom:12}}>Something went wrong</h2>
+        <p style={{color:"rgba(255,255,255,0.6)",textAlign:"center",marginBottom:24}}>{error}</p>
+        <button onClick={()=>window.location.reload()} style={{padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
+          Reload App
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{minHeight:"100vh",background:"#000",position:"relative"}}>
