@@ -2663,7 +2663,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
   // Live state
   const [prices,setPrices]=useState({...INITIAL_PRICES});
-  const [changes,setChanges]=useState({BTC:2.34,ETH:-1.12,BNB:0.87,SOL:5.43,TRX:-0.56,USDT:0.01});
+  const [changes,setChanges]=useState({ETH:-1.12,BNB:0.87,SOL:5.43,TON:-0.23,LTC:0.45,ARB:1.23,USDT:0.01});
   const [balances,setBalances]=useState({...INITIAL_BALANCES});
 
   // Transaction history — starts empty; populated by real send/swap actions
