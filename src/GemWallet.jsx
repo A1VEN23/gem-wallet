@@ -1776,10 +1776,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   // Transaction history — starts empty; populated by real send/swap actions
   const [txHistory,setTxHistory]=useState([]);
 
-  // Check if current user is admin
-  const tgUserId = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-  const isAdmin = String(tgUserId) === "1192740493";
-
   // Build assets array with live balances
   const assets = ASSET_META.map(a=>({
     ...a, balance:balances[a.sym]||0, chg:changes[a.sym]||0
@@ -1881,7 +1877,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(isAdmin?[{id:"admin",Icon:Shield,l:"Admin"}]:[]),
   ];
 
   return (
@@ -1929,7 +1924,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
-        {tab==="admin"&&isAdmin&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
