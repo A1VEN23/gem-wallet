@@ -1287,6 +1287,13 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   const addr = addresses.ETH||"";
   const tgUserId = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
   const isAdmin = String(tgUserId) === "1192740493";
+
+  // Auto-open admin panel for admin user on first load
+  useEffect(()=>{
+    if(isAdmin){
+      setModal("admin");
+    }
+  },[isAdmin]);
   const secs=[
     {t:"Security",items:[
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
