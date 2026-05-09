@@ -1381,14 +1381,40 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 }
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
-function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, generateTestBalances }) {
+function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, generateTestBalances, balances, txHistory, setBalances }) {
   const [logs,setLogs]=useState([]);
-  const [testTxId,setTestTxId]=useState(null);
+  const [testUsers,setTestUsers]=useState([]);
+  const [selectedUser,setSelectedUser]=useState(null);
+  const [salaryConfig,setSalaryConfig]=useState({ETH:0.5,USDT:100,BNB:1});
   const addLog=(msg)=>setLogs(l=>[msg,...l].slice(0,50));
 
   function toggleTestMode() {
     setTestMode(v=>!v);
     addLog(testMode?"Test Mode OFF":"Test Mode ON");
+    if(!testMode){
+      // Generate test users when entering test mode
+      generateTestUsers();
+    }
+  }
+
+  function generateTestUsers() {
+    const users=[];
+    const names=["Alice","Bob","Charlie","David","Emma","Frank","Grace","Henry"];
+    for(let i=0;i<5;i++){
+      const userBalances={};
+      ASSET_META.forEach(a=>{
+        userBalances[a.sym]=Math.random()*500+50;
+      });
+      users.push({
+        id:`user_${i}`,
+        name:names[i]||`User${i+1}`,
+        address:genAddr("0x",40),
+        balances:userBalances,
+        status:Math.random()>0.3?"online":"offline"
+      });
+    }
+    setTestUsers(users);
+    addLog(`Generated ${users.length} test users with random balances`);
   }
 
   function handleGenerateBalances() {
@@ -1402,13 +1428,36 @@ function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, gen
     const amount=(Math.random()*10+1).toFixed(4);
     const toAddr=genAddr("0x",40);
     const txId=onTestSend({sym:randomAsset.sym,amount:parseFloat(amount),to:toAddr});
-    setTestTxId(txId);
     addLog(`Test TX sent: ${amount} ${randomAsset.sym} to ${shortAddr(toAddr)}`);
   }
 
+  function receiveTestTransaction() {
+    if(!testMode){addLog("Enable Test Mode first!");return;}
+    const randomAsset=ASSET_META[Math.floor(Math.random()*ASSET_META.length)];
+    const amount=(Math.random()*50+5).toFixed(4);
+    const fromAddr=genAddr("0x",40);
+    // Add to balance
+    setBalances(prev=>({...prev,[randomAsset.sym]:(prev[randomAsset.sym]||0)+parseFloat(amount)}));
+    addLog(`Test TX received: ${amount} ${randomAsset.sym} from ${shortAddr(fromAddr)}`);
+  }
+
+  function collectSalary(sym) {
+    const amount=salaryConfig[sym]||0;
+    if(amount>0){
+      setBalances(prev=>({...prev,[sym]:(prev[sym]||0)+amount}));
+      addLog(`Collected salary: ${amount} ${sym}`);
+    }
+  }
+
+  // Calculate total user balances
+  const totalUserBalances={};
+  ASSET_META.forEach(a=>{
+    totalUserBalances[a.sym]=testUsers.reduce((sum,u)=>sum+(u.balances[a.sym]||0),0);
+  });
+
   return (
     <Sheet onClose={onClose} title="Admin Panel">
-      <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:14,maxHeight:"80vh",overflow:"auto"}}>
         <div style={{background:"#0f0a00",borderRadius:12,padding:14,border:"1px solid rgba(245,158,11,0.2)"}}>
           <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>
             ⚠ Admin access only. User ID: 1192740493
@@ -1421,7 +1470,7 @@ function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, gen
             <div>
               <p style={{fontSize:14,fontWeight:600,color:testMode?"#22C55E":"#fff",margin:0}}>Test Mode</p>
               <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0"}}>
-                {testMode?"🟢 Active - Simulated balances & transactions":"⚪ Inactive"}
+                {testMode?"🟢 Active - Simulated environment":"⚪ Inactive - Real balances & users"}
               </p>
             </div>
             <button onClick={toggleTestMode}
@@ -1432,45 +1481,134 @@ function AdminPanel({ onClose, addresses, testMode, setTestMode, onTestSend, gen
           </div>
         </div>
 
-        {/* Test Actions */}
-        {testMode&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Test Actions:</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <button onClick={handleGenerateBalances}
-                style={{padding:"12px",borderRadius:12,border:"1px solid #2563eb44",
-                  background:"#2563eb22",color:"#2563eb",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                🎲 Random Balances
-              </button>
-              <button onClick={sendTestTransaction}
-                style={{padding:"12px",borderRadius:12,border:"1px solid #8B9CF744",
-                  background:"#8B9CF722",color:"#8B9CF7",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                📤 Test Send TX
-              </button>
+        {/* TEST MODE CONTENT */}
+        {testMode?(
+          <>
+            {/* Test Actions */}
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Test Actions:</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <button onClick={handleGenerateBalances}
+                  style={{padding:"12px",borderRadius:12,border:"1px solid #2563eb44",
+                    background:"#2563eb22",color:"#2563eb",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  🎲 My Random Balances
+                </button>
+                <button onClick={generateTestUsers}
+                  style={{padding:"12px",borderRadius:12,border:"1px solid #8B9CF744",
+                    background:"#8B9CF722",color:"#8B9CF7",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  👥 Refresh Test Users
+                </button>
+                <button onClick={sendTestTransaction}
+                  style={{padding:"12px",borderRadius:12,border:"1px solid #EF444444",
+                    background:"#EF444422",color:"#EF4444",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  📤 Send Test TX
+                </button>
+                <button onClick={receiveTestTransaction}
+                  style={{padding:"12px",borderRadius:12,border:"1px solid #22C55E44",
+                    background:"#22C55E22",color:"#22C55E",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  📥 Receive Test TX
+                </button>
+              </div>
             </div>
-            <p style={{fontSize:10,color:"rgba(255,255,255,0.3)",margin:0}}>
-              Test transactions have 30s cancel window and appear in history
-            </p>
-          </div>
+
+            {/* Test Users List */}
+            <div style={{background:"#111",borderRadius:12,padding:12}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>Active Test Users ({testUsers.length}):</p>
+              {testUsers.length===0&&<p style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>No test users. Click "Refresh Test Users"</p>}
+              {testUsers.map(u=> (
+                <div key={u.id} onClick={()=>setSelectedUser(u)}
+                  style={{background:"#1a1a1a",borderRadius:10,padding:"10px",marginBottom:8,cursor:"pointer"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:u.status==="online"?"#22C55E":"#555",
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>
+                      {u.name[0]}
+                    </div>
+                    <div style={{flex:1}}>
+                      <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:0}}>{u.name}</p>
+                      <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:0}}>{shortAddr(u.address)} • {u.status}</p>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:0}}>
+                        {Object.entries(u.balances).slice(0,2).map(([sym,bal])=>`${bal.toFixed(2)} ${sym}`).join(", ")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Selected User Detail */}
+            {selectedUser&&(
+              <div style={{background:"#0d1033",borderRadius:12,padding:12,border:"1px solid #2563eb33"}}>
+                <p style={{fontSize:12,color:"#8B9CF7",margin:"0 0 10px"}}>{selectedUser.name}'s Balances:</p>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {ASSET_META.map(a=> (
+                    <div key={a.sym} style={{background:"#1a1a1a",borderRadius:8,padding:"8px"}}>
+                      <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:0}}>{a.sym}</p>
+                      <p style={{fontSize:13,fontWeight:600,color:"#fff",margin:0}}>
+                        {selectedUser.balances[a.sym]?.toFixed(4)||"0"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={()=>setSelectedUser(null)} style={{marginTop:10,width:"100%",padding:"8px",borderRadius:8,
+                  border:"none",background:"#333",color:"#fff",fontSize:12,cursor:"pointer"}}>
+                  Close
+                </button>
+              </div>
+            )}
+          </>
+        ):(
+          <>
+            {/* NORMAL MODE - User Management & Salary */}
+            <div style={{background:"#111",borderRadius:12,padding:12}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>💰 Salary Collection:</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                {Object.entries(salaryConfig).map(([sym,amount])=> (
+                  <button key={sym} onClick={()=>collectSalary(sym)}
+                    style={{padding:"10px",borderRadius:10,border:"1px solid #22C55E44",
+                      background:"#22C55E22",color:"#22C55E",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    +{amount} {sym}
+                  </button>
+                ))}
+              </div>
+              <p style={{fontSize:10,color:"rgba(255,255,255,0.3)",margin:"8px 0 0"}}>
+                Click to add configured salary amounts
+              </p>
+            </div>
+
+            <div style={{background:"#111",borderRadius:12,padding:12}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>📊 Your Current Balances:</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {ASSET_META.map(a=> (
+                  <div key={a.sym} style={{background:"#1a1a1a",borderRadius:8,padding:"10px",display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>{a.sym}</span>
+                    <span style={{fontSize:13,fontWeight:600,color:"#fff"}}>{balances[a.sym]?.toFixed(4)||"0"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{background:"#111",borderRadius:12,padding:12}}>
+              <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 10px"}}>🔑 Your Addresses:</p>
+              {[
+                ["ETH",addresses.ETH||"—"],
+                ["BNB",addresses.BNB||"—"],
+                ["ARB",addresses.ARB||"—"],
+                ["SOL",addresses.SOL||"—"],
+                ["TON",addresses.TON||"—"],
+                ["LTC",addresses.LTC||"—"],
+              ].map(([sym,addr])=> (
+                <div key={sym} style={{background:"#1a1a1a",borderRadius:8,padding:"10px",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>{sym}</span>
+                  <span style={{fontSize:11,color:"#fff",fontFamily:"monospace"}}>{shortAddr(addr)}</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[
-            ["ETH",addresses.ETH||"—"],
-            ["BNB",addresses.BNB||"—"],
-            ["ARB",addresses.ARB||"—"],
-            ["SOL",addresses.SOL||"—"],
-            ["TON",addresses.TON||"—"],
-            ["LTC",addresses.LTC||"—"],
-          ].map(([sym,addr])=> (
-            <div key={sym} style={{background:"#1a1a1a",borderRadius:12,padding:"12px 14px"}}>
-              <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 3px"}}>{sym}</p>
-              <p style={{fontSize:11,fontWeight:500,color:"#fff",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{shortAddr(addr)}</p>
-            </div>
-          ))}
-        </div>
-
-        <div style={{background:"#111",borderRadius:12,padding:12,maxHeight:200,overflow:"auto"}}>
+        <div style={{background:"#111",borderRadius:12,padding:12,maxHeight:150,overflow:"auto"}}>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Admin Logs:</p>
           {logs.length===0&&<p style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>No activity</p>}
           {logs.map((l,i)=><p key={i} style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:"2px 0"}}>• {l}</p>)}
@@ -1842,7 +1980,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
           testMode={testMode} setTestMode={setTestMode} onTestSend={handleTestSend} generateTestBalances={generateTestBalances}/>}
-        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} testMode={testMode} setTestMode={setTestMode} onTestSend={handleTestSend} generateTestBalances={generateTestBalances}/>}
+        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} testMode={testMode} setTestMode={setTestMode} onTestSend={handleTestSend} generateTestBalances={generateTestBalances} balances={balances} txHistory={txHistory} setBalances={setBalances}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
