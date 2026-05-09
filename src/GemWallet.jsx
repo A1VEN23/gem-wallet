@@ -1285,7 +1285,8 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   const [modal,setModal]=useState(null);
   const [crystalClicks,setCrystalClicks]=useState(0);
   const addr = addresses.ETH||"";
-  const isAdmin = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id === 1192740493;
+  const tgUserId = typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  const isAdmin = String(tgUserId) === "1192740493";
   const secs=[
     {t:"Security",items:[
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
@@ -1314,7 +1315,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     const tgUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     const newCount = crystalClicks + 1;
     setCrystalClicks(newCount);
-    if (newCount >= 5 && tgUserId === 1192740493) {
+    if (newCount >= 5 && String(tgUserId) === "1192740493") {
       setCrystalClicks(0);
       setModal("admin");
     }
