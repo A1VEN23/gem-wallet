@@ -1354,9 +1354,49 @@ function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
   );
 }
 
+// ─── CANCEL CONFIRMATION MODAL ───────────────────────────────────────────────
+function CancelConfirmModal({ tx, onConfirm, onClose }) {
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.8)",backdropFilter:"blur(8px)"}}>
+      <div style={{background:"#1a1a1a",borderRadius:24,padding:"28px 24px",width:"90%",maxWidth:340,border:"1px solid rgba(255,255,255,0.1)"}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{width:64,height:64,borderRadius:"50%",background:"linear-gradient(135deg,#EF444422,#DC262622)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",border:"1px solid #EF444444"}}>
+            <X size={28} color="#EF4444"/>
+          </div>
+          <h3 style={{fontSize:18,fontWeight:700,color:"#fff",margin:"0 0 8px"}}>Cancel Transaction?</h3>
+          <p style={{fontSize:13,color:"rgba(255,255,255,0.5)",margin:0,lineHeight:1.5}}>
+            Are you sure you want to cancel this transaction? This action cannot be undone.
+          </p>
+        </div>
+        <div style={{background:"#252525",borderRadius:12,padding:14,marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>Amount</span>
+            <span style={{fontSize:13,fontWeight:600,color:"#fff"}}>{tx.label}</span>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>To</span>
+            <span style={{fontSize:13,color:"rgba(255,255,255,0.7)",fontFamily:"monospace"}}>{tx.addr}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose}
+            style={{flex:1,padding:"14px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.6)",fontSize:14,fontWeight:500,cursor:"pointer"}}>
+            Keep Transaction
+          </button>
+          <button onClick={()=>{onConfirm();onClose();}}
+            style={{flex:1,padding:"14px",borderRadius:14,border:"none",background:"#EF4444",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+            Yes, Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
 function TxDetail({ tx, onClose, onCancel }) {
   const [copied,setCopied]=useState(false);
+  const [showCancelConfirm,setShowCancelConfirm]=useState(false);
   const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const Icon=icons[tx.type]||ArrowUpRight;
@@ -1403,8 +1443,14 @@ function TxDetail({ tx, onClose, onCancel }) {
           <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>TX Hash</p>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{tx.hash||genTxHash()}</p>
         </div>
+        {showCancelConfirm&&(
+          <CancelConfirmModal 
+            tx={tx} 
+            onConfirm={()=>onCancel(tx.id)} 
+            onClose={()=>setShowCancelConfirm(false)}/>
+        )}
         {status==="pending"&&onCancel&&(
-          <button onClick={()=>onCancel(tx.id)}
+          <button onClick={()=>setShowCancelConfirm(true)}
             style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid #EF444444",
               background:"#EF444422",color:"#EF4444",
               fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -1743,60 +1789,93 @@ function ActivityTab({ txHistory, onCancelTx }) {
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
   const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
   const filtered = filter==="all"?txHistory:filter==="declined"?txHistory.filter(t=>t.status==="declined"):txHistory.filter(t=>t.type===filter);
+  
+  const getStatusIcon = (status) => {
+    if(status==="confirmed")return <CheckCircle size={12} color="#22C55E"/>;
+    if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
+    return <AlertCircle size={12} color="#EF4444"/>;
+  };
 
   return (
     <div style={{padding:"0 16px 100px"}}>
       {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,padding:"0 4px",flexWrap:"wrap"}}>
-        <span style={{fontSize:15,fontWeight:600,color:"#fff",flex:1}}>Activity</span>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"0 4px",flexWrap:"wrap"}}>
+        <span style={{fontSize:17,fontWeight:700,color:"#fff",flex:1}}>Activity</span>
         {["all","send","receive","swap","declined"].map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
-            style={{padding:"6px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
-              background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)"}}>
+            style={{padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
+              background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)",
+              transition:"all 0.2s",boxShadow:filter===f?"0 4px 14px rgba(37,99,235,0.3)":"none"}}>
             {f==="declined"?"Declined":f.charAt(0).toUpperCase()+f.slice(1)}
           </button>
         ))}
       </div>
       {filtered.length===0&&(
-        <div style={{textAlign:"center",padding:"48px 24px"}}>
-          <div style={{margin:"0 0 16px",display:"flex",justifyContent:"center"}}>
-            <EmptyMailboxIcon size={56}/>
+        <div style={{textAlign:"center",padding:"60px 24px"}}>
+          <div style={{margin:"0 0 20px",display:"flex",justifyContent:"center"}}>
+            <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#1a1a1a,#252525)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.05)"}}>
+              <EmptyMailboxIcon size={40}/>
+            </div>
           </div>
-          <p style={{color:"rgba(255,255,255,0.4)",fontSize:14}}>No transactions yet</p>
+          <p style={{color:"rgba(255,255,255,0.5)",fontSize:15,fontWeight:500}}>No transactions yet</p>
+          <p style={{color:"rgba(255,255,255,0.3)",fontSize:13,marginTop:6}}>Your transaction history will appear here</p>
         </div>
       )}
       {filtered.map((tx,i)=>{
         const Icon=icons[tx.type]||ArrowUpRight;
+        const isNegative = tx.type==="send"||tx.status==="declined";
         return (
           <div key={tx.id} onClick={()=>setSel(tx)}
-            style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,
-              cursor:"pointer",transition:"background 0.15s",
+            style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:18,
+              cursor:"pointer",transition:"all 0.2s ease",
+              background:"linear-gradient(145deg,#1a1a1a,#161616)",
+              border:"1px solid rgba(255,255,255,0.04)",
+              boxShadow:"0 2px 8px rgba(0,0,0,0.2)",
+              marginBottom:10,
               animation:`fadeUp 0.4s ${0.06*i}s ease both`,opacity:0,animationFillMode:"forwards"}}
-            onMouseEnter={e=>e.currentTarget.style.background="#161616"}
-            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <div style={{width:44,height:44,borderRadius:"50%",background:bg[tx.type]||"#1a1a1a",
-              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx.color}33`,flexShrink:0}}>
-              <Icon size={20} color={tx.color}/>
+            onMouseEnter={e=>{
+              e.currentTarget.style.background="linear-gradient(145deg,#1f1f1f,#1a1a1a)";
+              e.currentTarget.style.transform="translateY(-2px)";
+              e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.3)";
+            }}
+            onMouseLeave={e=>{
+              e.currentTarget.style.background="linear-gradient(145deg,#1a1a1a,#161616)";
+              e.currentTarget.style.transform="translateY(0)";
+              e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.2)";
+            }}>
+            <div style={{width:48,height:48,borderRadius:14,background:bg[tx.type]||"#1a1a1a",
+              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx.color}30`,flexShrink:0,
+              boxShadow:`0 4px 12px ${tx.color}20`}}>
+              <Icon size={22} color={tx.color}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:14,fontWeight:600,color:"#fff",textTransform:"capitalize",display:"flex",alignItems:"center",gap:6}}>
-                  {tx.type}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:15,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>
+                    {tx.type}
+                  </span>
                   {tx.status&&tx.status!=="confirmed"&&(
-                    <span style={{fontSize:10,color:statusColors[tx.status],background:statusColors[tx.status]+"22",padding:"1px 6px",borderRadius:4,textTransform:"capitalize"}}>
+                    <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx.status],
+                      background:statusColors[tx.status]+"15",padding:"3px 8px",borderRadius:6,textTransform:"capitalize",
+                      fontWeight:600,border:`1px solid ${statusColors[tx.status]}30`}}>
+                      {getStatusIcon(tx.status)}
                       {tx.status}
                     </span>
                   )}
+                </div>
+                <span style={{fontSize:15,fontWeight:700,color:isNegative?"#EF4444":tx.status==="pending"?"#F59E0B":"#22C55E"}}>
+                  {isNegative?"-":"+"}{tx.usd}
                 </span>
-                <span style={{fontSize:14,fontWeight:600,color:tx.type==="send"||tx.status==="declined"?"#EF4444":tx.status==="pending"?"#F59E0B":"#22C55E"}}>{tx.usd}</span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>{tx.addr}</span>
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>{tx.time}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",letterSpacing:"-0.3px"}}>
+                  {tx.addr.slice(0,8)}...{tx.addr.slice(-6)}
+                </span>
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>{tx.time}</span>
               </div>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.25)"}}>{tx.label}</span>
+              <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:2,display:"block"}}>{tx.label}</span>
             </div>
-            <ChevronRight size={14} color="rgba(255,255,255,0.2)"/>
+            <ChevronRight size={16} color="rgba(255,255,255,0.15)"/>
           </div>
         );
       })}
