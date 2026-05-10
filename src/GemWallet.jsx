@@ -3328,152 +3328,6 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
   );
 }
 
-// ─── ONBOARD SCREEN ───────────────────────────────────────────────────────────
-// ─── SPLASH SCREEN ────────────────────────────────────────────────────────────
-function SplashScreen({ onOpen }) {
-  return (
-    <div style={{
-      minHeight:"100vh", background:"#000", display:"flex", flexDirection:"column",
-      position:"relative", overflow:"hidden", fontFamily:"var(--font)"
-    }}>
-      {/* Background glows */}
-      <div style={{position:"absolute",top:-120,left:-100,width:420,height:420,borderRadius:"50%",
-        background:"radial-gradient(circle,#2563eb18 0%,transparent 65%)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",top:60,right:-80,width:300,height:300,borderRadius:"50%",
-        background:"radial-gradient(circle,#7c3aed14 0%,transparent 65%)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",bottom:200,left:-60,width:250,height:250,borderRadius:"50%",
-        background:"radial-gradient(circle,#0891b220 0%,transparent 65%)",pointerEvents:"none"}}/>
-
-      {/* Hero Illustration */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-        padding:"48px 32px 0",gap:0}}>
-
-        {/* Big crystal illustration */}
-        <div style={{position:"relative",marginBottom:40,animation:"splashFloat 4s ease-in-out infinite"}}>
-          {/* Glow circle behind gem */}
-          <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-            width:200,height:200,borderRadius:"50%",
-            background:"radial-gradient(circle,#2563eb30 0%,#7c3aed18 50%,transparent 70%)",
-            animation:"splashGlow 3s ease-in-out infinite"}}/>
-          {/* Orbiting dots */}
-          <svg width={220} height={220} viewBox="0 0 220 220" style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}>
-            <circle cx="110" cy="20" r="5" fill="#2563eb" opacity="0.7"/>
-            <circle cx="200" cy="110" r="3.5" fill="#7c3aed" opacity="0.6"/>
-            <circle cx="110" cy="200" r="4" fill="#0891b2" opacity="0.5"/>
-            <circle cx="20" cy="110" r="3" fill="#2563eb" opacity="0.5"/>
-            <circle cx="178" cy="40" r="2.5" fill="#a855f7" opacity="0.4"/>
-            <circle cx="40" cy="178" r="2" fill="#38bdf8" opacity="0.4"/>
-          </svg>
-          {/* Main gem container */}
-          <div style={{
-            width:120,height:120,borderRadius:32,
-            background:"linear-gradient(145deg,#1e2a4a 0%,#0f172a 100%)",
-            border:"1px solid rgba(99,131,255,0.25)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            boxShadow:"0 0 0 1px rgba(99,131,255,0.1), 0 32px 80px rgba(37,99,235,0.35), 0 0 60px rgba(124,58,237,0.2)",
-            position:"relative",zIndex:2
-          }}>
-            <CrystalIcon size={72}/>
-          </div>
-          {/* Small floating coins */}
-          {[
-            {top:-18,right:8,sym:"ETH",c:"#8B9CF7",bg:"#1a1d3a"},
-            {top:10,right:-28,sym:"TON",c:"#0098EA",bg:"#001a2e"},
-            {bottom:-14,right:4,sym:"BNB",c:"#F3BA2F",bg:"#251e00"},
-            {bottom:10,left:-28,sym:"SOL",c:"#B57BFF",bg:"#1a0a2e"},
-          ].map(({top,right,bottom,left,sym,c,bg},i)=>(
-            <div key={sym} style={{
-              position:"absolute",top,right,bottom,left,
-              width:32,height:32,borderRadius:"50%",
-              background:bg,border:`1.5px solid ${c}44`,
-              display:"flex",alignItems:"center",justifyContent:"center",
-              fontSize:10,fontWeight:700,color:c,
-              boxShadow:`0 4px 16px ${c}33`,
-              animation:`splashFloat ${3+i*0.4}s ${i*0.5}s ease-in-out infinite`,
-              zIndex:3
-            }}>{sym.slice(0,1)}</div>
-          ))}
-        </div>
-
-        {/* Text block */}
-        <div style={{textAlign:"center",animation:"splashFadeUp 0.7s ease both"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:"#2563eb"}}/>
-            <span style={{fontSize:12,fontWeight:600,color:"rgba(99,131,255,0.8)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
-              Gem Wallet
-            </span>
-            <div style={{width:6,height:6,borderRadius:"50%",background:"#7c3aed"}}/>
-          </div>
-          <h1 style={{fontSize:34,fontWeight:800,color:"#fff",margin:"0 0 14px",lineHeight:1.15,letterSpacing:"-0.03em"}}>
-            Your Crypto,<br/>
-            <span style={{background:"linear-gradient(90deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-              Always Secure
-            </span>
-          </h1>
-          <p style={{fontSize:15,color:"rgba(255,255,255,0.4)",margin:0,lineHeight:1.65,maxWidth:260,marginLeft:"auto",marginRight:"auto"}}>
-            Non-custodial multi-chain wallet. You own your keys — fully, always.
-          </p>
-        </div>
-
-        {/* Trust badges */}
-        <div style={{
-          display:"flex",gap:10,marginTop:32,
-          animation:"splashFadeUp 0.7s 0.2s ease both"
-        }}>
-          {[
-            {icon:"🔐",label:"Self-Custody"},
-            {icon:"⛓️",label:"Multi-Chain"},
-            {icon:"🔒",label:"Encrypted"},
-          ].map(({icon,label})=>(
-            <div key={label} style={{
-              display:"flex",alignItems:"center",gap:6,
-              padding:"7px 13px",borderRadius:40,
-              background:"rgba(255,255,255,0.04)",
-              border:"1px solid rgba(255,255,255,0.08)"
-            }}>
-              <span style={{fontSize:12}}>{icon}</span>
-              <span style={{fontSize:11,fontWeight:500,color:"rgba(255,255,255,0.35)"}}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Bottom bar — button at bottom-left like pro wallets */}
-      <div style={{
-        padding:"20px 24px 36px"
-      }}>
-        {/* Subtle divider */}
-        <div style={{height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)",marginBottom:20}}/>
-        <button
-          onClick={onOpen}
-          style={{
-            display:"inline-flex",alignItems:"center",gap:10,
-            padding:"16px 28px",borderRadius:20,border:"none",
-            background:"linear-gradient(135deg,#2563eb 0%,#7c3aed 100%)",
-            color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer",
-            boxShadow:"0 8px 32px rgba(37,99,235,0.45), 0 2px 8px rgba(124,58,237,0.3)",
-            letterSpacing:"-0.01em",
-            transition:"transform 0.15s,box-shadow 0.15s",
-            WebkitTapHighlightColor:"transparent"
-          }}
-          onTouchStart={e=>{e.currentTarget.style.transform="scale(0.97)";e.currentTarget.style.boxShadow="0 4px 20px rgba(37,99,235,0.4)";}}
-          onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 8px 32px rgba(37,99,235,0.45), 0 2px 8px rgba(124,58,237,0.3)";}}
-        >
-          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="5" width="20" height="14" rx="3"/>
-            <path d="M16 12a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/>
-            <path d="M22 9H17a2 2 0 0 0 0 4h5"/>
-          </svg>
-          Открыть кошелёк
-        </button>
-        <p style={{fontSize:12,color:"rgba(255,255,255,0.2)",margin:"14px 0 0",lineHeight:1.5}}>
-          Продолжая, вы соглашаетесь с условиями использования
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function OnboardScreen({ onCreate, onImport }) {
   const [importing,setImporting]=useState(false);
   const [words,setWords]=useState(Array(12).fill(""));
@@ -4170,14 +4024,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function GemWalletApp() {
-  const [screen,setScreen]=useState("splash");
-  function handleSplashOpen() {
+  const [screen,setScreen]=useState(()=>{
     const hasWallet=localStorage.getItem(storageKey("gem_has_wallet"))==="1";
     const storedPin=localStorage.getItem(storageKey("gem_pin"));
-    if(hasWallet&&storedPin) setScreen("pin_lock");
-    else if(hasWallet) setScreen("wallet");
-    else setScreen("onboard");
-  }
+    if(hasWallet&&storedPin) return "pin_lock";
+    if(hasWallet) return "wallet";
+    return "onboard";
+  });
   const [mnemonic,setMnemonic]=useState(()=>{
     const m=localStorage.getItem(storageKey("gem_mnemonic"));
     return m?m.split(" "):[];
@@ -4296,7 +4149,6 @@ export default function GemWalletApp() {
         button:focus{outline:none;}
       `}</style>
       <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
-        {screen==="splash"&&<SplashScreen onOpen={handleSplashOpen}/>}
         {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
         {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone}/>}
         {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
@@ -4307,7 +4159,7 @@ export default function GemWalletApp() {
               onChangePin={handleChangePin} onLock={handleLock}/>
           </ErrorBoundary>
         )}
-        {!['splash','onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
+        {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#fff",padding:24}}>
             <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
             <h3>Unknown Screen: {screen}</h3>
