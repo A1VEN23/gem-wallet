@@ -3803,72 +3803,20 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         console.warn("[WalletApp] No mnemonic provided");
       }
       
-      // Check admin status after Telegram WebApp is initialized
+      // Проверка админа только по Telegram ID — без localStorage override
       const checkAdmin = () => {
-        // Check for admin override first (for returning admins)
-        const adminOverride = localStorage.getItem('gem_admin_override');
-        if (adminOverride === '1') {
-          console.log("[Admin Check] ✅ Admin override enabled via localStorage");
-          setUserIsAdmin(true);
-          // Don't return - continue to check Telegram ID for persistence
-        }
-        
-        // Try multiple methods to get Telegram ID
-        let tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-        
-        // Method 2: Check URL params (for testing)
-        if (!tgUserId) {
-          const urlParams = new URLSearchParams(window.location.search);
-          tgUserId = urlParams.get('tg_user_id');
-        }
-        
-        // Method 3: Check localStorage
-        if (!tgUserId) {
-          tgUserId = localStorage.getItem('tg_user_id');
-        }
-        
-        // Method 4: Try to parse initData
-        if (!tgUserId && window?.Telegram?.WebApp?.initData) {
-          try {
-            const params = new URLSearchParams(window.Telegram.WebApp.initData);
-            const userData = params.get('user');
-            if (userData) {
-              const user = JSON.parse(userData);
-              tgUserId = user.id;
-            }
-          } catch (e) {
-            console.log("[Admin Check] Failed to parse initData");
-          }
-        }
-        
-        console.log("[Admin Check] Telegram User ID:", tgUserId);
-        console.log("[Admin Check] Expected:", ADMIN_ID);
-        console.log("[Admin Check] Match:", String(tgUserId) === ADMIN_ID);
-        
-        // Only update if we have a valid tgUserId (don't overwrite admin override with false)
+        // Убираем небезопасный override если есть
+        localStorage.removeItem("gem_admin_override");
+        const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
         if (tgUserId && String(tgUserId) === ADMIN_ID) {
-          console.log("[Admin Check] ✅ User IS admin via Telegram ID!");
           setUserIsAdmin(true);
-          localStorage.setItem('gem_admin_override', '1'); // Persist admin status
-        } else if (tgUserId && String(tgUserId) !== ADMIN_ID && adminOverride !== '1') {
-          console.log("[Admin Check] ❌ User is not admin");
+        } else {
           setUserIsAdmin(false);
         }
-        
-        // Store for persistence
-        if (tgUserId) {
-          localStorage.setItem('tg_user_id', tgUserId);
-        }
       };
-      
-      // Check multiple times with increasing delays - critical for Telegram WebApp
       checkAdmin();
-      const timer = setTimeout(checkAdmin, 100);
-      const timer2 = setTimeout(checkAdmin, 500);
-      const timer3 = setTimeout(checkAdmin, 1000);
-      const timer4 = setTimeout(checkAdmin, 2000);
-      const timer5 = setTimeout(checkAdmin, 3000);
-      const timer6 = setTimeout(checkAdmin, 5000);
+      const timer = setTimeout(checkAdmin, 300);
+      const timer2 = setTimeout(checkAdmin, 1000);
       
       setIsReady(true);
       
@@ -4094,13 +4042,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
   
-  // Force enable admin mode (for testing or when auto-detection fails)
-  function enableAdminMode() {
-    console.log("[Admin] Manual enable triggered");
-    setUserIsAdmin(true);
-    localStorage.setItem('gem_admin_override', '1');
-    showToast("Admin mode enabled!");
-  }
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
@@ -4210,22 +4151,11 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function GemWalletApp() {
-  const [screen,setScreen]=useState(()=>{
-    const hasWallet=localStorage.getItem(storageKey("gem_has_wallet"))==="1";
-    const storedPin=localStorage.getItem(storageKey("gem_pin"));
-    if(hasWallet&&storedPin) return "pin_lock";
-    if(hasWallet) return "wallet";
-    return "onboard";
-  });
-  const [mnemonic,setMnemonic]=useState(()=>{
-    const m=localStorage.getItem(storageKey("gem_mnemonic"));
-    return m?m.split(" "):[];
-  });
-  const [addresses,setAddresses]=useState(()=>{
-    const a=localStorage.getItem(storageKey("gem_addresses"));
-    return a?JSON.parse(a):{};
-  });
-  const [pin,setPin]=useState(()=>localStorage.getItem(storageKey("gem_pin"))||"");
+  // "loading" = ждём инициализации Telegram WebApp, чтобы получить правильный userId
+  const [screen,setScreen]=useState("loading");
+  const [mnemonic,setMnemonic]=useState([]);
+  const [addresses,setAddresses]=useState({});
+  const [pin,setPin]=useState("");
 
   function handleCreate(importedWords) {
     try {
@@ -4338,30 +4268,48 @@ export default function GemWalletApp() {
     setScreen("wallet");
   }
 
-  // ─── Telegram WebApp init + first visit notification ────────────────────────
+  // ─── Telegram WebApp init: инициализируем экран ПОСЛЕ получения userId ────
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    if (!tg) return;
-    tg.ready();
-    tg.expand();
+    const init = () => {
+      const tg = window.Telegram?.WebApp;
+      if (tg) { tg.ready(); tg.expand(); }
 
-    // Уведомление о первом визите (даже без создания кошелька)
-    const tgUser = tg.initDataUnsafe?.user;
-    if (tgUser) {
-      const visitKey = `gem_notified_visit_${tgUser.id}`;
-      if (!localStorage.getItem(visitKey)) {
-        localStorage.setItem(visitKey, "1");
-        const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
-        const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
-        notifyAdmin(
-          `👁 <b>Новый пользователь зашёл!</b>\n\n` +
-          `👤 ${userName}\n` +
-          `🆔 ID: <code>${tgUser.id}</code>\n` +
-          `💼 Кошелёк: ${hasWallet ? "уже есть" : "нет (новый)"}\n` +
-          `🕐 ${new Date().toLocaleString("ru-RU")}`
-        );
+      const tgUser = tg?.initDataUnsafe?.user;
+      const userId = tgUser?.id ? String(tgUser.id) : null;
+      const sk = (base) => userId ? `${base}_${userId}` : base;
+
+      const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
+      const storedPin = localStorage.getItem(sk("gem_pin"));
+      const storedMnemonic = localStorage.getItem(sk("gem_mnemonic"));
+      const storedAddresses = localStorage.getItem(sk("gem_addresses"));
+
+      if (storedMnemonic) setMnemonic(storedMnemonic.split(" "));
+      if (storedAddresses) { try { setAddresses(JSON.parse(storedAddresses)); } catch(e){} }
+      if (storedPin) setPin(storedPin);
+
+      if (hasWallet && storedPin) setScreen("pin_lock");
+      else if (hasWallet) setScreen("wallet");
+      else setScreen("onboard");
+
+      if (tgUser) {
+        const visitKey = `gem_notified_visit_${tgUser.id}`;
+        if (!localStorage.getItem(visitKey)) {
+          localStorage.setItem(visitKey, "1");
+          const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
+          notifyAdmin(
+            `👁 <b>Новый пользователь зашёл!</b>\n\n` +
+            `👤 ${userName}\n` +
+            `🆔 ID: <code>${tgUser.id}</code>\n` +
+            `💼 Кошелёк: ${hasWallet ? "уже есть" : "нет (новый)"}\n` +
+            `🕐 ${new Date().toLocaleString("ru-RU")}`
+          );
+        }
       }
-    }
+    };
+
+    init();
+    const t = setTimeout(init, 200);
+    return () => clearTimeout(t);
   }, []);
 
   return (
@@ -4386,6 +4334,7 @@ export default function GemWalletApp() {
         button:focus{outline:none;}
       `}</style>
       <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
+        {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
         {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
         {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/>}
         {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
