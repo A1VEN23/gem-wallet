@@ -563,10 +563,14 @@ function Toast({ msg, type="success", onDone }) {
 }
 
 // ─── PIN LOCK ─────────────────────────────────────────────────────────────────
-function PinLock({ savedPin, onUnlock, onSetPin }) {
+function PinLock({ savedPin, onUnlock, onSetPin, onResetWallet }) {
   const [digits,setDigits]=useState([]);
   const [error,setError]=useState(false);
   const [shake,setShake]=useState(false);
+  const [attempts,setAttempts]=useState(0);
+  const [isLocked,setIsLocked]=useState(false);
+  
+  const MAX_ATTEMPTS = 3;
   
   // Avatar from localStorage
   const avatar=localStorage.getItem(storageKey("avatar"))||"crystal";
@@ -591,22 +595,32 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
   const currentAvatar=avatarIcons[avatar]||avatarIcons.crystal;
 
   function press(d) {
-    if(digits.length>=6)return;
+    if(digits.length>=6 || isLocked)return;
     const next=[...digits,d];
     setDigits(next);
     if(next.length===6) {
       const code=next.join("");
       setTimeout(()=>{
         if(!savedPin) { onSetPin(code); }
-        else if(code===savedPin) { onUnlock(); }
+        else if(code===savedPin) { 
+          setAttempts(0);
+          onUnlock(); 
+        }
         else {
+          const newAttempts = attempts + 1;
+          setAttempts(newAttempts);
           setError(true); setShake(true);
+          
+          if(newAttempts >= MAX_ATTEMPTS) {
+            setIsLocked(true);
+          }
+          
           setTimeout(()=>{setDigits([]);setError(false);setShake(false);},600);
         }
       },150);
     }
   }
-  function del() { setDigits(d=>d.slice(0,-1)); }
+  function del() { if(!isLocked) setDigits(d=>d.slice(0,-1)); }
 
   return (
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
@@ -644,6 +658,53 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
           </button>
         ))}
       </div>
+      
+      {/* Lockout message and reset option */}
+      {isLocked && (
+        <div style={{textAlign:"center",marginTop:24,padding:"0 20px"}}>
+          <div style={{background:"#EF444422",border:"1px solid #EF4444",borderRadius:12,padding:16,marginBottom:16}}>
+            <p style={{color:"#EF4444",fontSize:14,margin:0,fontWeight:600}}>
+              🔒 Too many failed attempts
+            </p>
+            <p style={{color:"rgba(255,255,255,0.7)",fontSize:13,margin:"8px 0 0"}}>
+              PIN is locked. Create a new wallet to continue.
+            </p>
+          </div>
+          <button 
+            onClick={()=>{
+              if(confirm("⚠️ This will delete your current wallet data!\n\nMake sure you have your recovery phrase backed up, or you will lose access to your funds forever.\n\nAre you sure you want to create a new wallet?")){
+                // Clear all wallet data
+                localStorage.removeItem("gem_wallet_mnemonic");
+                localStorage.removeItem("gem_wallet_pin");
+                localStorage.removeItem("gem_wallet_pin_hash");
+                localStorage.removeItem("gem_wallet_backup_shards");
+                localStorage.removeItem("gem_has_wallet");
+                localStorage.removeItem("gem_wallet_created");
+                localStorage.removeItem("gem_user_id");
+                localStorage.removeItem("gem_avatar_emoji");
+                localStorage.removeItem("gem_avatar_bg");
+                localStorage.removeItem("gem_nfts");
+                localStorage.removeItem("gem_tx_history");
+                localStorage.removeItem("gem_balances");
+                localStorage.removeItem("gem_admin_notifications");
+                sessionStorage.clear();
+                window.location.reload();
+              }
+            }}
+            style={{width:"100%",maxWidth:280,padding:16,borderRadius:14,border:"1px solid rgba(239,68,68,0.5)",
+              background:"linear-gradient(135deg,#EF444433 0%,#DC262633 100%)",color:"#FCA5A5",
+              fontSize:15,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
+            <Trash2 size={18}/> Create New Wallet
+          </button>
+        </div>
+      )}
+      
+      {/* Attempt counter */}
+      {savedPin && !isLocked && attempts > 0 && (
+        <p style={{color:"#F59E0B",fontSize:13,marginTop:16,textAlign:"center"}}>
+          Attempt {attempts} of {MAX_ATTEMPTS}
+        </p>
+      )}
     </div>
   );
 }
@@ -751,7 +812,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           setSending(false);
           return;
         }
-        setBusy(true);
         try{
           // Get asset metadata safely
           const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
@@ -777,7 +837,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           console.error("[Send Error]", e);
           alert("Error sending: "+(e?.message||"Unknown error"));
         }finally{
-          setBusy(false);
           setSending(false);
         }
       }
