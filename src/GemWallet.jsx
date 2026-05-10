@@ -3839,7 +3839,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       if (sessionStorage.getItem("gem_open_admin") === "1") {
         sessionStorage.removeItem("gem_open_admin");
         if (String(resolvedId) === ADMIN_ID) {
-          setTimeout(() => setTab("admin"), 100);
+          setTimeout(() => setTab("admin"), 400);
         }
       }
       
@@ -4314,11 +4314,19 @@ export default function GemWalletApp() {
       else if (hasWallet) setScreen("wallet");
       else setScreen("onboard");
 
-      // /admin command: if start_param === "admin" and user is admin → open admin panel
+      // /admin command: check all possible ways the param can arrive
       try {
-        const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-        if (startParam === "admin" && String(userId) === ADMIN_ID) {
-          // Store flag so WalletApp can open AdminPanel after mount
+        const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+        const hash = window.location.hash;
+        const search = window.location.search;
+        const isAdminParam = (
+          tgStartParam === "admin" ||
+          hash === "#admin" ||
+          hash.includes("tgWebAppStartParam=admin") ||
+          new URLSearchParams(search).get("startapp") === "admin" ||
+          new URLSearchParams(search).get("admin") === "1"
+        );
+        if (isAdminParam && String(userId) === ADMIN_ID) {
           sessionStorage.setItem("gem_open_admin", "1");
         }
       } catch(e) {}
