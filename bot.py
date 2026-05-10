@@ -24,11 +24,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inline_keyboard=[[InlineKeyboardButton("💎 Gem", web_app=WebAppInfo(url=WEBAPP_URL))]]
     )
 
-    gif_path = os.path.join(os.path.dirname(__file__), "welcome.gif")
-    with open(gif_path, "rb") as gif:
-        await context.bot.send_animation(
+    img_path = os.path.join(os.path.dirname(__file__), "welcome.png")
+    with open(img_path, "rb") as img:
+        await context.bot.send_photo(
             chat_id=chat_id,
-            animation=gif,
+            photo=img,
             caption=WELCOME_TEXT,
             parse_mode="Markdown",
             reply_markup=keyboard,
