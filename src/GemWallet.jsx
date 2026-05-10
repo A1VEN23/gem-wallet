@@ -59,6 +59,20 @@ const ASSET_META = [
 ];
 const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
 
+// ─── REAL NETWORK FEES (approximate in USD) ─────────────────────────────────
+const NETWORK_FEES = {
+  ETH: { low: 2.5, medium: 8.5, high: 25 },      // Ethereum
+  BNB: { low: 0.05, medium: 0.1, high: 0.2 },    // BSC
+  ARB: { low: 0.1, medium: 0.3, high: 0.5 },      // Arbitrum
+  SOL: { low: 0.001, medium: 0.005, high: 0.01 }, // Solana
+  TON: { low: 0.01, medium: 0.05, high: 0.1 },   // TON
+  LTC: { low: 0.02, medium: 0.05, high: 0.1 },   // Litecoin
+  USDT: { low: 1, medium: 3, high: 8 }           // Depends on network
+};
+
+// ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
+const TEST_BALANCES = { ETH: 1000, TON: 5000, BNB: 2000, LTC: 1500, ARB: 3000, SOL: 10000, USDT: 50000 };
+
 // ─── OFFICIAL GEM WALLET LINKS ────────────────────────────────────────────────
 const GEM_LINKS = {
   twitter: "https://twitter.com/gemwallet",
@@ -793,7 +807,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
   const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
   const price = prices[sel.sym]||0;
-  const fee = 0.84;
+  const [feeSpeed,setFeeSpeed]=useState("medium");
   const nets = ASSET_NETWORKS[sel.sym]||[];
   const curNet = selectedNet || nets[0] || null;
 
@@ -812,6 +826,14 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     }
   }
 
+  // Get real network fee based on selected speed
+  const getNetworkFee = () => {
+    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+    return fees[feeSpeed] || fees.medium;
+  };
+
+  const fee = getNetworkFee();
+
   function next() {
     if(step===1){
       if(!to){ setAddrError("Enter recipient address"); return; }
@@ -822,7 +844,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     else if(step===2&&amt) setStep(3);
     else if(step===3) {
       const num=parseFloat(amt);
-      if(num>assetObj.balance){alert("Insufficient balance");return;}
+      const totalNeeded = num + fee;
+      if(totalNeeded>assetObj.balance){alert(`Insufficient balance. Need ${fmt(totalNeeded)} ${sel.sym} (includes $${fee} fee)`);return;}
       setSending(true);
       async function doSend(){
         if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
@@ -932,6 +955,30 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           )}
           {step===2&&(
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              {/* Fee Speed Selection */}
+              <div style={{background:"#111",borderRadius:12,padding:12,border:"1px solid rgba(255,255,255,0.1)"}}>
+                <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Transaction Speed</p>
+                <div style={{display:"flex",gap:8}}>
+                  {["low","medium","high"].map((speed)=>{
+                    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+                    const feeValue = fees[speed];
+                    const isSelected = feeSpeed === speed;
+                    return (
+                      <button key={speed} onClick={()=>setFeeSpeed(speed)}
+                        style={{flex:1,padding:"10px 8px",borderRadius:10,border:"none",
+                          background:isSelected?"linear-gradient(135deg,#2563eb,#7c3aed)":"rgba(255,255,255,0.08)",
+                          color:"#fff",fontSize:12,cursor:"pointer",textTransform:"capitalize",
+                          fontWeight:isSelected?600:400}}>
+                        <div>{speed}</div>
+                        <div style={{fontSize:10,color:isSelected?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.5)",marginTop:2}}>
+                          ${feeValue}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Amount</p>
                 <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Bal: {fmt(assetObj.balance,6)} {sel.sym}</span>
@@ -1512,31 +1559,64 @@ function getAllUsersFromStorage() {
   }
 }
 
-function AdminModal({ onClose, prices }) {
+function AdminModal({ onClose, prices, onModeChange }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adminError, setAdminError] = useState(null);
   const [notifications, setNotifications] = useState([]);
-
+  
+  // Mode switcher: test vs real
+  const [isTestMode, setIsTestMode] = useState(() => {
+    return localStorage.getItem("gem_wallet_mode") === "test" || 
+           localStorage.getItem("gem_admin_override") === "1";
+  });
+  
+  // Real-time user updates
   useEffect(() => {
-    try {
-      const allUsers = getAllUsersFromStorage();
-      setUsers(allUsers);
-      
-      // Load admin notifications
-      let adminNotifications = [];
+    let interval;
+    
+    const loadUsers = () => {
       try {
-        const existing = localStorage.getItem("gem_admin_notifications");
-        if (existing) adminNotifications = JSON.parse(existing);
-      } catch (e) { adminNotifications = []; }
-      setNotifications(adminNotifications);
-    } catch (err) {
-      console.error("[AdminModal] Error:", err);
-      setAdminError("Failed to load: " + err.message);
-    } finally {
-      setLoading(false);
-    }
+        const allUsers = getAllUsersFromStorage();
+        setUsers(allUsers);
+      } catch (err) {
+        console.error("[AdminModal] Error loading users:", err);
+        setAdminError("Failed to load users: " + err.message);
+      }
+    };
+    
+    // Initial load
+    loadUsers();
+    setLoading(false);
+    
+    // Real-time updates every 3 seconds
+    interval = setInterval(loadUsers, 3000);
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      loadUsers();
+    };
+    window.addEventListener("storage", handleStorageChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
+  
+  // Mode toggle function
+  const toggleMode = () => {
+    const newMode = !isTestMode;
+    setIsTestMode(newMode);
+    localStorage.setItem("gem_wallet_mode", newMode ? "test" : "real");
+    if (newMode) {
+      localStorage.setItem("gem_admin_override", "1");
+    } else {
+      localStorage.removeItem("gem_admin_override");
+    }
+    if (onModeChange) onModeChange(newMode);
+    alert(`Switched to ${newMode ? "TEST" : "REAL"} mode\n\n${newMode ? "Test balances enabled. Transactions will be simulated." : "Real mode enabled. Real transactions with real fees."}`);
+  };
 
   const formatUSD = (amount) => {
     const num = parseFloat(amount || 0);
@@ -1589,6 +1669,23 @@ function AdminModal({ onClose, prices }) {
               color: activeTab===tab ? "#fff" : "rgba(255,255,255,0.5)"
             }}>{label}{tab==="notifications"&&notifications.filter(n=>!n.read).length>0&&<span style={{marginLeft:6,background:"#ef4444",borderRadius:"50%",padding:"1px 6px",fontSize:11}}>{notifications.filter(n=>!n.read).length}</span>}</button>
           ))}
+        </div>
+
+        {/* Mode Toggle Button */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+          <button 
+            onClick={toggleMode}
+            style={{
+              display:"flex",alignItems:"center",gap:8,
+              padding:"10px 20px",borderRadius:25,
+              background:isTestMode?"#22C55E":"#EF4444",
+              color:"#fff",border:"none",cursor:"pointer",
+              fontWeight:600,fontSize:14,
+              boxShadow:isTestMode?"0 4px 15px rgba(34,197,94,0.4)":"0 4px 15px rgba(239,68,68,0.4)"
+            }}
+          >
+            {isTestMode ? "🧪 TEST MODE" : "🔴 REAL MODE"}
+          </button>
         </div>
 
         {adminError && (
@@ -3890,7 +3987,10 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   // Live state
   const [prices,setPrices]=useState({...INITIAL_PRICES});
   const [changes,setChanges]=useState({ETH:-1.12,BNB:0.87,SOL:5.43,TON:-0.23,LTC:0.45,ARB:1.23,USDT:0.01});
-  const [balances,setBalances]=useState({...INITIAL_BALANCES});
+  
+  // Check if admin for test mode
+  const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
+  const [balances,setBalances]=useState(isAdminMode ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
 
   // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
@@ -3928,6 +4028,42 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   }));
 
   function showToast(msg,type="success"){setToast({msg,type,id:Date.now()});}
+
+  // ─── ADMIN ONLY: Cancel Transaction ──────────────────────────────────────────
+  function handleCancelTx(tx) {
+    // Only admin can cancel transactions
+    if (!isAdminMode) {
+      showToast("Only admin can cancel transactions", "error");
+      return;
+    }
+    
+    if (!tx || !tx.id) {
+      showToast("Invalid transaction", "error");
+      return;
+    }
+    
+    // Update transaction status to cancelled
+    setTxHistory(prev => {
+      const updated = prev.map(t => {
+        if (t.id === tx.id) {
+          // Return cancelled status
+          return { ...t, status: "cancelled", cancelledAt: Date.now() };
+        }
+        return t;
+      });
+      
+      // Save to localStorage
+      try {
+        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(updated));
+      } catch (e) {
+        console.error("Failed to save cancelled transaction", e);
+      }
+      
+      return updated;
+    });
+    
+    showToast(`Transaction ${tx.id.slice(-6)} cancelled`, "success");
+  }
 
   async function refreshPrices() {
     setLiveStatus("loading");
