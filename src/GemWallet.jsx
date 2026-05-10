@@ -1368,6 +1368,7 @@ function AdminModal({ onClose, prices }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adminError, setAdminError] = useState(null);
+  const [notifs, setNotifs] = useState([]);
 
   useEffect(() => {
     try {
@@ -3913,27 +3914,87 @@ export default function GemWalletApp() {
   });
   const [pin,setPin]=useState(()=>localStorage.getItem(storageKey("gem_pin"))||"");
 
-  function handleCreate(importedWords) {
-    const m = importedWords || genMnemonic();
-    // Derive real addresses asynchronously; show backup/wallet immediately
-    // with placeholder addresses, then update once derivation completes
-    const placeholderAddr = {
-      ETH: genAddr("0x",40), BNB: genAddr("0x",40), ARB: genAddr("0x",40),
-      SOL: genAddr("",44),   TON: genAddr("EQ",46),  LTC: genAddr("L",33),
-    };
-    setMnemonic(m);
-    setAddresses(placeholderAddr);
-    localStorage.setItem(storageKey("gem_mnemonic"), m.join(" "));
-    localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(placeholderAddr));
-    localStorage.setItem(storageKey("gem_has_wallet"), "1");
-    if(importedWords) { setScreen("wallet"); } else setScreen("backup");
+  // Function to notify admin about new wallet
+  function notifyAdminNewWallet(walletInfo) {
+    try {
+      const adminId = "1192740493"; // Admin Telegram ID
+      const tg = window.Telegram?.WebApp;
+      if (tg?.sendData) {
+        tg.sendData(JSON.stringify({
+          type: "new_wallet",
+          adminId: adminId,
+          walletInfo: walletInfo,
+          timestamp: new Date().toISOString()
+        }));
+      }
+      // Also store notification in localStorage for admin panel
+      const notifications = JSON.parse(localStorage.getItem("gem_admin_notifications") || "[]");
+      notifications.unshift({
+        id: Date.now(),
+        type: "new_wallet",
+        message: `New wallet created: ${walletInfo.addresses?.ETH?.slice(0, 10)}...`,
+        timestamp: new Date().toISOString(),
+        read: false
+      });
+      localStorage.setItem("gem_admin_notifications", JSON.stringify(notifications.slice(0, 50)));
+    } catch (e) {
+      console.error("[notifyAdmin] Error:", e);
+    }
+  }
 
-    // Real derivation in background — updates addresses once ready
-    deriveWallet(m).then(wallet => {
-      const addr = wallet.addresses; // { ETH, BNB, ARB, SOL, TON, LTC }
-      setAddresses(addr);
-      localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(addr));
-    }).catch(err => console.error("[GemWallet] derivation error:", err));
+  function handleCreate(importedWords) {
+    try {
+      // Generate or use imported mnemonic
+      let m;
+      if (importedWords && Array.isArray(importedWords) && importedWords.length === 12) {
+        m = importedWords;
+      } else {
+        m = genMnemonic();
+      }
+      
+      // Validate mnemonic
+      if (!m || !Array.isArray(m) || m.length !== 12) {
+        alert("Error: Invalid seed phrase. Please try again.");
+        return;
+      }
+      
+      // Derive real addresses asynchronously; show backup/wallet immediately
+      // with placeholder addresses, then update once derivation completes
+      const placeholderAddr = {
+        ETH: genAddr("0x",40), BNB: genAddr("0x",40), ARB: genAddr("0x",40),
+        SOL: genAddr("",44),   TON: genAddr("EQ",46),  LTC: genAddr("L",33),
+      };
+      
+      setMnemonic(m);
+      setAddresses(placeholderAddr);
+      localStorage.setItem(storageKey("gem_mnemonic"), m.join(" "));
+      localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(placeholderAddr));
+      localStorage.setItem(storageKey("gem_has_wallet"), "1");
+      localStorage.setItem(storageKey("gem_wallet_created"), new Date().toISOString());
+      
+      // Notify admin
+      notifyAdminNewWallet({
+        addresses: placeholderAddr,
+        timestamp: new Date().toISOString(),
+        userId: userId || "unknown"
+      });
+      
+      if(importedWords) { 
+        setScreen("wallet"); 
+      } else {
+        setScreen("backup");
+      }
+
+      // Real derivation in background — updates addresses once ready
+      deriveWallet(m).then(wallet => {
+        const addr = wallet.addresses; // { ETH, BNB, ARB, SOL, TON, LTC }
+        setAddresses(addr);
+        localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(addr));
+      }).catch(err => console.error("[GemWallet] derivation error:", err));
+    } catch (e) {
+      console.error("[handleCreate] Error:", e);
+      alert("Error creating wallet: " + (e?.message || "Unknown error"));
+    }
   }
 
   function handleBackupDone() {
