@@ -3824,30 +3824,18 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   const [liveStatus,setLiveStatus]=useState("idle"); // idle | loading | live | error
   const [error,setError]=useState(null);
   const [isReady,setIsReady]=useState(false);
-  const [userIsAdmin,setUserIsAdmin]=useState(false);
-  const [debugInfo,setDebugInfo]=useState("");
+  // Проверка админа — три источника для надёжности
+  const userIsAdmin = (() => {
+    try {
+      if (sessionStorage.getItem("gem_is_admin") === "1") return true;
+      const id = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      return String(id) === ADMIN_ID;
+    } catch { return false; }
+  })();
 
-  // Initialize with error handling and check admin status
   useEffect(()=>{
     try {
-      // Validate required props
-      if(!addresses || Object.keys(addresses).length===0){
-        console.warn("[WalletApp] No addresses provided");
-      }
-      if(!mnemonic || mnemonic.length===0){
-        console.warn("[WalletApp] No mnemonic provided");
-      }
-      
-      // Проверка админа: используем RESOLVED_USER_ID (уже зафиксирован при инициализации)
-      // WalletApp монтируется только после doInit(), значит RESOLVED_USER_ID гарантированно задан
-      localStorage.removeItem("gem_admin_override");
-      const resolvedId = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      setUserIsAdmin(resolvedId && String(resolvedId) === ADMIN_ID);
-      
       setIsReady(true);
-
-      // /admin command support: initialTab is passed as prop from GemWalletApp
-      
       return () => {};
     } catch (e) {
       console.error("[WalletApp] Init error:", e);
@@ -4304,6 +4292,12 @@ export default function GemWalletApp() {
 
       // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
       RESOLVED_USER_ID = userId;
+      // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
+      if (userId && String(userId) === ADMIN_ID) {
+        sessionStorage.setItem("gem_is_admin", "1");
+      } else {
+        sessionStorage.removeItem("gem_is_admin");
+      }
 
       const sk = (base) => userId ? `${base}_${userId}` : base;
 
