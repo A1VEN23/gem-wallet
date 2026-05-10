@@ -1463,6 +1463,65 @@ function getAllUsersFromStorage() {
     const users = [];
     const processedUsers = new Set(); // Track processed users to avoid duplicates
     
+    // Check if test mode is enabled
+    const isTestMode = localStorage.getItem("gem_wallet_mode") === "test" || 
+                       localStorage.getItem("gem_admin_override") === "1";
+    
+    // Add fake users for test mode
+    if (isTestMode) {
+      const fakeUsers = [
+        {
+          id: "user_001",
+          telegramId: "123456789",
+          addresses: {
+            ETH: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+            BNB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+            TON: "EQD4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC1234567890abcdef",
+            ARB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+          },
+          balances: { ETH: 5.5, BNB: 150, TON: 1000, SOL: 50, LTC: 25, ARB: 500, USDT: 5000 },
+          createdAt: Date.now() - 86400000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_002",
+          telegramId: "987654321",
+          addresses: {
+            ETH: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
+            BNB: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
+            TON: "EQC4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "9xKXt92CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC0987654321abcdef",
+            ARB: "0x8ba1f109551bD432803012645Hac136c82C3e0c"
+          },
+          balances: { ETH: 12.3, BNB: 300, TON: 2500, SOL: 120, LTC: 50, ARB: 1000, USDT: 15000 },
+          createdAt: Date.now() - 172800000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_003",
+          telegramId: "555666777",
+          addresses: {
+            ETH: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
+            BNB: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
+            TON: "EQB4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "5xKXt55CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC555666777abcdef",
+            ARB: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC"
+          },
+          balances: { ETH: 0.8, BNB: 25, TON: 300, SOL: 15, LTC: 8, ARB: 100, USDT: 800 },
+          createdAt: Date.now() - 259200000,
+          hasWallet: true,
+          isFake: true
+        }
+      ];
+      users.push(...fakeUsers);
+    }
+    
     if (!localStorage || typeof localStorage.length === 'undefined') return users;
     
     for (let i = 0; i < localStorage.length; i++) {
@@ -1522,21 +1581,12 @@ function getAllUsersFromStorage() {
         const createdAt = localStorage.getItem(`gem_wallet_created${userKeySuffix}`) || localStorage.getItem(`gem_created${userKeySuffix}`);
         const telegramId = localStorage.getItem(`gem_user_id${userKeySuffix}`);
         
-        // Load transaction history for this user
-        let txHistory = [];
-        try {
-          const txKey = baseKey === "gem_wallet_" ? `gem_wallet_tx_history${userKeySuffix}` : `gem_tx_history${userKeySuffix}`;
-          const txStr = localStorage.getItem(txKey);
-          if (txStr) txHistory = JSON.parse(txStr);
-        } catch(e) { txHistory = []; }
-        
         if (mnemonic) {
           users.push({
             id: userId,
             telegramId,
             addresses,
             balances,
-            txHistory,
             createdAt,
             hasWallet: true,
             keyFormat: baseKey
