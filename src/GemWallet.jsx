@@ -520,19 +520,34 @@ function ActionBtn({ icon, label, onClick, color="#2563EB" }) {
 }
 
 function Sheet({ onClose, title, children }) {
+  // Keep a stable ref to latest onClose so the Telegram BackButton effect runs only once
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (!tg) return;
-    tg.BackButton.show();
-    tg.BackButton.onClick(onClose);
-    return () => { tg.BackButton.hide(); tg.BackButton.offClick(onClose); };
-  }, [onClose]);
+    if (!tg?.BackButton) return;
+    const handler = () => onCloseRef.current?.();
+    try {
+      tg.BackButton.show();
+      tg.BackButton.onClick(handler);
+    } catch (e) { console.warn('[Sheet] BackButton.onClick error:', e); }
+    return () => {
+      try {
+        tg.BackButton.hide();
+        // offClick was added in Telegram Bot API 6.1 — guard for older clients
+        tg.BackButton.offClick?.(handler);
+      } catch (e) { console.warn('[Sheet] BackButton cleanup error:', e); }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount — handler always calls latest onClose via ref
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,
       display:"flex",alignItems:"flex-end",animation:"fadeIn 0.2s ease"}}>
       <div style={{width:"100%",background:"#111",borderRadius:"24px 24px 0 0",
-        padding:"0 0 48px",animation:"slideUp 0.35s cubic-bezier(.16,1,.3,1)",
-        maxHeight:"92vh",overflowY:"auto"}}>
+        padding:"0 0 env(safe-area-inset-bottom, 48px) 0",paddingBottom:"max(48px,env(safe-area-inset-bottom))",
+        animation:"slideUp 0.35s cubic-bezier(.16,1,.3,1)",
+        maxHeight:"92dvh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px 0"}}>
           <h3 style={{fontSize:18,fontWeight:700,color:"#fff",margin:0}}>{title}</h3>
           <button onClick={onClose} style={{background:"#222",border:"none",borderRadius:"50%",
@@ -826,7 +841,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           if(!fromAddr){throw new Error(`No address found for ${sel.sym} (${assetMeta.id})`);}
           
           // Send transaction
-          const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
+          const hash = await chainSendTransaction({ sym: sel.sym, from: fromAddr, to, amount: parseFloat(amt), privateKey, networkId: assetMeta.id });
           if(hash){
             alert(`Sent! Hash: ${hash.slice(0,20)}...`);
             const sentAmount = parseFloat(amt);
@@ -4040,7 +4055,7 @@ export default function GemWalletApp() {
       localStorage.setItem(storageKey("gem_has_wallet"), "1");
       
       // Save admin notification for new wallet
-      const userId = getUserId();
+      const userId = getTgUserId();
       const walletType = importedWords ? "imported" : "new";
       const timestamp = Date.now();
       const notification = {
