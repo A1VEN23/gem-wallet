@@ -3804,8 +3804,8 @@ class ErrorBoundary extends React.Component {
 }
 
 // ─── MAIN WALLET APP ──────────────────────────────────────────────────────────
-function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
-  const [tab,setTab]=useState("wallet");
+function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }) {
+  const [tab,setTab]=useState(initialTab||"wallet");
   const [modal,setModal]=useState(null);
   const [animKey,setAnimKey]=useState(0);
   const [network,setNetwork]=useState("mainnet");
@@ -3835,13 +3835,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       
       setIsReady(true);
 
-      // /admin command support: if flagged, open admin tab directly
-      if (sessionStorage.getItem("gem_open_admin") === "1") {
-        sessionStorage.removeItem("gem_open_admin");
-        if (String(resolvedId) === ADMIN_ID) {
-          setTimeout(() => setTab("admin"), 400);
-        }
-      }
+      // /admin command support: initialTab is passed as prop from GemWalletApp
       
       return () => {};
     } catch (e) {
@@ -4170,6 +4164,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 export default function GemWalletApp() {
   // "loading" = ждём инициализации Telegram WebApp, чтобы получить правильный userId
   const [screen,setScreen]=useState("loading");
+  const [initialTab,setInitialTab]=useState("wallet");
   const [mnemonic,setMnemonic]=useState([]);
   const [addresses,setAddresses]=useState({});
   const [pin,setPin]=useState("");
@@ -4326,7 +4321,7 @@ export default function GemWalletApp() {
           new URLSearchParams(search).get("admin") === "1"
         );
         if (isAdminParam && String(userId) === ADMIN_ID) {
-          sessionStorage.setItem("gem_open_admin", "1");
+          setInitialTab("admin");
         }
       } catch(e) {}
 
@@ -4393,7 +4388,7 @@ export default function GemWalletApp() {
         {screen==="wallet"&&(
           <ErrorBoundary>
             <WalletApp addresses={addresses} mnemonic={mnemonic} pin={pin}
-              onChangePin={handleChangePin} onLock={handleLock}/>
+              onChangePin={handleChangePin} onLock={handleLock} initialTab={initialTab}/>
           </ErrorBoundary>
         )}
         {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
