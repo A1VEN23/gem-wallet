@@ -2432,6 +2432,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
   const [isProcessing,setIsProcessing]=useState(false);
   const [showToast,setShowToast]=useState(false);
   const [toastMsg,setToastMsg]=useState("");
+  const [panelError,setPanelError]=useState(null);
 
   // Toast helper
   function showToastMsg(msg){
@@ -2440,58 +2441,78 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
     setTimeout(()=>setShowToast(false),3000);
   }
 
-  // Load real users from localStorage
+  // Load real users from localStorage with error handling
   function loadRealUsers(){
-    const realUsers = getAllUsersFromStorage();
-    // Add metadata for display
-    const usersWithMeta = realUsers.map((u, idx) => {
-      const names = ["User"];
-      const totalUSD = calculateTotalUSD(u.balances, prices);
-      return {
-        ...u,
-        name: names[idx % names.length] + " " + u.id.slice(-4),
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
-        totalUSD,
-        status: "active"
-      };
-    });
-    setUsers(usersWithMeta);
-    setSelectedUsers(new Set());
-    setSelectedTokens(new Set());
-    setStep(1);
-    showToastMsg(`Found ${usersWithMeta.length} wallets`);
+    try {
+      setPanelError(null);
+      const realUsers = getAllUsersFromStorage();
+      // Add metadata for display
+      const usersWithMeta = realUsers.map((u, idx) => {
+        const names = ["User"];
+        const totalUSD = calculateTotalUSD(u.balances, prices);
+        return {
+          ...u,
+          name: names[idx % names.length] + " " + u.id.slice(-4),
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
+          totalUSD,
+          status: "active"
+        };
+      });
+      setUsers(usersWithMeta);
+      setSelectedUsers(new Set());
+      setSelectedTokens(new Set());
+      setStep(1);
+      showToastMsg(`Found ${usersWithMeta.length} wallets`);
+    } catch (err) {
+      console.error("[AdminPanel] Error loading users:", err);
+      setPanelError("Failed to load users: " + err.message);
+      showToastMsg("Error loading users");
+    }
   }
 
   // Calculate total USD value from balances
   function calculateTotalUSD(balances, prices) {
-    if (!balances || !prices) return 0;
-    return Object.entries(balances).reduce((sum, [sym, bal]) => {
-      const price = prices[sym] || (sym === "USDT" ? 1 : 0);
-      return sum + (parseFloat(bal || 0) * price);
-    }, 0);
+    try {
+      if (!balances || !prices) return 0;
+      return Object.entries(balances).reduce((sum, [sym, bal]) => {
+        const price = prices[sym] || (sym === "USDT" ? 1 : 0);
+        return sum + (parseFloat(bal || 0) * price);
+      }, 0);
+    } catch (e) {
+      return 0;
+    }
   }
 
-  // Get admin notifications
+  // Get admin notifications with error handling
   function getAdminNotifications() {
-    const notifs = [];
-    // Check for new wallets created
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.includes("gem_has_wallet")) {
-        const userId = key.replace("gem_has_wallet", "").replace("_", "") || "unknown";
-        const created = localStorage.getItem(key + "_created");
-        if (created) {
-          const date = new Date(parseInt(created));
-          notifs.push({
-            type: "wallet_created",
-            userId,
-            time: date.toLocaleString(),
-            message: `New wallet created by user ${userId.slice(-6)}`
-          });
+    try {
+      const notifs = [];
+      // Safely check localStorage
+      if (typeof localStorage === 'undefined' || !localStorage.length) return [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes("gem_has_wallet")) {
+          const userId = key.replace("gem_has_wallet", "").replace("_", "") || "unknown";
+          const created = localStorage.getItem(key + "_created");
+          if (created) {
+            const date = new Date(parseInt(created));
+            if (!isNaN(date)) {
+              notifs.push({
+                type: "wallet_created",
+                userId,
+                time: date.toLocaleString(),
+                message: `New wallet created by user ${userId.slice(-6)}`
+              });
+            }
+          }
         }
       }
+      return notifs.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
+    } catch (err) {
+      console.error("[AdminPanel] Error getting notifications:", err);
+      return [];
     }
-    return notifs.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
   }
 
   // Toggle user selection
@@ -2706,6 +2727,18 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
             background:"#1a1a1a",border:"1px solid #333",borderRadius:12,padding:"12px 20px",
             boxShadow:"0 10px 40px rgba(0,0,0,0.5)"}}>
             <span style={{color:"#fff",fontSize:14}}>{toastMsg}</span>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {panelError&&(
+          <div style={{padding:"16px 20px"}}>
+            <div style={{background:"#1a1a1a",borderRadius:12,padding:16,border:"1px solid #ef4444"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <AlertTriangle size={16} color="#ef4444"/>
+                <span style={{color:"#ef4444",fontSize:14}}>{panelError}</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -3188,25 +3221,32 @@ function OnboardScreen({ onCreate, onImport }) {
 }
 
 // ─── BACKUP SCREEN ────────────────────────────────────────────────────────────
+// Separate screens: 1) Show seed phrase, 2) Verify 4 random words
 function BackupScreen({ mnemonic, onDone }) {
-  const [rev,setRev]=useState(false);
-  const [verified,setVerified]=useState(false);
-  const [checks,setChecks]=useState([]);
   const [step,setStep]=useState("show"); // show | verify | done
+  const [rev,setRev]=useState(false);
 
+  // Generate 4 random word indices for verification
   const randomIndices = useMemo(()=>{
     const idxs=[...Array(12).keys()];
     for(let i=idxs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[idxs[i],idxs[j]]=[idxs[j],idxs[i]];}
     return idxs.slice(0,4).sort((a,b)=>a-b);
   },[mnemonic.join(" ")]);
+
+  // Initialize verification words when entering verify step
   const [verifyWords,setVerifyWords]=useState([]);
-  useEffect(()=>{if(rev&&step==="show")setVerifyWords(randomIndices.map(i=>({idx:i,word:mnemonic[i],input:""}))); },[rev,randomIndices]);
+  useEffect(()=>{
+    if(step==="verify"){
+      setVerifyWords(randomIndices.map(i=>({idx:i,word:mnemonic[i],input:""})));
+    }
+  },[step,randomIndices,mnemonic]);
 
   function checkVerify() {
     const ok=verifyWords.every(v=>v.input.trim().toLowerCase()===v.word.toLowerCase());
-    if(ok){setStep("done");}else{alert("Some words are incorrect. Please try again.");}
+    if(ok){setStep("done");}else{alert("Some words are incorrect. Please check and try again.");}
   }
 
+  // ─── STEP 3: DONE ───────────────────────────────────────────────────────────
   if(step==="done") return (
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:"32px 24px"}}>
@@ -3224,6 +3264,54 @@ function BackupScreen({ mnemonic, onDone }) {
     </div>
   );
 
+  // ─── STEP 2: VERIFY ─────────────────────────────────────────────────────────
+  if(step==="verify") return (
+    <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px"}}>
+      <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Check size={30} color="#fff"/>
+          </div>
+        </div>
+        <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 8px"}}>Verify Your Backup</h2>
+        <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:0,lineHeight:1.6}}>
+          Enter the 4 words from your recovery phrase to confirm you've written them down.
+        </p>
+      </div>
+
+      <div style={{background:"#0f0a00",borderRadius:12,padding:14,border:"1px solid rgba(245,158,11,0.2)",marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <AlertTriangle size={14} color="rgba(245,158,11,0.8)"/>
+          <p style={{fontSize:12,color:"rgba(245,158,11,0.8)",margin:0}}>Enter the exact words in order</p>
+        </div>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:24}}>
+        {verifyWords.map((v,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:12,background:"#1a1a1a",borderRadius:12,padding:"14px 16px",
+            border:v.input.toLowerCase()===v.word.toLowerCase()&&v.input?"1px solid #22C55E":"1px solid rgba(255,255,255,0.1)"}}>
+            <span style={{fontSize:14,color:"rgba(255,255,255,0.6)",minWidth:80,fontWeight:600}}>Word #{v.idx+1}</span>
+            <input value={v.input} onChange={e=>{const n=[...verifyWords];n[i]={...n[i],input:e.target.value};setVerifyWords(n);}}
+              placeholder={`Enter word #${v.idx+1}`}
+              style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:15,
+                borderBottom:"1px solid rgba(255,255,255,0.2)",paddingBottom:4}}/>
+            {v.input.toLowerCase()===v.word.toLowerCase()&&v.input&&<Check size={20} color="#22C55E"/>}
+          </div>
+        ))}
+      </div>
+
+      <button onClick={checkVerify} style={{width:"100%",padding:"17px",borderRadius:16,border:"none",
+        background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",marginBottom:12}}>
+        Verify & Continue →
+      </button>
+      <button onClick={()=>setStep("show")} style={{width:"100%",padding:"14px",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)",
+        background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer"}}>
+        ← Back to Phrase
+      </button>
+    </div>
+  );
+
+  // ─── STEP 1: SHOW ───────────────────────────────────────────────────────────
   return (
     <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px"}}>
       <div style={{textAlign:"center",marginBottom:32}}>
@@ -3264,28 +3352,11 @@ function BackupScreen({ mnemonic, onDone }) {
           ))}
         </div>
       </div>
-      {rev&&step==="show"&&(
-        <>
-          <p style={{fontSize:13,color:"rgba(255,255,255,0.5)",textAlign:"center",marginBottom:16}}>
-            Verify 4 words to confirm you've written them down:
-          </p>
-          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-            {verifyWords.map((v,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:12,background:"#1a1a1a",borderRadius:12,padding:"12px 16px"}}>
-                <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",minWidth:60}}>Word #{v.idx+1}</span>
-                <input value={v.input} onChange={e=>{const n=[...verifyWords];n[i]={...n[i],input:e.target.value};setVerifyWords(n);}}
-                  placeholder={`Enter word #${v.idx+1}`}
-                  style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:14,
-                    borderBottom:"1px solid rgba(255,255,255,0.1)",paddingBottom:4}}/>
-                {v.input.toLowerCase()===v.word.toLowerCase()&&v.input&&<Check size={16} color="#22C55E"/>}
-              </div>
-            ))}
-          </div>
-          <button onClick={checkVerify} style={{width:"100%",padding:"17px",borderRadius:16,border:"none",
-            background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
-            Verify & Continue →
-          </button>
-        </>
+      {rev&&(
+        <button onClick={()=>setStep("verify")} style={{width:"100%",padding:"17px",borderRadius:16,border:"none",
+          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",marginBottom:12}}>
+          I Wrote It Down →
+        </button>
       )}
       {!rev&&(
         <button onClick={onDone} style={{width:"100%",padding:"14px",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)",
