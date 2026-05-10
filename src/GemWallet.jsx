@@ -3680,40 +3680,75 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   useEffect(()=>{ refreshPrices(); const t=setInterval(refreshPrices,60000); return()=>clearInterval(t); },[]);
 
   function handleSend({sym,amount,to,usd,isTest}) {
-    setBalances(b=>({...b,[sym]:Math.max(0,b[sym]-amount)}));
-    const now=new Date();
-    const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
-    // Random timer 60-180 minutes for pending status
-    const pendingMinutes=60+Math.floor(Math.random()*121);
-    const cancelTime=isTest?Date.now()+30000:Date.now()+pendingMinutes*60000;
-    const txId="t"+Date.now();
-    setTxHistory(h=>[{
-      id:txId,type:"send",
-      usd:`−${fmtUSD(usd)}`,time:timeStr,
-      addr:shortAddr(to),color:"#EF4444",
-      sym,label:`−${amount} ${sym}`,hash:genTxHash(),status:"pending",
-      cancelTime,isTest
-    },...h]);
-    showToast(isTest?`Test transaction created (cancel in 30s)`:`Transaction pending (${pendingMinutes}min to confirm)`,"info");
-    // Auto-confirm after timer expires
-    setTimeout(()=>{
-      setTxHistory(h=>h.map(tx=>tx.id===txId?{...tx,status:"confirmed"}:tx));
-      if(!isTest)showToast(`Transaction confirmed: ${amount} ${sym}`,"success");
-    },isTest?30000:pendingMinutes*60000);
-    return txId;
+    try {
+      // Validate inputs
+      if (!sym || typeof amount !== 'number' || isNaN(amount)) {
+        console.error("[handleSend] Invalid arguments:", {sym, amount, to, usd});
+        return null;
+      }
+      
+      setBalances(b=>{
+        if (!b || typeof b !== 'object') return b;
+        return {...b,[sym]:Math.max(0,(b[sym]||0)-amount)};
+      });
+      
+      const now=new Date();
+      const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+      // Random timer 60-180 minutes for pending status
+      const pendingMinutes=60+Math.floor(Math.random()*121);
+      const cancelTime=isTest?Date.now()+30000:Date.now()+pendingMinutes*60000;
+      const txId="t"+Date.now();
+      
+      setTxHistory(h=>{
+        if (!Array.isArray(h)) h = [];
+        return [{
+          id:txId,type:"send",
+          usd:`−${fmtUSD(usd||0)}`,time:timeStr,
+          addr:shortAddr(to||""),color:"#EF4444",
+          sym,label:`−${amount} ${sym}`,hash:genTxHash(),status:"pending",
+          cancelTime,isTest
+        },...h];
+      });
+      
+      showToast(isTest?`Test transaction created (cancel in 30s)`:`Transaction pending (${pendingMinutes}min to confirm)`,"info");
+      // Auto-confirm after timer expires
+      setTimeout(()=>{
+        setTxHistory(h=>{
+          if (!Array.isArray(h)) return [];
+          return h.map(tx=>tx?.id===txId?{...tx,status:"confirmed"}:tx);
+        });
+        if(!isTest)showToast(`Transaction confirmed: ${amount} ${sym}`,"success");
+      },isTest?30000:pendingMinutes*60000);
+      
+      return txId;
+    } catch (e) {
+      console.error("[handleSend] Error:", e);
+      showToast("Transaction error: " + (e?.message||"Unknown"), "error");
+      return null;
+    }
   }
 
   function handleCancelTx(txId) {
-    const tx=txHistory.find(t=>t.id===txId);
-    if(!tx||tx.status!=="pending")return;
-    setTxHistory(h=>h.map(t=>t.id===txId?{...t,status:"declined"}:t));
-    // Refund balance
-    if(tx.type==="send"||tx.type==="test"){
-      const amount=parseFloat(tx.label.replace(/[^0-9.]/g,""));
-      setBalances(b=>({...b,[tx.sym]:(b[tx.sym]||0)+amount}));
+    try {
+      if (!Array.isArray(txHistory)) return;
+      const tx=txHistory.find(t=>t?.id===txId);
+      if(!tx||tx.status!=="pending")return;
+      setTxHistory(h=>{
+        if (!Array.isArray(h)) return [];
+        return h.map(t=>t?.id===txId?{...t,status:"declined"}:t);
+      });
+      // Refund balance
+      if(tx.type==="send"||tx.type==="test"){
+        const amount=parseFloat((tx.label||"").replace(/[^0-9.]/g,""))||0;
+        setBalances(b=>{
+          if (!b || typeof b !== 'object') return b;
+          return {...b,[tx.sym]:(b[tx.sym]||0)+amount};
+        });
+      }
+      showToast("Transaction cancelled","info");
+    } catch (e) {
+      console.error("[handleCancelTx] Error:", e);
     }
-    showToast("Transaction cancelled","info");
-    return true;
   }
 
   function handleSwap({fromSym,toSym,fromAmt,toAmt,usd}) {
