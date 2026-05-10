@@ -367,10 +367,7 @@ async function sweepLtc({ privateKeyHex, fromAddress }) {
  * @param {object} wallet.privateKeys  — { eth, bnb, arb, sol, ton, ltc }
  * @returns {Promise<Array<{ chain, sym, txHash, amount }>>}
  */
-// Alias for backwards compatibility
-export const collectAll = collectAllWithKeys;
-
-export async function collectAllWithKeys({ addresses, privateKeys }) {
+export async function collectAll({ addresses, privateKeys }) {
   const results = [];
 
   // privateKeys from walletDerivation.js uses uppercase keys: ETH, BNB, ARB, SOL, TON, LTC

