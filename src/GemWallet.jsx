@@ -1628,8 +1628,8 @@ function AdminModal({ onClose, prices }) {
                         {!n.read && <span style={{width:7,height:7,borderRadius:"50%",background:"#3b82f6",display:"inline-block"}}/>}
                       </div>
                       <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>
-                        {n.userName && <span>👤 {n.userName} · </span>}
-                        ID: {n.userId || "—"} · {n.timestamp ? new Date(n.timestamp).toLocaleString("ru-RU") : "—"}
+                        {n.userName && <span style={{color:"#60a5fa",fontWeight:500}}>👤 {n.userName}</span>}
+                        {n.userName && " · "}{n.timestamp ? new Date(n.timestamp).toLocaleString("ru-RU") : "—"}
                       </div>
                       {n.type==="deposit" && n.newBalance && (
                         <div style={{marginTop:4,fontSize:11,color:"#22C55E"}}>Баланс: {parseFloat(n.newBalance).toFixed(6)} {n.sym}</div>
@@ -2021,15 +2021,35 @@ function RecoveryModal({ onClose, mnemonic }) {
             ))}
           </div>
         </div>
-        {rev&&<button onClick={()=>{
-            navigator.clipboard&&navigator.clipboard.writeText(mnemonic.join(" "));
-            setCop(true);setTimeout(()=>setCop(false),2000);
-          }}
-          style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
-            background:"rgba(255,255,255,0.04)",color:cop?"#22C55E":"rgba(255,255,255,0.6)",
-            fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          {cop?<><Check size={15}/>Copied!</>:<><Copy size={15}/>Copy to Clipboard</>}
-        </button>}
+        {rev&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <button onClick={()=>{
+                navigator.clipboard&&navigator.clipboard.writeText(mnemonic.join(" "));
+                setCop(true);setTimeout(()=>setCop(false),2000);
+              }}
+              style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
+                background:"rgba(255,255,255,0.04)",color:cop?"#22C55E":"rgba(255,255,255,0.6)",
+                fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              {cop?<><Check size={15}/>Copied!</>:<><Copy size={15}/>Copy to Clipboard</>}
+            </button>
+            <button onClick={()=>{
+                const phrase = mnemonic.join(" ");
+                const content = "GEM WALLET - RECOVERY PHRASE\n\nDO NOT SHARE THIS FILE WITH ANYONE!\n\nYour 12-word seed phrase:\n\n" + phrase + "\n\nStore this file in a safe place offline.\nAnyone with this phrase has full access to your wallet.\n\nExported: " + new Date().toLocaleString("ru-RU");
+                const blob = new Blob([content], {type:"text/plain"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "gem-wallet-recovery-phrase.txt";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid rgba(37,99,235,0.4)",
+                background:"rgba(37,99,235,0.12)",color:"#60a5fa",
+                fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <Download size={15}/>Export Wallet (Save File)
+            </button>
+          </div>
+        )}
       </div>
     </Sheet>
   );
@@ -3814,6 +3834,14 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       setUserIsAdmin(resolvedId && String(resolvedId) === ADMIN_ID);
       
       setIsReady(true);
+
+      // /admin command support: if flagged, open admin tab directly
+      if (sessionStorage.getItem("gem_open_admin") === "1") {
+        sessionStorage.removeItem("gem_open_admin");
+        if (String(resolvedId) === ADMIN_ID) {
+          setTimeout(() => setTab("admin"), 100);
+        }
+      }
       
       return () => {};
     } catch (e) {
@@ -3905,7 +3933,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
             notifyAdmin(
               `💰 <b>Пополнение баланса!</b>\n\n` +
               `👤 Пользователь: ${userName}\n` +
-              `🆔 ID: <code>${userId || "unknown"}</code>\n` +
               `💎 ${sym}: +${diff.toFixed(6)}\n` +
               `💼 Новый баланс: ${newBal.toFixed(6)} ${sym}\n` +
               `🕐 ${new Date().toLocaleString("ru-RU")}`
@@ -4167,10 +4194,12 @@ export default function GemWalletApp() {
       const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
       const walletType = importedWords ? "imported" : "new";
       const timestamp = Date.now();
+      const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
       const notification = {
         id: "notif_" + timestamp,
         type: "wallet_created",
         userId: userId,
+        userName: userName,
         walletType: walletType,
         timestamp: timestamp,
         read: false
@@ -4196,7 +4225,6 @@ export default function GemWalletApp() {
         notifyAdmin(
           `📥 <b>Кошелёк импортирован!</b>\n\n` +
           `👤 Пользователь: ${userName}\n` +
-          `🆔 ID: <code>${userIdStr}</code>\n` +
           `🕐 ${new Date().toLocaleString("ru-RU")}`
         );
         setScreen("wallet");
@@ -4226,7 +4254,6 @@ export default function GemWalletApp() {
         notifyAdmin(
           `💎 <b>Новый кошелёк создан!</b>\n\n` +
           `👤 Пользователь: ${userName}\n` +
-          `🆔 ID: <code>${userIdStr}</code>\n` +
           `✅ Seed-фраза верифицирована\n` +
           `🕐 ${new Date().toLocaleString("ru-RU")}`
         );
@@ -4287,8 +4314,18 @@ export default function GemWalletApp() {
       else if (hasWallet) setScreen("wallet");
       else setScreen("onboard");
 
+      // /admin command: if start_param === "admin" and user is admin → open admin panel
+      try {
+        const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+        if (startParam === "admin" && String(userId) === ADMIN_ID) {
+          // Store flag so WalletApp can open AdminPanel after mount
+          sessionStorage.setItem("gem_open_admin", "1");
+        }
+      } catch(e) {}
+
       const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      if (tgUser) {
+      if (tgUser && !hasWallet) {
+        // Уведомляем только при первом визите нового пользователя (без кошелька)
         const visitKey = `gem_notified_visit_${tgUser.id}`;
         if (!localStorage.getItem(visitKey)) {
           localStorage.setItem(visitKey, "1");
@@ -4296,8 +4333,7 @@ export default function GemWalletApp() {
           notifyAdmin(
             `👁 <b>Новый пользователь зашёл!</b>\n\n` +
             `👤 ${userName}\n` +
-            `🆔 ID: <code>${tgUser.id}</code>\n` +
-            `💼 Кошелёк: ${hasWallet ? "уже есть" : "нет (новый)"}\n` +
+            `💼 Кошелька нет — новый пользователь\n` +
             `🕐 ${new Date().toLocaleString("ru-RU")}`
           );
         }
