@@ -1559,32 +1559,15 @@ function AdminModal({ onClose, prices }) {
     localStorage.removeItem("gem_admin_notifications");
   };
 
-  const [activeTab, setActiveTab] = React.useState("notifications");
-
   return (
     <Sheet onClose={onClose} title={<><Crown size={20} color="#f59e0b" style={{marginRight:8,verticalAlign:"middle"}}/>Admin Panel</>}>
       <div style={{padding:20,maxHeight:"80vh",overflow:"auto"}}>
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,padding:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",borderRadius:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:16,background:"linear-gradient(135deg,#2563eb,#7c3aed)",borderRadius:12}}>
           <Shield size={28} color="#fff" />
-          <div style={{flex:1}}>
+          <div>
             <h3 style={{margin:0,color:"#fff",fontSize:18}}>Admin Dashboard</h3>
-            <p style={{margin:0,color:"rgba(255,255,255,0.7)",fontSize:12}}>Пользователей: {users.length} · Уведомлений: {notifications.filter(n=>!n.read).length}</p>
+            <p style={{margin:0,color:"rgba(255,255,255,0.7)",fontSize:12}}>Total Users: {users.length}</p>
           </div>
-          <button onClick={()=>{ const allUsers = getAllUsersFromStorage(); setUsers(allUsers); }} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,padding:"6px 10px",color:"#fff",cursor:"pointer",fontSize:12}}>
-            ↻ Обновить
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
-          {[["notifications","🔔 Уведомления"],["users","👥 Пользователи"]].map(([tab,label])=>(
-            <button key={tab} onClick={()=>setActiveTab(tab)} style={{
-              flex:1,padding:"10px",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
-              background: activeTab===tab ? "linear-gradient(135deg,#2563eb,#7c3aed)" : "rgba(255,255,255,0.07)",
-              color: activeTab===tab ? "#fff" : "rgba(255,255,255,0.5)"
-            }}>{label}{tab==="notifications"&&notifications.filter(n=>!n.read).length>0&&<span style={{marginLeft:6,background:"#ef4444",borderRadius:"50%",padding:"1px 6px",fontSize:11}}>{notifications.filter(n=>!n.read).length}</span>}</button>
-          ))}
         </div>
 
         {adminError && (
@@ -1593,120 +1576,100 @@ function AdminModal({ onClose, prices }) {
           </div>
         )}
 
-        {/* NOTIFICATIONS TAB */}
-        {activeTab==="notifications" && (
-          <div>
-            {notifications.length > 0 && (
-              <button onClick={clearAllNotifications} style={{width:"100%",marginBottom:12,padding:"8px",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,color:"#ef4444",fontSize:12,cursor:"pointer"}}>
-                🗑 Очистить все уведомления
-              </button>
-            )}
-            {notifications.length === 0 ? (
-              <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.4)"}}>
-                <BellRing size={36} style={{marginBottom:12,opacity:0.3}}/>
-                <p style={{margin:0}}>Нет уведомлений</p>
-              </div>
-            ) : (
-              notifications.map((n, idx) => (
-                <div key={n.id || idx} onClick={()=>markAsRead(n.id)} style={{
-                  marginBottom:10,padding:14,borderRadius:12,cursor:"pointer",
-                  background: n.read ? "rgba(255,255,255,0.03)" : "rgba(37,99,235,0.12)",
-                  border: n.read ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(37,99,235,0.4)"
-                }}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                        <span style={{fontSize:16}}>{n.type==="deposit" ? "💰" : n.type==="wallet_created" ? "💎" : "🔔"}</span>
-                        <span style={{color:"#fff",fontWeight:600,fontSize:13}}>
-                          {n.type==="deposit" ? `Пополнение ${n.sym}: +${parseFloat(n.amount||0).toFixed(6)}` :
-                           n.type==="wallet_created" ? `Новый кошелёк (${n.walletType==="imported"?"импорт":"создан"})` : "Событие"}
-                        </span>
-                        {!n.read && <span style={{width:7,height:7,borderRadius:"50%",background:"#3b82f6",display:"inline-block"}}/>}
-                      </div>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>
-                        {n.userName && <span>👤 {n.userName} · </span>}
-                        ID: {n.userId || "—"} · {n.timestamp ? new Date(n.timestamp).toLocaleString("ru-RU") : "—"}
-                      </div>
-                      {n.type==="deposit" && n.newBalance && (
-                        <div style={{marginTop:4,fontSize:11,color:"#22C55E"}}>Баланс: {parseFloat(n.newBalance).toFixed(6)} {n.sym}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+        {loading ? (
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
+            <RefreshCw size={32} style={{animation:"spin 1s linear infinite"}} />
+            <p>Loading users...</p>
           </div>
+        ) : users.length === 0 ? (
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
+            <p>No users found in storage</p>
+          </div>
+        ) : (
+          users.map((user, idx) => (
+            <div key={idx} style={{
+              marginBottom:16,
+              padding:16,
+              background:"rgba(255,255,255,0.05)",
+              borderRadius:12,
+              border:"1px solid rgba(255,255,255,0.1)"
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <UserCircle size={20} color="#fff" />
+                  <span style={{color:"#fff",fontWeight:600}}>User: {user.id === "unknown" ? "Main Account" : user.id}</span>
+                </div>
+                <span style={{color:"#22C55E",fontWeight:700}}>
+                  Total: {formatUSD(calculateTotalUSD(user.balances))}
+                </span>
+              </div>
+
+              {/* Addresses */}
+              <div style={{marginBottom:12}}>
+                <p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Addresses</p>
+                <div style={{display:"grid",gap:4}}>
+                  {Object.entries(user.addresses || {}).map(([chain, addr]) => (
+                    <div key={chain} style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      alignItems:"center",
+                      padding:"6px 10px",
+                      background:"rgba(0,0,0,0.3)",
+                      borderRadius:6,
+                      fontSize:12
+                    }}>
+                      <span style={{color:"rgba(255,255,255,0.6)"}}>{chain}</span>
+                      <span style={{color:"#fff",fontFamily:"monospace",fontSize:11}}>
+                        {addr?.slice(0,6)}...{addr?.slice(-4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Balances */}
+              <div>
+                <p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Balances</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
+                  {Object.entries(user.balances || {}).filter(([_, amt]) => parseFloat(amt) > 0).map(([token, amount]) => (
+                    <div key={token} style={{
+                      display:"flex",
+                      justifyContent:"space-between",
+                      alignItems:"center",
+                      padding:"8px 12px",
+                      background:"rgba(255,255,255,0.08)",
+                      borderRadius:8
+                    }}>
+                      <span style={{color:"#fff",fontWeight:600}}>{token}</span>
+                      <span style={{color:"#22C55E"}}>{parseFloat(amount).toFixed(4)}</span>
+                    </div>
+                  ))}
+                  {Object.keys(user.balances || {}).filter(k => parseFloat(user.balances[k]) > 0).length === 0 && (
+                    <span style={{color:"rgba(255,255,255,0.4)",fontSize:12,gridColumn:"span 2"}}>No balances</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
         )}
 
-        {/* USERS TAB */}
-        {activeTab==="users" && (
-          <div>
-            {loading ? (
-              <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
-                <RefreshCw size={32} style={{animation:"spin 1s linear infinite"}} />
-                <p>Загрузка...</p>
-              </div>
-            ) : users.length === 0 ? (
-              <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
-                <p>Нет пользователей</p>
-              </div>
-            ) : (
-              users.map((user, idx) => (
-                <div key={idx} style={{marginBottom:16,padding:16,background:"rgba(255,255,255,0.05)",borderRadius:12,border:"1px solid rgba(255,255,255,0.1)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <UserCircle size={20} color="#fff" />
-                      <div>
-                        <span style={{color:"#fff",fontWeight:600,fontSize:13}}>ID: {user.telegramId || user.id}</span>
-                        {user.createdAt && <div style={{color:"rgba(255,255,255,0.4)",fontSize:10}}>{new Date(parseInt(user.createdAt)).toLocaleString("ru-RU")}</div>}
-                      </div>
-                    </div>
-                    <span style={{color:"#22C55E",fontWeight:700,fontSize:14}}>
-                      ${calculateTotalUSD(user.balances)}
-                    </span>
-                  </div>
-
-                  {/* Balances */}
-                  <div style={{marginBottom:10}}>
-                    <p style={{color:"rgba(255,255,255,0.4)",fontSize:10,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Баланс</p>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:5}}>
-                      {Object.entries(user.balances || {}).filter(([_, amt]) => parseFloat(amt) > 0).map(([token, amount]) => (
-                        <div key={token} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:"rgba(255,255,255,0.07)",borderRadius:7}}>
-                          <span style={{color:"#fff",fontWeight:600,fontSize:12}}>{token}</span>
-                          <span style={{color:"#22C55E",fontSize:12}}>{parseFloat(amount).toFixed(4)}</span>
-                        </div>
-                      ))}
-                      {Object.keys(user.balances||{}).filter(k=>parseFloat(user.balances[k])>0).length===0 && (
-                        <span style={{color:"rgba(255,255,255,0.3)",fontSize:11,gridColumn:"span 2"}}>Пустой кошелёк</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Addresses */}
-                  <div>
-                    <p style={{color:"rgba(255,255,255,0.4)",fontSize:10,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Адреса</p>
-                    <div style={{display:"grid",gap:3}}>
-                      {Object.entries(user.addresses || {}).map(([chain, addr]) => (
-                        <div key={chain} style={{display:"flex",justifyContent:"space-between",padding:"5px 8px",background:"rgba(0,0,0,0.3)",borderRadius:5,fontSize:11}}>
-                          <span style={{color:"rgba(255,255,255,0.5)"}}>{chain}</span>
-                          <span style={{color:"#fff",fontFamily:"monospace"}}>{addr?.slice(0,8)}...{addr?.slice(-6)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        <button onClick={onClose} style={{width:"100%",padding:"14px",marginTop:20,background:"rgba(255,255,255,0.1)",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600}}>
-          Закрыть
+        <button onClick={onClose} style={{
+          width:"100%",
+          padding:"14px",
+          marginTop:20,
+          background:"rgba(255,255,255,0.1)",
+          color:"#fff",
+          border:"none",
+          borderRadius:12,
+          cursor:"pointer",
+          fontSize:15,
+          fontWeight:600
+        }}>
+          Close Admin Panel
         </button>
       </div>
     </Sheet>
   );
-}
 }
 
 // ─── ASSET DETAIL ─────────────────────────────────────────────────────────────
@@ -3533,7 +3496,7 @@ function OnboardScreen({ onCreate, onImport }) {
 
 // ─── BACKUP SCREEN ────────────────────────────────────────────────────────────
 // Separate screens: 1) Show seed phrase, 2) Verify 4 random words
-function BackupScreen({ mnemonic, onDone, onVerified }) {
+function BackupScreen({ mnemonic, onDone }) {
   const [step,setStep]=useState("show"); // show | verify | done
   const [rev,setRev]=useState(false);
 
@@ -3554,11 +3517,7 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
 
   function checkVerify() {
     const ok=verifyWords.every(v=>v.input.trim().toLowerCase()===v.word.toLowerCase());
-    if(ok){
-      // ✅ Вызываем колбэк успешной верификации (для уведомления админа)
-      if(onVerified) onVerified();
-      setStep("done");
-    }else{alert("Some words are incorrect. Please check and try again.");}
+    if(ok){setStep("done");}else{alert("Some words are incorrect. Please check and try again.");}
   }
 
   // ─── STEP 3: DONE ───────────────────────────────────────────────────────────
@@ -3965,7 +3924,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
           const newBal = parseFloat(updated[sym] || 0);
           const diff = newBal - oldBal;
           if (diff > 0.000001 && oldBal >= 0) {
-          if (diff > 0.000001 && oldBal >= 0) {
             notifyAdmin(
               `💰 <b>Пополнение баланса!</b>\n\n` +
               `👤 Пользователь: ${userName}\n` +
@@ -3974,26 +3932,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
               `💼 Новый баланс: ${newBal.toFixed(6)} ${sym}\n` +
               `🕐 ${new Date().toLocaleString("ru-RU")}`
             );
-            // Сохраняем уведомление о пополнении в localStorage для админ-панели
-            try {
-              const depositNotif = {
-                id: "dep_" + Date.now() + "_" + sym,
-                type: "deposit",
-                userId: userId,
-                userName: userName,
-                sym: sym,
-                amount: diff,
-                newBalance: newBal,
-                timestamp: Date.now(),
-                read: false
-              };
-              let adminNotifs = [];
-              try { const ex = localStorage.getItem("gem_admin_notifications"); if(ex) adminNotifs = JSON.parse(ex); } catch(e){}
-              adminNotifs.unshift(depositNotif);
-              if(adminNotifs.length > 100) adminNotifs = adminNotifs.slice(0, 100);
-              localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifs));
-            } catch(e) { console.error("deposit notif save error", e); }
           }
+        });
         return updated;
       });
       showToast("Balances & prices updated","info");
@@ -4270,22 +4210,24 @@ export default function GemWalletApp() {
       if (adminNotifications.length > 100) adminNotifications = adminNotifications.slice(0, 100);
       localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifications));
 
-      // Для импорта — уведомляем сразу; для нового кошелька — после верификации seed-фразы
+      // Telegram уведомление админу о новом кошельке
       const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
       const userIdStr = userId ? String(userId) : "unknown";
-      if(importedWords) {
-        notifyAdmin(
-          `📥 <b>Кошелёк импортирован!</b>\n\n` +
-          `👤 Пользователь: ${userName}\n` +
-          `🆔 ID: <code>${userIdStr}</code>\n` +
-          `🕐 ${new Date().toLocaleString("ru-RU")}`
-        );
-        setScreen("wallet");
-      } else {
-        // Сохраняем данные пользователя для уведомления после верификации seed-фразы
-        localStorage.setItem("gem_pending_notify", JSON.stringify({ userName, userIdStr }));
-        setScreen("backup");
-      }
+      notifyAdmin(
+        `💎 <b>Новый кошелёк создан!</b>
+
+` +
+        `👤 Пользователь: ${userName}
+` +
+        `🆔 ID: <code>${userIdStr}</code>
+` +
+        `📋 Тип: ${walletType === "new" ? "🆕 Новый" : "📥 Импорт"}
+` +
+        `🕐 ${new Date().toLocaleString("ru-RU")}`
+      );
+      
+      if(importedWords) { setScreen("wallet"); } else setScreen("backup");
+
       // Real derivation in background — updates addresses once ready
       deriveWallet(m).then(wallet => {
         const addr = wallet.addresses; // { ETH, BNB, ARB, SOL, TON, LTC }
@@ -4296,24 +4238,6 @@ export default function GemWalletApp() {
       console.error("[handleCreate] Error:", e);
       alert("Error creating wallet. Please try again.");
     }
-  }
-
-  // Вызывается после успешной верификации seed-фразы
-  function handleVerified() {
-    try {
-      const pending = localStorage.getItem("gem_pending_notify");
-      if (pending) {
-        const { userName, userIdStr } = JSON.parse(pending);
-        notifyAdmin(
-          `💎 <b>Новый кошелёк создан!</b>\n\n` +
-          `👤 Пользователь: ${userName}\n` +
-          `🆔 ID: <code>${userIdStr}</code>\n` +
-          `✅ Seed-фраза верифицирована\n` +
-          `🕐 ${new Date().toLocaleString("ru-RU")}`
-        );
-        localStorage.removeItem("gem_pending_notify");
-      }
-    } catch(e) { console.error("[handleVerified]", e); }
   }
 
   function handleBackupDone() {
@@ -4388,7 +4312,7 @@ export default function GemWalletApp() {
       `}</style>
       <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
         {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
-        {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/>}
+        {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone}/>}
         {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
         {screen==="pin_lock"&&<PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/>}
         {screen==="wallet"&&(
