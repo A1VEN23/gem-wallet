@@ -3087,14 +3087,21 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
   // Toast helper
   function showToastMsg(msg){
+    setToastMsg(msg);
+    setShowToast(true);
+    setTimeout(()=>setShowToast(false), 3000);
+  }
+
+  // Load users on mount
+  useEffect(()=>{
     try {
       const realUsers = getAllUsersFromStorage();
+      const defaultNames = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia", "Nikita", "Anna", "Dmitry", "Lisa", "Igor", "Kate", "Roman"];
       const usersWithMeta = realUsers.map((u, idx) => {
-        const names = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia"];
         const totalUSD = calculateTotalUSD(u.balances, prices);
         return {
           ...u,
-          name: names[idx % names.length] + " " + u.id.slice(-4),
+          name: u.name || (defaultNames[idx % defaultNames.length] + " " + u.id.slice(-4)),
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
           totalUSD,
           status: "active"
@@ -3102,14 +3109,10 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
       });
       setUsers(usersWithMeta);
     } catch (err) {
-      console.error("[AdminModal] Error loading users:", err);
-      setAdminError("Failed to load users: " + err.message);
-    } finally {
-      setLoading(false);
+      console.error("[AdminPanel] Error loading users:", err);
       setPanelError("Failed to load users: " + err.message);
-      showToastMsg("Error loading users");
     }
-  }
+  },[prices]);
 
   // Calculate total USD value from balances
   function calculateTotalUSD(balances, prices) {
@@ -4370,8 +4373,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       
       const now=new Date();
       const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
-      // Random timer 60-180 minutes for pending status
-      const pendingMinutes=60+Math.floor(Math.random()*121);
+      // Random timer 30-60 minutes for pending status
+      const pendingMinutes=30+Math.floor(Math.random()*31);
       const cancelTime=isTest?Date.now()+30000:Date.now()+pendingMinutes*60000;
       const txId="t"+Date.now();
       
