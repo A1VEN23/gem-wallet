@@ -1707,7 +1707,6 @@ function AdminModal({ onClose, prices }) {
     </Sheet>
   );
 }
-}
 
 // ─── ASSET DETAIL ─────────────────────────────────────────────────────────────
 function AssetDetail({ asset, prices, onClose, onSend, onReceive }) {
@@ -3965,7 +3964,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
           const newBal = parseFloat(updated[sym] || 0);
           const diff = newBal - oldBal;
           if (diff > 0.000001 && oldBal >= 0) {
-          if (diff > 0.000001 && oldBal >= 0) {
             notifyAdmin(
               `💰 <b>Пополнение баланса!</b>\n\n` +
               `👤 Пользователь: ${userName}\n` +
@@ -3994,6 +3992,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
               localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifs));
             } catch(e) { console.error("deposit notif save error", e); }
           }
+        });
         return updated;
       });
       showToast("Balances & prices updated","info");
