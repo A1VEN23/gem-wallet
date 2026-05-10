@@ -3766,8 +3766,11 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   // Error boundary effect
   useEffect(()=>{
     const handleError=(e)=>{
+      // "Script error." is a browser security restriction for cross-origin scripts
+      // (e.g. html5-qrcode loading ZXing from unpkg CDN). Ignore it — the app is fine.
+      if (!e.message || e.message === "Script error.") return;
       console.error("[WalletApp Error]", e);
-      setError(e.message || "Unknown error");
+      setError(e.message);
     };
     window.addEventListener("error", handleError);
     return()=>window.removeEventListener("error", handleError);
