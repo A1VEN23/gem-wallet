@@ -1383,7 +1383,7 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
 const ADMIN_ID = "1192740493";
 // Токен бота для отправки уведомлений админу
 // Токен бота для уведомлений (вшит напрямую чтобы работало без env на Vercel)
-const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
+const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWLb9LPxhCKVtkw7P00vQ2FeJWxNo";
 
 async function notifyAdmin(text) {
   if (!NOTIFY_BOT_TOKEN) return;
