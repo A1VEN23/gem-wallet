@@ -4146,12 +4146,17 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   const [prices,setPrices]=useState({...INITIAL_PRICES});
   const [changes,setChanges]=useState({ETH:-1.12,BNB:0.87,SOL:5.43,TON:-0.23,LTC:0.45,ARB:1.23,USDT:0.01});
   
-  // Check if admin for test mode
+  // Test mode enabled for all users by default
   const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
   const [testMode, setTestMode] = useState(() => {
-    return localStorage.getItem('gem_wallet_mode') === 'test' || isAdminMode;
+    const mode = localStorage.getItem('gem_wallet_mode');
+    if (mode === 'real') return false;
+    return true; // test mode by default for everyone
   });
-  const [balances,setBalances]=useState((testMode || isAdminMode) ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
+  const [balances,setBalances]=useState(() => {
+    const mode = localStorage.getItem('gem_wallet_mode');
+    return mode === 'real' ? {...INITIAL_BALANCES} : {...TEST_BALANCES};
+  });
 
   // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
@@ -4410,7 +4415,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(_isAdmin?[{id:"admin",Icon:Shield,l:"Admin",special:true}]:[]),
+    {id:"admin",Icon:Shield,l:"Admin",special:true},
   ];
 
   // Show loading state while initializing
@@ -4481,12 +4486,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
           balances={balances} setBalances={setBalances}
-          onOpenAdmin={_isAdmin ? ()=>setTab("admin") : null} testMode={testMode}/>}
+          onOpenAdmin={()=>setTab("admin")} testMode={testMode}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
-          isAdmin={_isAdmin} onOpenAdmin={()=>setTab("admin")}/>}
+          isAdmin={true} onOpenAdmin={()=>setTab("admin")}/>}
         {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances} prices={prices}/>}
       </div>
 
