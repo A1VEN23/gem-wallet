@@ -691,49 +691,56 @@ function NetworkPicker({ sym, selected, onSelect }) {
 
 // ─── SEND MODAL ───────────────────────────────────────────────────────────────
 function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network }) {
+  // Safe defaults
+  const safeAssets = Array.isArray(assets) && assets.length > 0 ? assets : [{ sym: 'ETH', name: 'Ethereum', balance: 0 }];
+  const safePrices = prices || {};
+  
   const [step,setStep]=useState(1);
-  const [sel,setSel]=useState(assets[0]);
+  const [sel,setSel]=useState(safeAssets[0]);
   const [to,setTo]=useState("");
   const [amt,setAmt]=useState("");
   const [done,setDone]=useState(false);
   const [sending,setSending]=useState(false);
   const [txHash,setTxHash]=useState("");
-  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
+  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[safeAssets[0]?.sym]?.[0]||null);
   const [addrError,setAddrError]=useState("");
   const [showScanner,setShowScanner]=useState(false);
 
-  const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
-  const price = prices[sel.sym]||0;
+  const assetObj = safeAssets.find(a=>a?.sym===sel?.sym)||safeAssets[0];
+  const price = safePrices[sel?.sym]||0;
   const fee = 0.84;
-  const nets = ASSET_NETWORKS[sel.sym]||[];
+  const nets = ASSET_NETWORKS[sel?.sym]||[];
   const curNet = selectedNet || nets[0] || null;
 
   function handleSelAsset(a) {
+    if (!a || typeof a !== 'object') return;
     setSel(a);
     setTo("");
-    setSelectedNet(ASSET_NETWORKS[a.sym]?.[0]||null);
+    setSelectedNet(ASSET_NETWORKS[a?.sym]?.[0]||null);
   }
 
   function handleToChange(val) {
     setTo(val);
-    if (val && !isValidAddress(val, sel.sym)) {
-      setAddrError(`Invalid ${sel.sym} address format`);
+    const sym = sel?.sym || 'ETH';
+    if (val && !isValidAddress(val, sym)) {
+      setAddrError(`Invalid ${sym} address format`);
     } else {
       setAddrError("");
     }
   }
 
   function next() {
+    const sym = sel?.sym || 'ETH';
     if(step===1){
       if(!to){ setAddrError("Enter recipient address"); return; }
-      if(!isValidAddress(to, sel.sym)){ setAddrError(`Invalid ${sel.sym} address format`); return; }
+      if(!isValidAddress(to, sym)){ setAddrError(`Invalid ${sym} address format`); return; }
       setAddrError("");
       setStep(2);
     }
     else if(step===2&&amt) setStep(3);
     else if(step===3) {
       const num=parseFloat(amt);
-      if(num>assetObj.balance){alert("Insufficient balance");return;}
+      if(num>(assetObj?.balance||0)){alert("Insufficient balance");return;}
       setSending(true);
       async function doSend(){
         if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
@@ -745,22 +752,22 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
         setBusy(true);
         try{
           // Get asset metadata safely
-          const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
-          if(!assetMeta){throw new Error("Asset not found: "+sel.sym);}
+          const assetMeta = ASSET_META.find(a=>a.sym===sym);
+          if(!assetMeta){throw new Error("Asset not found: "+sym);}
           
           // Get private key
-          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
+          const privateKey = await getPrivateKey(mnemonic.join(" "), sym, network);
           if(!privateKey){throw new Error("Failed to derive private key");}
           
           // Get from address safely
           const fromAddr = addresses?.[assetMeta.id];
-          if(!fromAddr){throw new Error(`No address found for ${sel.sym} (${assetMeta.id})`);}
+          if(!fromAddr){throw new Error(`No address found for ${sym} (${assetMeta.id})`);}
           
           // Send transaction
-          const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
+          const hash = await chainSendTransaction(sym, fromAddr, to, parseFloat(amt), privateKey, { network });
           if(hash){
             alert(`Sent! Hash: ${hash.slice(0,20)}...`);
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
+            onSend({ sym, amount:num, to, usd:num*price, hash });
             setDone(true);
             setTimeout(onClose,2500);
           }else{throw new Error("Transaction failed - no hash returned");}
@@ -2068,7 +2075,9 @@ function ActivityTab({ txHistory, onCancelTx }) {
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
   const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
-  const filtered = filter==="all"?txHistory:filter==="declined"?txHistory.filter(t=>t.status==="declined"):txHistory.filter(t=>t.type===filter);
+  // Safe filtering with array check
+  const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
+  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
   
   const getStatusIcon = (status) => {
     if(status==="confirmed")return <CheckCircle size={12} color="#22C55E"/>;
@@ -2102,10 +2111,11 @@ function ActivityTab({ txHistory, onCancelTx }) {
         </div>
       )}
       {filtered.map((tx,i)=>{
-        const Icon=icons[tx.type]||ArrowUpRight;
-        const isNegative = tx.type==="send"||tx.status==="declined";
+        if (!tx || typeof tx !== 'object') return null;
+        const Icon=icons[tx?.type]||ArrowUpRight;
+        const isNegative = tx?.type==="send"||tx?.status==="declined";
         return (
-          <div key={tx.id} onClick={()=>setSel(tx)}
+          <div key={tx?.id||i} onClick={()=>setSel(tx)}
             style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:18,
               cursor:"pointer",transition:"all 0.2s ease",
               background:"linear-gradient(145deg,#1a1a1a,#161616)",
@@ -2123,23 +2133,23 @@ function ActivityTab({ txHistory, onCancelTx }) {
               e.currentTarget.style.transform="translateY(0)";
               e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.2)";
             }}>
-            <div style={{width:48,height:48,borderRadius:14,background:bg[tx.type]||"#1a1a1a",
-              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx.color}30`,flexShrink:0,
-              boxShadow:`0 4px 12px ${tx.color}20`}}>
-              <Icon size={22} color={tx.color}/>
+            <div style={{width:48,height:48,borderRadius:14,background:bg[tx?.type]||"#1a1a1a",
+              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx?.color||"#fff"}30`,flexShrink:0,
+              boxShadow:`0 4px 12px ${tx?.color||"#fff"}20`}}>
+              <Icon size={22} color={tx?.color||"#fff"}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:15,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>
-                    {tx.type}
+                    {tx?.type||"unknown"}
                   </span>
-                  {tx.status&&tx.status!=="confirmed"&&(
-                    <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx.status],
-                      background:statusColors[tx.status]+"15",padding:"3px 8px",borderRadius:6,textTransform:"capitalize",
-                      fontWeight:600,border:`1px solid ${statusColors[tx.status]}30`}}>
-                      {getStatusIcon(tx.status)}
-                      {tx.status}
+                  {tx?.status&&tx?.status!=="confirmed"&&(
+                    <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx?.status],
+                      background:statusColors[tx?.status]+"15",padding:"3px 8px",borderRadius:6,textTransform:"capitalize",
+                      fontWeight:600,border:`1px solid ${statusColors[tx?.status]}30`}}>
+                      {getStatusIcon(tx?.status)}
+                      {tx?.status}
                     </span>
                   )}
                 </div>
