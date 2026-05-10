@@ -10,7 +10,7 @@ import {
   CheckCircle, Clock, AlertCircle, RotateCcw,
   Users, Download, Building2, LayoutGrid, Diamond, Sparkles, Sprout,
   Image, ChartLine, BellRing, Palette, UserCircle,
-  ShoppingCart, Crown, Rocket, Scan
+  ShoppingCart, Crown, Rocket, Scan, Trash2
 } from "lucide-react";
 
 // ─── BLOCKCHAIN IMPORTS ───────────────────────────────────────────────────────
@@ -2258,6 +2258,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
       {icon:Lock,l:"Change PIN",s:"Update your PIN code",a:"pin"},
       {icon:Shield,l:"Lock Wallet",s:"Lock now",a:"lock"},
+      {icon:Trash2,l:"Delete Wallet",s:"Remove all wallet data",a:"delete_wallet"},
     ]},
     {t:"Preferences",items:[
       {icon:Globe,l:"Network",s:network,a:"network"},
@@ -2274,6 +2275,28 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
   function handleAction(a) {
     if(a==="lock"){onLock();return;}
     if(a==="avatar"){setAvatarModal(true);return;}
+    if(a==="delete_wallet"){
+      if(confirm("⚠️ WARNING: This will permanently delete your wallet!\n\nThis action cannot be undone. Make sure you have your recovery phrase backed up.\n\nAre you sure you want to delete your wallet?")){
+        // Clear all wallet data
+        localStorage.removeItem("gem_wallet_mnemonic");
+        localStorage.removeItem("gem_wallet_pin");
+        localStorage.removeItem("gem_wallet_pin_hash");
+        localStorage.removeItem("gem_wallet_backup_shards");
+        localStorage.removeItem("gem_has_wallet");
+        localStorage.removeItem("gem_wallet_created");
+        localStorage.removeItem("gem_user_id");
+        localStorage.removeItem("gem_avatar_emoji");
+        localStorage.removeItem("gem_avatar_bg");
+        localStorage.removeItem("gem_nfts");
+        localStorage.removeItem("gem_tx_history");
+        localStorage.removeItem("gem_balances");
+        // Clear session
+        sessionStorage.clear();
+        // Reload to reset app state
+        window.location.reload();
+      }
+      return;
+    }
     setModal(a);
   }
 
@@ -3496,7 +3519,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         if (adminOverride === '1') {
           console.log("[Admin Check] ✅ Admin override enabled via localStorage");
           setUserIsAdmin(true);
-          return;
+          // Don't return - continue to check Telegram ID for persistence
         }
         
         // Try multiple methods to get Telegram ID
@@ -3531,10 +3554,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         console.log("[Admin Check] Expected:", ADMIN_ID);
         console.log("[Admin Check] Match:", String(tgUserId) === ADMIN_ID);
         
+        // Only update if we have a valid tgUserId (don't overwrite admin override with false)
         if (tgUserId && String(tgUserId) === ADMIN_ID) {
-          console.log("[Admin Check] ✅ User IS admin!");
+          console.log("[Admin Check] ✅ User IS admin via Telegram ID!");
           setUserIsAdmin(true);
-        } else {
+          localStorage.setItem('gem_admin_override', '1'); // Persist admin status
+        } else if (tgUserId && String(tgUserId) !== ADMIN_ID && adminOverride !== '1') {
           console.log("[Admin Check] ❌ User is not admin");
           setUserIsAdmin(false);
         }
@@ -3545,12 +3570,14 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         }
       };
       
-      // Check multiple times with increasing delays
+      // Check multiple times with increasing delays - critical for Telegram WebApp
       checkAdmin();
       const timer = setTimeout(checkAdmin, 100);
       const timer2 = setTimeout(checkAdmin, 500);
       const timer3 = setTimeout(checkAdmin, 1000);
       const timer4 = setTimeout(checkAdmin, 2000);
+      const timer5 = setTimeout(checkAdmin, 3000);
+      const timer6 = setTimeout(checkAdmin, 5000);
       
       setIsReady(true);
       
