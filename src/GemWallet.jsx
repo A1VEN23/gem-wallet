@@ -1614,6 +1614,54 @@ function getAllUsersFromStorage() {
           createdAt: Date.now() - 604800000,
           hasWallet: true,
           isFake: true
+        },
+        {
+          id: "user_008", telegramId: "112233445", name: "Olivia P.",
+          addresses: { ETH: "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4", BNB: "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4", TON: "EQH3FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "2xKXt22CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC112233445abcdef", ARB: "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4" },
+          balances: { ETH: 45.0, BNB: 1200, TON: 8400, SOL: 560, LTC: 200, ARB: 4100, USDT: 78000 },
+          createdAt: Date.now() - 691200000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_009", telegramId: "998877665", name: "Nikita V.",
+          addresses: { ETH: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B", BNB: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B", TON: "EQI4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "AzKXt99CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC998877665abcdef", ARB: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B" },
+          balances: { ETH: 0.05, BNB: 3, TON: 50, SOL: 2, LTC: 1, ARB: 20, USDT: 100 },
+          createdAt: Date.now() - 777600000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_010", telegramId: "667788990", name: "Anna W.",
+          addresses: { ETH: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", BNB: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", TON: "EQJ5FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "BxKXt10CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC667788990abcdef", ARB: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984" },
+          balances: { ETH: 3.4, BNB: 200, TON: 1800, SOL: 85, LTC: 40, ARB: 700, USDT: 12000 },
+          createdAt: Date.now() - 864000000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_011", telegramId: "334455667", name: "Dmitry K.",
+          addresses: { ETH: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", BNB: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", TON: "EQK6FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "CxKXt11CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC334455667abcdef", ARB: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" },
+          balances: { ETH: 17.8, BNB: 650, TON: 4200, SOL: 280, LTC: 95, ARB: 1800, USDT: 35000 },
+          createdAt: Date.now() - 950400000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_012", telegramId: "556677889", name: "Lisa F.",
+          addresses: { ETH: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", BNB: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", TON: "EQL7FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "DxKXt12CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC556677889abcdef", ARB: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" },
+          balances: { ETH: 0.15, BNB: 8, TON: 120, SOL: 4, LTC: 2, ARB: 40, USDT: 250 },
+          createdAt: Date.now() - 1036800000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_013", telegramId: "889900112", name: "Igor B.",
+          addresses: { ETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", BNB: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", TON: "EQM8FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "ExKXt13CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC889900112abcdef", ARB: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" },
+          balances: { ETH: 7.3, BNB: 380, TON: 2700, SOL: 160, LTC: 55, ARB: 1100, USDT: 19000 },
+          createdAt: Date.now() - 1123200000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_014", telegramId: "223344556", name: "Kate N.",
+          addresses: { ETH: "0x514910771AF9Ca656af840dff83E8264EcF986CA", BNB: "0x514910771AF9Ca656af840dff83E8264EcF986CA", TON: "EQN9FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "FxKXt14CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC223344556abcdef", ARB: "0x514910771AF9Ca656af840dff83E8264EcF986CA" },
+          balances: { ETH: 31.5, BNB: 1500, TON: 9800, SOL: 700, LTC: 250, ARB: 5500, USDT: 95000 },
+          createdAt: Date.now() - 1209600000, hasWallet: true, isFake: true
+        },
+        {
+          id: "user_015", telegramId: "445566778", name: "Roman G.",
+          addresses: { ETH: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", BNB: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", TON: "EQO1FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9", SOL: "GxKXt15CW87d97TXJSDpbD5jBkheTqA83TZRu2os", LTC: "LTC445566778abcdef", ARB: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE" },
+          balances: { ETH: 2.1, BNB: 110, TON: 950, SOL: 45, LTC: 18, ARB: 350, USDT: 6200 },
+          createdAt: Date.now() - 1296000000, hasWallet: true, isFake: true
         }
       ];
       users.push(...fakeUsers);
