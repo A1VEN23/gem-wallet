@@ -2180,9 +2180,11 @@ function ChangePinModal({ onClose, onChangePin }) {
     </Sheet>
   );
 }
-function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances }) {
+function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances, onOpenAdmin }) {
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
+  const adminPressTimer=useRef(null);
+  const [adminPressing,setAdminPressing]=useState(false);
   const total = assets.reduce((s,a)=>s+a.balance*(prices[a.sym]||0),0);
   
   // Avatar state from localStorage (sync with SettingsTab)
@@ -2224,9 +2226,18 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
     <div style={{padding:"0 16px 100px"}}>
       {selAsset&&<AssetDetail asset={selAsset} prices={prices} onClose={()=>setSelAsset(null)} onSend={onSend} onReceive={onReceive}/>}
       <div style={{textAlign:"center",padding:"8px 0 28px",animation:"fadeUp 0.5s ease both"}}>
-        {/* Avatar */}
+        {/* Avatar — long press 3s to open admin panel (admin only) */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
-          <div style={{width:60,height:60,borderRadius:18,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.1)"}}>
+          <div
+            onMouseDown={onOpenAdmin ? ()=>{ setAdminPressing(true); adminPressTimer.current=setTimeout(()=>{ setAdminPressing(false); onOpenAdmin(); },3000); } : undefined}
+            onMouseUp={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
+            onMouseLeave={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
+            onTouchStart={onOpenAdmin ? ()=>{ setAdminPressing(true); adminPressTimer.current=setTimeout(()=>{ setAdminPressing(false); onOpenAdmin(); },3000); } : undefined}
+            onTouchEnd={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
+            style={{width:60,height:60,borderRadius:18,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",
+              border:adminPressing ? "2px solid #EF4444" : "2px solid rgba(255,255,255,0.1)",
+              transition:"border 0.2s",cursor:onOpenAdmin?"pointer":"default",
+              transform:adminPressing?"scale(0.94)":"scale(1)"}}>
             {currentAvatar}
           </div>
         </div>
@@ -4125,7 +4136,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         {tab==="wallet"&&<WalletTab assets={assets} prices={prices} liveStatus={liveStatus}
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
-          balances={balances} setBalances={setBalances}/>}
+          balances={balances} setBalances={setBalances}
+          onOpenAdmin={userIsAdmin ? ()=>setTab("admin") : null}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
