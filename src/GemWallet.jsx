@@ -4219,7 +4219,6 @@ export default function GemWalletApp() {
       localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifications));
 
       // Для импорта — уведомляем сразу; для нового кошелька — после верификации seed-фразы
-      const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
       const userIdStr = userId ? String(userId) : "unknown";
       if(importedWords) {
         notifyAdmin(
