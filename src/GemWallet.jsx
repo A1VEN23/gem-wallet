@@ -1451,12 +1451,21 @@ function getAllUsersFromStorage() {
         const createdAt = localStorage.getItem(`gem_wallet_created${userKeySuffix}`) || localStorage.getItem(`gem_created${userKeySuffix}`);
         const telegramId = localStorage.getItem(`gem_user_id${userKeySuffix}`);
         
+        // Load transaction history for this user
+        let txHistory = [];
+        try {
+          const txKey = baseKey === "gem_wallet_" ? `gem_wallet_tx_history${userKeySuffix}` : `gem_tx_history${userKeySuffix}`;
+          const txStr = localStorage.getItem(txKey);
+          if (txStr) txHistory = JSON.parse(txStr);
+        } catch(e) { txHistory = []; }
+        
         if (mnemonic) {
           users.push({
             id: userId,
             telegramId,
             addresses,
             balances,
+            txHistory,
             createdAt,
             hasWallet: true,
             keyFormat: baseKey
@@ -3044,6 +3053,36 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                             </div>
                           </div>
                         </div>
+                        {/* User transactions */}
+                        {u.txHistory && u.txHistory.length > 0 && (
+                          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 6px",fontWeight:600}}>
+                              📋 Transactions ({u.txHistory.length})
+                            </p>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {u.txHistory.slice(0,5).map((tx,ti)=>(
+                                <div key={ti} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                                  padding:"5px 8px",borderRadius:8,background:"rgba(255,255,255,0.04)"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                    <div style={{width:6,height:6,borderRadius:"50%",
+                                      background:tx.status==="confirmed"?"#22c55e":tx.status==="pending"?"#f59e0b":"#ef4444"}}/>
+                                    <span style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>{tx.label}</span>
+                                    <span style={{fontSize:10,color:"rgba(255,255,255,0.3)",textTransform:"capitalize"}}>{tx.type}</span>
+                                  </div>
+                                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                    <span style={{fontSize:11,color:tx.color||"#fff",fontWeight:600}}>{tx.usd}</span>
+                                    <span style={{fontSize:9,color:"rgba(255,255,255,0.3)"}}>{tx.time}</span>
+                                  </div>
+                                </div>
+                              ))}
+                              {u.txHistory.length>5&&(
+                                <p style={{fontSize:10,color:"rgba(255,255,255,0.3)",margin:"2px 0 0",textAlign:"center"}}>
+                                  +{u.txHistory.length-5} ещё
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -3759,8 +3798,22 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
   const [changes,setChanges]=useState({ETH:-1.12,BNB:0.87,SOL:5.43,TON:-0.23,LTC:0.45,ARB:1.23,USDT:0.01});
   const [balances,setBalances]=useState({...INITIAL_BALANCES});
 
-  // Transaction history — starts empty; populated by real send/swap actions
-  const [txHistory,setTxHistory]=useState([]);
+  // Transaction history — persisted to localStorage per user
+  const [txHistory,setTxHistory]=useState(()=>{
+    try {
+      const saved = localStorage.getItem(storageKey("gem_tx_history"));
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // Auto-save txHistory to localStorage whenever it changes
+  useEffect(()=>{
+    try {
+      if (Array.isArray(txHistory)) {
+        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(txHistory));
+      }
+    } catch(e) { console.error("[txHistory save]", e); }
+  }, [txHistory]);
 
   // Error boundary effect
   useEffect(()=>{
