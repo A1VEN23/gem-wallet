@@ -3350,11 +3350,6 @@ function SplashScreen({ onOpen }) {
 
         {/* Big crystal illustration */}
         <div style={{position:"relative",marginBottom:40,animation:"splashFloat 4s ease-in-out infinite"}}>
-          <style>{`
-            @keyframes splashFloat{0%,100%{transform:translateY(0px) rotate(-2deg)}50%{transform:translateY(-12px) rotate(2deg)}}
-            @keyframes splashGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.9;transform:scale(1.08)}}
-            @keyframes splashFadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
-          `}</style>
           {/* Glow circle behind gem */}
           <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
             width:200,height:200,borderRadius:"50%",
@@ -3401,7 +3396,7 @@ function SplashScreen({ onOpen }) {
         </div>
 
         {/* Text block */}
-        <div style={{textAlign:"center",animation:"splashFadeUp 0.7s 0.2s ease both",opacity:0,animationFillMode:"forwards"}}>
+        <div style={{textAlign:"center",animation:"splashFadeUp 0.7s ease both"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:"#2563eb"}}/>
             <span style={{fontSize:12,fontWeight:600,color:"rgba(99,131,255,0.8)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
@@ -3423,7 +3418,7 @@ function SplashScreen({ onOpen }) {
         {/* Trust badges */}
         <div style={{
           display:"flex",gap:10,marginTop:32,
-          animation:"splashFadeUp 0.7s 0.4s ease both",opacity:0,animationFillMode:"forwards"
+          animation:"splashFadeUp 0.7s 0.2s ease both"
         }}>
           {[
             {icon:"🔐",label:"Self-Custody"},
@@ -3445,8 +3440,7 @@ function SplashScreen({ onOpen }) {
 
       {/* Bottom bar — button at bottom-left like pro wallets */}
       <div style={{
-        padding:"20px 24px 36px",
-        animation:"splashFadeUp 0.7s 0.55s ease both",opacity:0,animationFillMode:"forwards"
+        padding:"20px 24px 36px"
       }}>
         {/* Subtle divider */}
         <div style={{height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)",marginBottom:20}}/>
@@ -4176,13 +4170,14 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function GemWalletApp() {
-  const [screen,setScreen]=useState(()=>{
+  const [screen,setScreen]=useState("splash");
+  function handleSplashOpen() {
     const hasWallet=localStorage.getItem(storageKey("gem_has_wallet"))==="1";
-    const pin=localStorage.getItem(storageKey("gem_pin"));
-    if(hasWallet&&pin) return "pin_lock";
-    if(hasWallet) return "wallet";
-    return "splash";
-  });
+    const storedPin=localStorage.getItem(storageKey("gem_pin"));
+    if(hasWallet&&storedPin) setScreen("pin_lock");
+    else if(hasWallet) setScreen("wallet");
+    else setScreen("onboard");
+  }
   const [mnemonic,setMnemonic]=useState(()=>{
     const m=localStorage.getItem(storageKey("gem_mnemonic"));
     return m?m.split(" "):[];
@@ -4288,6 +4283,9 @@ export default function GemWalletApp() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        @keyframes splashFloat{0%,100%{transform:translateY(0px) rotate(-2deg)}50%{transform:translateY(-12px) rotate(2deg)}}
+        @keyframes splashGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.9;transform:scale(1.08)}}
+        @keyframes splashFadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideDown{from{transform:translate(-50%,-20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
@@ -4298,7 +4296,7 @@ export default function GemWalletApp() {
         button:focus{outline:none;}
       `}</style>
       <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
-        {screen==="splash"&&<SplashScreen onOpen={()=>setScreen("onboard")}/>}
+        {screen==="splash"&&<SplashScreen onOpen={handleSplashOpen}/>}
         {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
         {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone}/>}
         {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
