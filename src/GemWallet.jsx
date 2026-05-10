@@ -735,29 +735,37 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
       const num=parseFloat(amt);
       if(num>assetObj.balance){alert("Insufficient balance");return;}
       setSending(true);
-      (async () => {
-        try {
-          // REAL MODE: Send actual blockchain transaction
-          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
-          const fromAddr = addresses[ASSET_META.find(a=>a.sym===sel.sym)?.id];
-          const txHash = await chainSendTransaction({
-            sym: sel.sym,
-            networkId: network,
-            from: fromAddr,
-            to: to,
-            amount: num,
-            privateKey: privateKey
-          });
+      async function doSend(){
+        if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
+        setBusy(true);
+        try{
+          // Get asset metadata safely
+          const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
+          if(!assetMeta){throw new Error("Asset not found: "+sel.sym);}
           
-          setTxHash(txHash);
-          onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
-          setDone(true);
-          setTimeout(onClose,2500);
-        } catch(err) {
+          // Get private key
+          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
+          if(!privateKey){throw new Error("Failed to derive private key");}
+          
+          // Get from address safely
+          const fromAddr = addresses?.[assetMeta.id];
+          if(!fromAddr){throw new Error(`No address found for ${sel.sym} (${assetMeta.id})`);}
+          
+          // Send transaction
+          const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
+          if(hash){
+            alert(`Sent! Hash: ${hash.slice(0,20)}...`);
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
+            setDone(true);
+            setTimeout(onClose,2500);
+          }else{alert("Transaction failed - no hash returned");}
+        }catch(e){
+          console.error("[Send Error]", e);
+          alert("Error sending: "+(e.message||"Unknown error"));
           setSending(false);
-          alert("Transaction failed: " + (err.message || err));
         }
-      })();
+      }
+      doSend();
     }
   }
 
@@ -1359,6 +1367,12 @@ function AdminModal({ onClose, prices }) {
             <p style={{margin:0,color:"rgba(255,255,255,0.7)",fontSize:12}}>Total Users: {users.length}</p>
           </div>
         </div>
+
+        {adminError && (
+          <div style={{padding:"12px 16px",background:"#EF444422",border:"1px solid #EF4444",borderRadius:12,marginBottom:20}}>
+            <p style={{color:"#EF4444",fontSize:14,margin:0}}>⚠️ {adminError}</p>
+          </div>
+        )}
 
         {loading ? (
           <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.6)"}}>
@@ -2459,19 +2473,10 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
   // Toast helper
   function showToastMsg(msg){
-    setToastMsg(msg);
-    setShowToast(true);
-    setTimeout(()=>setShowToast(false),3000);
-  }
-
-  // Load real users from localStorage with error handling
-  function loadRealUsers(){
     try {
-      setPanelError(null);
       const realUsers = getAllUsersFromStorage();
-      // Add metadata for display
       const usersWithMeta = realUsers.map((u, idx) => {
-        const names = ["User"];
+        const names = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia"];
         const totalUSD = calculateTotalUSD(u.balances, prices);
         return {
           ...u,
@@ -2482,12 +2487,11 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
         };
       });
       setUsers(usersWithMeta);
-      setSelectedUsers(new Set());
-      setSelectedTokens(new Set());
-      setStep(1);
-      showToastMsg(`Found ${usersWithMeta.length} wallets`);
     } catch (err) {
-      console.error("[AdminPanel] Error loading users:", err);
+      console.error("[AdminModal] Error loading users:", err);
+      setAdminError("Failed to load users: " + err.message);
+    } finally {
+      setLoading(false);
       setPanelError("Failed to load users: " + err.message);
       showToastMsg("Error loading users");
     }
