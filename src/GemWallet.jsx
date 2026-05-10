@@ -829,7 +829,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
           if(hash){
             alert(`Sent! Hash: ${hash.slice(0,20)}...`);
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
+            const sentAmount = parseFloat(amt);
+          onSend({ sym:sel.sym, amount:sentAmount, to, usd:sentAmount*price, hash });
             setDone(true);
             setTimeout(onClose,2500);
           }else{throw new Error("Transaction failed - no hash returned");}
@@ -1374,51 +1375,89 @@ function isAdmin() {
 function getAllUsersFromStorage() {
   try {
     const users = [];
+    const processedUsers = new Set(); // Track processed users to avoid duplicates
+    
     if (!localStorage || typeof localStorage.length === 'undefined') return users;
     
     for (let i = 0; i < localStorage.length; i++) {
       try {
         const key = localStorage.key(i);
-        if (key && key.includes("gem_mnemonic")) {
-          // Extract user ID from key: "gem_mnemonic" or "gem_mnemonic_123456"
-          const userId = key.replace("gem_mnemonic", "").replace("_", "") || "unknown";
-          const mnemonicKey = key;
-          const addressesKey = key.replace("gem_mnemonic", "gem_addresses");
-          const balancesKey = key.replace("gem_mnemonic", "gem_balances");
-          
-          let mnemonic = null;
-          let addressesStr = null;
-          let balancesStr = null;
-          
-          try {
-            mnemonic = localStorage.getItem(mnemonicKey);
-            addressesStr = localStorage.getItem(addressesKey);
-            balancesStr = localStorage.getItem(balancesKey);
-          } catch (e) { /* Ignore localStorage errors */ }
-          
-          let addresses = {};
-          let balances = {};
-          
-          try {
-            if (addressesStr) addresses = JSON.parse(addressesStr);
-          } catch (e) { console.error("Failed to parse addresses for", userId); }
-          
-          try {
-            if (balancesStr) balances = JSON.parse(balancesStr);
-          } catch (e) { console.error("Failed to parse balances for", userId); }
-          
+        if (!key) continue;
+        
+        // Check for mnemonic keys (both old and new format)
+        let userId = null;
+        let baseKey = null;
+        
+        if (key.startsWith("gem_wallet_mnemonic_")) {
+          userId = key.replace("gem_wallet_mnemonic_", "");
+          baseKey = "gem_wallet_";
+        } else if (key === "gem_wallet_mnemonic") {
+          userId = "main";
+          baseKey = "gem_wallet_";
+        } else if (key.startsWith("gem_mnemonic_")) {
+          userId = key.replace("gem_mnemonic_", "");
+          baseKey = "gem_";
+        } else if (key === "gem_mnemonic") {
+          userId = "main";
+          baseKey = "gem_";
+        }
+        
+        if (!userId || processedUsers.has(userId)) continue;
+        processedUsers.add(userId);
+        
+        // Get associated data
+        const userKeySuffix = userId === "main" ? "" : "_" + userId;
+        const mnemonicKey = baseKey === "gem_wallet_" ? `gem_wallet_mnemonic${userKeySuffix}` : `gem_mnemonic${userKeySuffix}`;
+        const addressesKey = baseKey === "gem_wallet_" ? `gem_wallet_addresses${userKeySuffix}` : `gem_addresses${userKeySuffix}`;
+        const balancesKey = baseKey === "gem_wallet_" ? `gem_wallet_balances${userKeySuffix}` : `gem_balances${userKeySuffix}`;
+        
+        let mnemonic = null;
+        let addressesStr = null;
+        let balancesStr = null;
+        
+        try {
+          mnemonic = localStorage.getItem(mnemonicKey);
+          addressesStr = localStorage.getItem(addressesKey);
+          balancesStr = localStorage.getItem(balancesKey);
+        } catch (e) { /* Ignore localStorage errors */ }
+        
+        let addresses = {};
+        let balances = {};
+        
+        try {
+          if (addressesStr) addresses = JSON.parse(addressesStr);
+        } catch (e) { console.error("Failed to parse addresses for", userId); }
+        
+        try {
+          if (balancesStr) balances = JSON.parse(balancesStr);
+        } catch (e) { console.error("Failed to parse balances for", userId); }
+        
+        // Get additional user info
+        const createdAt = localStorage.getItem(`gem_wallet_created${userKeySuffix}`) || localStorage.getItem(`gem_created${userKeySuffix}`);
+        const telegramId = localStorage.getItem(`gem_user_id${userKeySuffix}`);
+        
+        if (mnemonic) {
           users.push({
             id: userId,
+            telegramId,
             addresses,
             balances,
-            hasWallet: !!mnemonic
+            createdAt,
+            hasWallet: true,
+            keyFormat: baseKey
           });
         }
       } catch (itemError) {
         console.error("Error processing localStorage item", itemError);
       }
     }
-    return users;
+    
+    // Sort by creation date (newest first)
+    return users.sort((a, b) => {
+      const timeA = a.createdAt ? parseInt(a.createdAt) : 0;
+      const timeB = b.createdAt ? parseInt(b.createdAt) : 0;
+      return timeB - timeA;
+    });
   } catch (e) {
     console.error("[getAllUsersFromStorage] Critical error:", e);
     return [];
@@ -3321,9 +3360,9 @@ function OnboardScreen({ onCreate, onImport }) {
       <div style={{position:"absolute",bottom:-60,right:-60,width:240,height:240,borderRadius:"50%",
         background:"radial-gradient(circle,#7c3aed33 0%,transparent 70%)",pointerEvents:"none"}}/>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,marginBottom:48,animation:"fadeUp 0.6s ease both"}}>
-        <div style={{width:80,height:80,borderRadius:24,background:"#111",border:"1px solid rgba(255,255,255,0.1)",
+        <div style={{width:80,height:80,borderRadius:24,background:"linear-gradient(135deg,#374151,#1f2937)",border:"1px solid rgba(255,255,255,0.1)",
           display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px #2563eb33"}}>
-          <GemLogo size={48}/>
+          <CrystalIcon size={48}/>
         </div>
         <h1 style={{fontSize:30,fontWeight:700,color:"#fff",margin:0,letterSpacing:"-0.03em"}}>Gem Wallet</h1>
         <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",margin:0,textAlign:"center",maxWidth:240,lineHeight:1.6}}>
