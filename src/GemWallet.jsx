@@ -32,13 +32,17 @@ const fmtUSD = n => "$"+fmt(n);
 const fmtCrypto = (n, d=6) => parseFloat(n.toFixed(d));
 
 // ─── STORAGE HELPERS (Telegram-linked localStorage) ─────────────────────────
+// Устанавливается один раз при инициализации — гарантирует консистентность ключей
+let RESOLVED_USER_ID = null;
+
 function getTgUserId() {
   try {
     return window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
   } catch { return null; }
 }
 function storageKey(base) {
-  const uid = getTgUserId();
+  // Используем зафиксированный userId если он уже определён
+  const uid = RESOLVED_USER_ID || getTgUserId();
   return uid ? `${base}_${uid}` : base;
 }
 
@@ -3803,31 +3807,15 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
         console.warn("[WalletApp] No mnemonic provided");
       }
       
-      // Проверка админа только по Telegram ID — без localStorage override
-      const checkAdmin = () => {
-        // Убираем небезопасный override если есть
-        localStorage.removeItem("gem_admin_override");
-        const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-        if (tgUserId && String(tgUserId) === ADMIN_ID) {
-          setUserIsAdmin(true);
-        } else {
-          setUserIsAdmin(false);
-        }
-      };
-      checkAdmin();
-      const timer = setTimeout(checkAdmin, 300);
-      const timer2 = setTimeout(checkAdmin, 1000);
-      const timer3 = setTimeout(checkAdmin, 2000);
-      const timer4 = setTimeout(checkAdmin, 3500);
+      // Проверка админа: используем RESOLVED_USER_ID (уже зафиксирован при инициализации)
+      // WalletApp монтируется только после doInit(), значит RESOLVED_USER_ID гарантированно задан
+      localStorage.removeItem("gem_admin_override");
+      const resolvedId = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      setUserIsAdmin(resolvedId && String(resolvedId) === ADMIN_ID);
       
       setIsReady(true);
       
-      return () => {
-        clearTimeout(timer);
-        clearTimeout(timer2);
-        clearTimeout(timer3);
-        clearTimeout(timer4);
-      };
+      return () => {};
     } catch (e) {
       console.error("[WalletApp] Init error:", e);
       setError(e.message);
@@ -4270,19 +4258,21 @@ export default function GemWalletApp() {
     setScreen("wallet");
   }
 
-  // ─── Telegram WebApp init: инициализируем экран ПОСЛЕ получения userId ────
+  // ─── Telegram WebApp init: polling до получения userId, затем один раз инициализируем ────
   useEffect(() => {
-    const init = () => {
-      const tg = window.Telegram?.WebApp;
-      if (tg) { tg.ready(); tg.expand(); }
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
 
-      const tgUser = tg?.initDataUnsafe?.user;
-      const userId = tgUser?.id ? String(tgUser.id) : null;
+    let resolved = false;
+
+    const doInit = (userId) => {
+      if (resolved) return;
+      resolved = true;
+
+      // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
+      RESOLVED_USER_ID = userId;
+
       const sk = (base) => userId ? `${base}_${userId}` : base;
-
-      // Если Telegram ещё не отдал userId — ждём повторного вызова (таймер 200ms)
-      // Без этой проверки новые пользователи видят чужой PIN-экран
-      if (!userId) return;
 
       const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
       const storedPin = localStorage.getItem(sk("gem_pin"));
@@ -4297,6 +4287,7 @@ export default function GemWalletApp() {
       else if (hasWallet) setScreen("wallet");
       else setScreen("onboard");
 
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
       if (tgUser) {
         const visitKey = `gem_notified_visit_${tgUser.id}`;
         if (!localStorage.getItem(visitKey)) {
@@ -4313,17 +4304,23 @@ export default function GemWalletApp() {
       }
     };
 
-    init();
-    const t = setTimeout(init, 200);
-    const t2 = setTimeout(init, 800);
-    // Fallback: если через 1.5с userId так и нет — показываем onboard (не застрять на загрузке)
-    const tFallback = setTimeout(() => {
-      setScreen(s => s === "loading" ? "onboard" : s);
-    }, 1500);
-    return () => { clearTimeout(t); clearTimeout(t2); clearTimeout(tFallback); };
+    let attempts = 0;
+    const poll = setInterval(() => {
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      const userId = tgUser?.id ? String(tgUser.id) : null;
+      attempts++;
+      // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
+      if (userId || attempts >= 15) {
+        clearInterval(poll);
+        doInit(userId);
+      }
+    }, 200);
+
+    return () => clearInterval(poll);
   }, []);
 
   return (
+
     <>
       <style>{`
         :root{--font:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;}
