@@ -70,8 +70,8 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("У вас нет доступа к этой команде.")
         return
 
-    # startapp=admin передаётся в WebApp как initDataUnsafe.start_param = "admin"
-    admin_url = WEBAPP_URL + "?startapp=admin"
+    # Передаём маркер через хэш URL — читается на клиенте через window.location.hash
+    admin_url = WEBAPP_URL + "#admin"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton("👑 Открыть Admin Panel", web_app=WebAppInfo(url=admin_url))
