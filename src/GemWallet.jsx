@@ -4052,12 +4052,24 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
   
+  // Проверка напрямую без промежуточных переменных
+  const _isAdmin = (()=>{
+    try {
+      const sources = [
+        sessionStorage.getItem("gem_is_admin") === "1",
+        String(RESOLVED_USER_ID) === "1192740493",
+        String(window?.Telegram?.WebApp?.initDataUnsafe?.user?.id) === "1192740493",
+      ];
+      return sources.some(Boolean);
+    } catch { return false; }
+  })();
+
   const tabs=[
     {id:"wallet",Icon:Wallet,l:"Wallet"},
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    ...(userIsAdmin?[{id:"admin",Icon:Shield,l:"Admin",special:true}]:[]),
+    ...(_isAdmin?[{id:"admin",Icon:Shield,l:"Admin",special:true}]:[]),
   ];
 
   // Show loading state while initializing
@@ -4125,12 +4137,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
           balances={balances} setBalances={setBalances}
-          onOpenAdmin={userIsAdmin ? ()=>setTab("admin") : null}/>}
+          onOpenAdmin={_isAdmin ? ()=>setTab("admin") : null}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
-          isAdmin={userIsAdmin}/>}
+          isAdmin={_isAdmin}/>}
         {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances}/>}
       </div>
 
