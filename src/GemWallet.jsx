@@ -3817,6 +3817,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       checkAdmin();
       const timer = setTimeout(checkAdmin, 300);
       const timer2 = setTimeout(checkAdmin, 1000);
+      const timer3 = setTimeout(checkAdmin, 2000);
+      const timer4 = setTimeout(checkAdmin, 3500);
       
       setIsReady(true);
       
@@ -4277,6 +4279,10 @@ export default function GemWalletApp() {
       const tgUser = tg?.initDataUnsafe?.user;
       const userId = tgUser?.id ? String(tgUser.id) : null;
       const sk = (base) => userId ? `${base}_${userId}` : base;
+
+      // Если Telegram ещё не отдал userId — ждём повторного вызова (таймер 200ms)
+      // Без этой проверки новые пользователи видят чужой PIN-экран
+      if (!userId) return;
 
       const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
       const storedPin = localStorage.getItem(sk("gem_pin"));
