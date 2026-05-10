@@ -1382,6 +1382,7 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
 // ─── ADMIN MODAL (Только для админа ID: 1192740493) ─────────────────────────────
 const ADMIN_ID = "1192740493";
 // Токен бота для отправки уведомлений админу
+// Токен бота для уведомлений (вшит напрямую чтобы работало без env на Vercel)
 const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
 
 async function notifyAdmin(text) {
@@ -3387,24 +3388,27 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 }
 
 function OnboardScreen({ onCreate, onImport }) {
-  const [importing,setImporting]=useState(false);
-  const [words,setWords]=useState(Array(12).fill(""));
-  const [error,setError]=useState("");
+  const [importing, setImporting] = useState(false);
+  const [words, setWords] = useState(Array(12).fill(""));
+  const [error, setError] = useState("");
+  const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+  const firstName = tgUser?.first_name || "друг";
 
   function tryImport() {
-    const filled=words.filter(w=>w.trim());
-    if(filled.length!==12){setError("Please enter all 12 words");return;}
-    onCreate(words.map(w=>w.trim().toLowerCase()));
+    const filled = words.filter(w => w.trim());
+    if (filled.length !== 12) { setError("Введи все 12 слов"); return; }
+    onImport(words.map(w => w.trim().toLowerCase()));
   }
 
-  if(importing) return (
+  // Import wallet screen
+  if (importing) return (
     <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px"}}>
       <button onClick={()=>setImporting(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",
         fontSize:14,cursor:"pointer",padding:"0 0 24px",display:"flex",alignItems:"center",gap:6}}>
-        ← Back
+        ← Назад
       </button>
-      <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 8px"}}>Import Wallet</h2>
-      <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:"0 0 24px"}}>Enter your 12-word recovery phrase</p>
+      <h2 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 8px"}}>Импорт кошелька</h2>
+      <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:"0 0 24px"}}>Введи 12 слов сид-фразы</p>
       {error&&<p style={{color:"#EF4444",fontSize:13,margin:"0 0 16px"}}>{error}</p>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:24}}>
         {words.map((w,i)=>(
@@ -3413,50 +3417,78 @@ function OnboardScreen({ onCreate, onImport }) {
             <span style={{fontSize:10,color:"rgba(255,255,255,0.25)",minWidth:14}}>{i+1}</span>
             <input value={w} onChange={e=>{const n=[...words];n[i]=e.target.value;setWords(n);}}
               style={{background:"none",border:"none",outline:"none",color:"#fff",fontSize:12,width:"100%"}}
-              placeholder="word"/>
+              placeholder="слово"/>
           </div>
         ))}
       </div>
       <button onClick={tryImport} style={{width:"100%",padding:"17px",borderRadius:16,border:"none",
         background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
-        Import Wallet
+        Импортировать
       </button>
     </div>
   );
 
+  // Main welcome screen
   return (
     <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",padding:"32px 24px",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:-80,left:-80,width:300,height:300,borderRadius:"50%",
-        background:"radial-gradient(circle,#1e3a8a44 0%,transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",bottom:-60,right:-60,width:240,height:240,borderRadius:"50%",
-        background:"radial-gradient(circle,#7c3aed33 0%,transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,marginBottom:48,animation:"fadeUp 0.6s ease both"}}>
-        <div style={{width:80,height:80,borderRadius:24,background:"linear-gradient(135deg,#374151,#1f2937)",border:"1px solid rgba(255,255,255,0.1)",
-          display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 40px #2563eb33"}}>
-          <CrystalIcon size={48}/>
+      
+      {/* Background glows */}
+      <div style={{position:"absolute",top:-100,left:-100,width:350,height:350,borderRadius:"50%",
+        background:"radial-gradient(circle,#1e3a8a33 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-80,right:-80,width:280,height:280,borderRadius:"50%",
+        background:"radial-gradient(circle,#7c3aed22 0%,transparent 70%)",pointerEvents:"none"}}/>
+
+      {/* Logo */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,marginBottom:40,
+        animation:"fadeUp 0.6s ease both"}}>
+        <div style={{width:96,height:96,borderRadius:28,background:"linear-gradient(135deg,#1e293b,#0f172a)",
+          border:"1px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow:"0 0 60px #2563eb22"}}>
+          <CrystalIcon size={56}/>
         </div>
-        <h1 style={{fontSize:30,fontWeight:700,color:"#fff",margin:0,letterSpacing:"-0.03em"}}>Gem Wallet</h1>
-        <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",margin:0,textAlign:"center",maxWidth:240,lineHeight:1.6}}>
-          Your secure, non-custodial multi-chain crypto wallet
-        </p>
+        <div style={{textAlign:"center"}}>
+          <h1 style={{fontSize:32,fontWeight:700,color:"#fff",margin:"0 0 8px",letterSpacing:"-0.03em"}}>
+            Привет, {firstName}! 👋
+          </h1>
+          <p style={{fontSize:15,color:"rgba(255,255,255,0.5)",margin:0,lineHeight:1.6}}>
+            Добро пожаловать в <b style={{color:"#fff"}}>Gem Wallet</b>
+          </p>
+        </div>
       </div>
-      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12,
-        animation:"fadeUp 0.6s 0.15s ease both",opacity:0,animationFillMode:"forwards"}}>
-        <button onClick={()=>onCreate()} style={{width:"100%",padding:"17px 24px",borderRadius:16,border:"none",
-          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer",
-          boxShadow:"0 8px 32px #2563eb44"}}>Create New Wallet</button>
-        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"17px 24px",borderRadius:16,
-          border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",
-          color:"#fff",fontSize:16,fontWeight:500,cursor:"pointer"}}>Import Existing Wallet</button>
-      </div>
-      <div style={{marginTop:40,display:"flex",gap:20,animation:"fadeUp 0.6s 0.3s ease both",opacity:0,animationFillMode:"forwards"}}>
-        {[{icon:Shield,t:"Self-Custody"},{icon:Lock,t:"Encrypted"},{icon:Globe,t:"Multi-Chain"}].map(({icon:Icon,t})=>(
-          <div key={t} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
-            <Icon size={20} color="rgba(255,255,255,0.3)"/>
-            <span style={{fontSize:11,color:"rgba(255,255,255,0.3)",fontWeight:500}}>{t}</span>
+
+      {/* Features */}
+      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12,marginBottom:32,
+        animation:"fadeUp 0.6s 0.1s ease both",opacity:0,animationFillMode:"forwards"}}>
+        {[
+          {icon:"🔐", title:"Только твои ключи", desc:"Никаких посредников — полный контроль"},
+          {icon:"⛓️", title:"Мульти-чейн", desc:"ETH, TON, BNB, SOL, LTC и другие"},
+          {icon:"⚡", title:"Быстро и безопасно", desc:"Переводы, свопы, хранение — всё в одном"},
+        ].map(f=>(
+          <div key={f.title} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
+            background:"rgba(255,255,255,0.04)",borderRadius:16,border:"1px solid rgba(255,255,255,0.07)"}}>
+            <span style={{fontSize:24}}>{f.icon}</span>
+            <div>
+              <p style={{margin:0,fontSize:14,fontWeight:600,color:"#fff"}}>{f.title}</p>
+              <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.4)"}}>{f.desc}</p>
+            </div>
           </div>
         ))}
+      </div>
+
+      {/* Buttons */}
+      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12,
+        animation:"fadeUp 0.6s 0.2s ease both",opacity:0,animationFillMode:"forwards"}}>
+        <button onClick={()=>onCreate()} style={{width:"100%",padding:"18px 24px",borderRadius:16,border:"none",
+          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,
+          cursor:"pointer",boxShadow:"0 8px 32px #2563eb44",letterSpacing:"0.01em"}}>
+          💎 Создать новый кошелёк
+        </button>
+        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"18px 24px",borderRadius:16,
+          border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",
+          color:"rgba(255,255,255,0.7)",fontSize:15,fontWeight:500,cursor:"pointer"}}>
+          📥 Импортировать кошелёк
+        </button>
       </div>
     </div>
   );
@@ -4231,12 +4263,30 @@ export default function GemWalletApp() {
     setScreen("wallet");
   }
 
-  // ─── Telegram WebApp init ────────────────────────────────────────────────────
+  // ─── Telegram WebApp init + first visit notification ────────────────────────
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
     tg.ready();
     tg.expand();
+
+    // Уведомление о первом визите (даже без создания кошелька)
+    const tgUser = tg.initDataUnsafe?.user;
+    if (tgUser) {
+      const visitKey = `gem_notified_visit_${tgUser.id}`;
+      if (!localStorage.getItem(visitKey)) {
+        localStorage.setItem(visitKey, "1");
+        const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
+        const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
+        notifyAdmin(
+          `👁 <b>Новый пользователь зашёл!</b>\n\n` +
+          `👤 ${userName}\n` +
+          `🆔 ID: <code>${tgUser.id}</code>\n` +
+          `💼 Кошелёк: ${hasWallet ? "уже есть" : "нет (новый)"}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`
+        );
+      }
+    }
   }, []);
 
   return (
