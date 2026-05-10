@@ -1,6 +1,6 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 logging.basicConfig(level=logging.INFO)
@@ -20,8 +20,17 @@ WELCOME_TEXT = (
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
+    # Устанавливаем Menu Button (синяя кнопка слева от поля ввода — как у Tonkeeper)
+    await context.bot.set_chat_menu_button(
+        chat_id=chat_id,
+        menu_button=MenuButtonWebApp(
+            text="💎 Gem",
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        )
+    )
+
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton("💎 Gem", web_app=WebAppInfo(url=WEBAPP_URL))]]
+        inline_keyboard=[[InlineKeyboardButton("💎 Открыть Gem Wallet", web_app=WebAppInfo(url=WEBAPP_URL))]]
     )
 
     img_path = os.path.join(os.path.dirname(__file__), "welcome.png")
