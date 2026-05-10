@@ -55,6 +55,15 @@ const ASSET_META = [
 ];
 const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
 
+// ─── OFFICIAL GEM WALLET LINKS ────────────────────────────────────────────────
+const GEM_LINKS = {
+  twitter: "https://twitter.com/gemwallet",
+  telegram: "https://t.me/gemwallet",
+  discord: "https://discord.gg/gemwallet",
+  github: "https://github.com/gemwallet",
+  website: "https://gemwallet.io"
+};
+
 // ─── ADDRESS VALIDATION ─────────────────────────────────────────────────────
 // Validates crypto addresses - only accepts real address formats or similar
 function isValidAddress(address, sym) {
@@ -691,56 +700,49 @@ function NetworkPicker({ sym, selected, onSelect }) {
 
 // ─── SEND MODAL ───────────────────────────────────────────────────────────────
 function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network }) {
-  // Safe defaults
-  const safeAssets = Array.isArray(assets) && assets.length > 0 ? assets : [{ sym: 'ETH', name: 'Ethereum', balance: 0 }];
-  const safePrices = prices || {};
-  
   const [step,setStep]=useState(1);
-  const [sel,setSel]=useState(safeAssets[0]);
+  const [sel,setSel]=useState(assets[0]);
   const [to,setTo]=useState("");
   const [amt,setAmt]=useState("");
   const [done,setDone]=useState(false);
   const [sending,setSending]=useState(false);
   const [txHash,setTxHash]=useState("");
-  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[safeAssets[0]?.sym]?.[0]||null);
+  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
   const [addrError,setAddrError]=useState("");
   const [showScanner,setShowScanner]=useState(false);
 
-  const assetObj = safeAssets.find(a=>a?.sym===sel?.sym)||safeAssets[0];
-  const price = safePrices[sel?.sym]||0;
+  const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
+  const price = prices[sel.sym]||0;
   const fee = 0.84;
-  const nets = ASSET_NETWORKS[sel?.sym]||[];
+  const nets = ASSET_NETWORKS[sel.sym]||[];
   const curNet = selectedNet || nets[0] || null;
 
   function handleSelAsset(a) {
-    if (!a || typeof a !== 'object') return;
     setSel(a);
     setTo("");
-    setSelectedNet(ASSET_NETWORKS[a?.sym]?.[0]||null);
+    setSelectedNet(ASSET_NETWORKS[a.sym]?.[0]||null);
   }
 
   function handleToChange(val) {
     setTo(val);
-    const sym = sel?.sym || 'ETH';
-    if (val && !isValidAddress(val, sym)) {
-      setAddrError(`Invalid ${sym} address format`);
+    if (val && !isValidAddress(val, sel.sym)) {
+      setAddrError(`Invalid ${sel.sym} address format`);
     } else {
       setAddrError("");
     }
   }
 
   function next() {
-    const sym = sel?.sym || 'ETH';
     if(step===1){
       if(!to){ setAddrError("Enter recipient address"); return; }
-      if(!isValidAddress(to, sym)){ setAddrError(`Invalid ${sym} address format`); return; }
+      if(!isValidAddress(to, sel.sym)){ setAddrError(`Invalid ${sel.sym} address format`); return; }
       setAddrError("");
       setStep(2);
     }
     else if(step===2&&amt) setStep(3);
     else if(step===3) {
       const num=parseFloat(amt);
-      if(num>(assetObj?.balance||0)){alert("Insufficient balance");return;}
+      if(num>assetObj.balance){alert("Insufficient balance");return;}
       setSending(true);
       async function doSend(){
         if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
@@ -752,22 +754,22 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
         setBusy(true);
         try{
           // Get asset metadata safely
-          const assetMeta = ASSET_META.find(a=>a.sym===sym);
-          if(!assetMeta){throw new Error("Asset not found: "+sym);}
+          const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
+          if(!assetMeta){throw new Error("Asset not found: "+sel.sym);}
           
           // Get private key
-          const privateKey = await getPrivateKey(mnemonic.join(" "), sym, network);
+          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
           if(!privateKey){throw new Error("Failed to derive private key");}
           
           // Get from address safely
           const fromAddr = addresses?.[assetMeta.id];
-          if(!fromAddr){throw new Error(`No address found for ${sym} (${assetMeta.id})`);}
+          if(!fromAddr){throw new Error(`No address found for ${sel.sym} (${assetMeta.id})`);}
           
           // Send transaction
-          const hash = await chainSendTransaction(sym, fromAddr, to, parseFloat(amt), privateKey, { network });
+          const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
           if(hash){
             alert(`Sent! Hash: ${hash.slice(0,20)}...`);
-            onSend({ sym, amount:num, to, usd:num*price, hash });
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
             setDone(true);
             setTimeout(onClose,2500);
           }else{throw new Error("Transaction failed - no hash returned");}
@@ -1368,7 +1370,6 @@ function AdminModal({ onClose, prices }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adminError, setAdminError] = useState(null);
-  const [notifs, setNotifs] = useState([]);
 
   useEffect(() => {
     try {
@@ -2076,7 +2077,7 @@ function ActivityTab({ txHistory, onCancelTx }) {
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
   const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
-  // Safe filtering with array check
+  // Safe filter with null check
   const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
   const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
   
@@ -2116,7 +2117,7 @@ function ActivityTab({ txHistory, onCancelTx }) {
         const Icon=icons[tx?.type]||ArrowUpRight;
         const isNegative = tx?.type==="send"||tx?.status==="declined";
         return (
-          <div key={tx?.id||i} onClick={()=>setSel(tx)}
+          <div key={tx?.id||i} onClick={()=>tx&&setSel(tx)}
             style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:18,
               cursor:"pointer",transition:"all 0.2s ease",
               background:"linear-gradient(145deg,#1a1a1a,#161616)",
@@ -2143,7 +2144,7 @@ function ActivityTab({ txHistory, onCancelTx }) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:15,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>
-                    {tx?.type||"unknown"}
+                    {tx?.type}
                   </span>
                   {tx?.status&&tx?.status!=="confirmed"&&(
                     <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx?.status],
@@ -2154,17 +2155,17 @@ function ActivityTab({ txHistory, onCancelTx }) {
                     </span>
                   )}
                 </div>
-                <span style={{fontSize:15,fontWeight:700,color:isNegative?"#EF4444":tx.status==="pending"?"#F59E0B":"#22C55E"}}>
-                  {isNegative?"-":"+"}{tx.usd}
+                <span style={{fontSize:15,fontWeight:700,color:isNegative?"#EF4444":tx?.status==="pending"?"#F59E0B":"#22C55E"}}>
+                  {isNegative?"-":"+"}{tx?.usd||""}
                 </span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",letterSpacing:"-0.3px"}}>
-                  {tx.addr.slice(0,8)}...{tx.addr.slice(-6)}
+                  {tx?.addr?.slice(0,8)}...{tx?.addr?.slice(-6)}
                 </span>
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>{tx.time}</span>
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>{tx?.time||""}</span>
               </div>
-              <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:2,display:"block"}}>{tx.label}</span>
+              <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:2,display:"block"}}>{tx?.label||""}</span>
             </div>
             <ChevronRight size={16} color="rgba(255,255,255,0.15)"/>
           </div>
@@ -2356,15 +2357,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     setModal(a);
   }
 
-  // Official Gem Wallet links
-  const gemLinks={
-    twitter:"https://twitter.com/gemwallet",
-    telegram:"https://t.me/gemwallet",
-    discord:"https://discord.gg/gemwallet",
-    github:"https://github.com/gemwallet",
-    website:"https://gemwallet.io"
-  };
-
   return (
     <div style={{padding:"0 16px 100px"}}>
       {/* Avatar Modal */}
@@ -2422,19 +2414,19 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
                 <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid rgba(255,255,255,0.1)",textAlign:"left"}}>
                   <p style={{margin:"0 0 12px",fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:600}}>OFFICIAL LINKS:</p>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <a href={gemLinks.twitter} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                    <a href={GEM_LINKS.twitter} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{width:20,textAlign:"center"}}>𝕏</span> Twitter/X @gemwallet
                     </a>
-                    <a href={gemLinks.telegram} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                    <a href={GEM_LINKS.telegram} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{width:20,textAlign:"center"}}>✈</span> Telegram @gemwallet
                     </a>
-                    <a href={gemLinks.discord} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                    <a href={GEM_LINKS.discord} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{width:20,textAlign:"center"}}>💬</span> Discord Server
                     </a>
-                    <a href={gemLinks.github} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                    <a href={GEM_LINKS.github} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{width:20,textAlign:"center"}}>⚙</span> GitHub gemwallet
                     </a>
-                    <a href={gemLinks.website} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
+                    <a href={GEM_LINKS.website} target="_blank" rel="noopener" style={{fontSize:13,color:"#fff",textDecoration:"none",display:"flex",alignItems:"center",gap:8}}>
                       <span style={{width:20,textAlign:"center"}}>🌐</span> gemwallet.io
                     </a>
                   </div>
@@ -3914,87 +3906,27 @@ export default function GemWalletApp() {
   });
   const [pin,setPin]=useState(()=>localStorage.getItem(storageKey("gem_pin"))||"");
 
-  // Function to notify admin about new wallet
-  function notifyAdminNewWallet(walletInfo) {
-    try {
-      const adminId = "1192740493"; // Admin Telegram ID
-      const tg = window.Telegram?.WebApp;
-      if (tg?.sendData) {
-        tg.sendData(JSON.stringify({
-          type: "new_wallet",
-          adminId: adminId,
-          walletInfo: walletInfo,
-          timestamp: new Date().toISOString()
-        }));
-      }
-      // Also store notification in localStorage for admin panel
-      const notifications = JSON.parse(localStorage.getItem("gem_admin_notifications") || "[]");
-      notifications.unshift({
-        id: Date.now(),
-        type: "new_wallet",
-        message: `New wallet created: ${walletInfo.addresses?.ETH?.slice(0, 10)}...`,
-        timestamp: new Date().toISOString(),
-        read: false
-      });
-      localStorage.setItem("gem_admin_notifications", JSON.stringify(notifications.slice(0, 50)));
-    } catch (e) {
-      console.error("[notifyAdmin] Error:", e);
-    }
-  }
-
   function handleCreate(importedWords) {
-    try {
-      // Generate or use imported mnemonic
-      let m;
-      if (importedWords && Array.isArray(importedWords) && importedWords.length === 12) {
-        m = importedWords;
-      } else {
-        m = genMnemonic();
-      }
-      
-      // Validate mnemonic
-      if (!m || !Array.isArray(m) || m.length !== 12) {
-        alert("Error: Invalid seed phrase. Please try again.");
-        return;
-      }
-      
-      // Derive real addresses asynchronously; show backup/wallet immediately
-      // with placeholder addresses, then update once derivation completes
-      const placeholderAddr = {
-        ETH: genAddr("0x",40), BNB: genAddr("0x",40), ARB: genAddr("0x",40),
-        SOL: genAddr("",44),   TON: genAddr("EQ",46),  LTC: genAddr("L",33),
-      };
-      
-      setMnemonic(m);
-      setAddresses(placeholderAddr);
-      localStorage.setItem(storageKey("gem_mnemonic"), m.join(" "));
-      localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(placeholderAddr));
-      localStorage.setItem(storageKey("gem_has_wallet"), "1");
-      localStorage.setItem(storageKey("gem_wallet_created"), new Date().toISOString());
-      
-      // Notify admin
-      notifyAdminNewWallet({
-        addresses: placeholderAddr,
-        timestamp: new Date().toISOString(),
-        userId: userId || "unknown"
-      });
-      
-      if(importedWords) { 
-        setScreen("wallet"); 
-      } else {
-        setScreen("backup");
-      }
+    const m = importedWords || genMnemonic();
+    // Derive real addresses asynchronously; show backup/wallet immediately
+    // with placeholder addresses, then update once derivation completes
+    const placeholderAddr = {
+      ETH: genAddr("0x",40), BNB: genAddr("0x",40), ARB: genAddr("0x",40),
+      SOL: genAddr("",44),   TON: genAddr("EQ",46),  LTC: genAddr("L",33),
+    };
+    setMnemonic(m);
+    setAddresses(placeholderAddr);
+    localStorage.setItem(storageKey("gem_mnemonic"), m.join(" "));
+    localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(placeholderAddr));
+    localStorage.setItem(storageKey("gem_has_wallet"), "1");
+    if(importedWords) { setScreen("wallet"); } else setScreen("backup");
 
-      // Real derivation in background — updates addresses once ready
-      deriveWallet(m).then(wallet => {
-        const addr = wallet.addresses; // { ETH, BNB, ARB, SOL, TON, LTC }
-        setAddresses(addr);
-        localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(addr));
-      }).catch(err => console.error("[GemWallet] derivation error:", err));
-    } catch (e) {
-      console.error("[handleCreate] Error:", e);
-      alert("Error creating wallet: " + (e?.message || "Unknown error"));
-    }
+    // Real derivation in background — updates addresses once ready
+    deriveWallet(m).then(wallet => {
+      const addr = wallet.addresses; // { ETH, BNB, ARB, SOL, TON, LTC }
+      setAddresses(addr);
+      localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(addr));
+    }).catch(err => console.error("[GemWallet] derivation error:", err));
   }
 
   function handleBackupDone() {
