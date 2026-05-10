@@ -4315,7 +4315,12 @@ export default function GemWalletApp() {
 
     init();
     const t = setTimeout(init, 200);
-    return () => clearTimeout(t);
+    const t2 = setTimeout(init, 800);
+    // Fallback: если через 1.5с userId так и нет — показываем onboard (не застрять на загрузке)
+    const tFallback = setTimeout(() => {
+      setScreen(s => s === "loading" ? "onboard" : s);
+    }, 1500);
+    return () => { clearTimeout(t); clearTimeout(t2); clearTimeout(tFallback); };
   }, []);
 
   return (
