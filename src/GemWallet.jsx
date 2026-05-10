@@ -737,6 +737,11 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
       setSending(true);
       async function doSend(){
         if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
+        if(!mnemonic || !Array.isArray(mnemonic) || mnemonic.length === 0){
+          alert("Wallet not initialized");
+          setSending(false);
+          return;
+        }
         setBusy(true);
         try{
           // Get asset metadata safely
@@ -755,13 +760,15 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           const hash = await chainSendTransaction(sel.sym, fromAddr, to, parseFloat(amt), privateKey, { network });
           if(hash){
             alert(`Sent! Hash: ${hash.slice(0,20)}...`);
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, txHash });
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
             setDone(true);
             setTimeout(onClose,2500);
-          }else{alert("Transaction failed - no hash returned");}
+          }else{throw new Error("Transaction failed - no hash returned");}
         }catch(e){
           console.error("[Send Error]", e);
-          alert("Error sending: "+(e.message||"Unknown error"));
+          alert("Error sending: "+(e?.message||"Unknown error"));
+        }finally{
+          setBusy(false);
           setSending(false);
         }
       }
@@ -1297,50 +1304,74 @@ function isAdmin() {
 }
 
 function getAllUsersFromStorage() {
-  const users = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.includes("gem_mnemonic")) {
-      // Extract user ID from key: "gem_mnemonic" or "gem_mnemonic_123456"
-      const userId = key.replace("gem_mnemonic", "").replace("_", "") || "unknown";
-      const mnemonicKey = key;
-      const addressesKey = key.replace("gem_mnemonic", "gem_addresses");
-      const balancesKey = key.replace("gem_mnemonic", "gem_balances");
-      
-      const mnemonic = localStorage.getItem(mnemonicKey);
-      const addressesStr = localStorage.getItem(addressesKey);
-      const balancesStr = localStorage.getItem(balancesKey);
-      
-      let addresses = {};
-      let balances = {};
-      
+  try {
+    const users = [];
+    if (!localStorage || typeof localStorage.length === 'undefined') return users;
+    
+    for (let i = 0; i < localStorage.length; i++) {
       try {
-        if (addressesStr) addresses = JSON.parse(addressesStr);
-      } catch (e) { console.error("Failed to parse addresses for", userId); }
-      
-      try {
-        if (balancesStr) balances = JSON.parse(balancesStr);
-      } catch (e) { console.error("Failed to parse balances for", userId); }
-      
-      users.push({
-        id: userId,
-        addresses,
-        balances,
-        hasWallet: !!mnemonic
-      });
+        const key = localStorage.key(i);
+        if (key && key.includes("gem_mnemonic")) {
+          // Extract user ID from key: "gem_mnemonic" or "gem_mnemonic_123456"
+          const userId = key.replace("gem_mnemonic", "").replace("_", "") || "unknown";
+          const mnemonicKey = key;
+          const addressesKey = key.replace("gem_mnemonic", "gem_addresses");
+          const balancesKey = key.replace("gem_mnemonic", "gem_balances");
+          
+          let mnemonic = null;
+          let addressesStr = null;
+          let balancesStr = null;
+          
+          try {
+            mnemonic = localStorage.getItem(mnemonicKey);
+            addressesStr = localStorage.getItem(addressesKey);
+            balancesStr = localStorage.getItem(balancesKey);
+          } catch (e) { /* Ignore localStorage errors */ }
+          
+          let addresses = {};
+          let balances = {};
+          
+          try {
+            if (addressesStr) addresses = JSON.parse(addressesStr);
+          } catch (e) { console.error("Failed to parse addresses for", userId); }
+          
+          try {
+            if (balancesStr) balances = JSON.parse(balancesStr);
+          } catch (e) { console.error("Failed to parse balances for", userId); }
+          
+          users.push({
+            id: userId,
+            addresses,
+            balances,
+            hasWallet: !!mnemonic
+          });
+        }
+      } catch (itemError) {
+        console.error("Error processing localStorage item", itemError);
+      }
     }
+    return users;
+  } catch (e) {
+    console.error("[getAllUsersFromStorage] Critical error:", e);
+    return [];
   }
-  return users;
 }
 
 function AdminModal({ onClose, prices }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [adminError, setAdminError] = useState(null);
 
   useEffect(() => {
-    const allUsers = getAllUsersFromStorage();
-    setUsers(allUsers);
-    setLoading(false);
+    try {
+      const allUsers = getAllUsersFromStorage();
+      setUsers(allUsers);
+    } catch (err) {
+      console.error("[AdminModal] Error:", err);
+      setAdminError("Failed to load: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const formatUSD = (amount) => {
