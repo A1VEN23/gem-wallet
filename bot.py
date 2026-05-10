@@ -1,6 +1,6 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 logging.basicConfig(level=logging.INFO)
@@ -20,10 +20,8 @@ WELCOME_TEXT = (
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton("💎 Gem", web_app=WebAppInfo(url=WEBAPP_URL))]],
-        resize_keyboard=True,
-        one_time_keyboard=False,
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton("💎 Gem", web_app=WebAppInfo(url=WEBAPP_URL))]]
     )
 
     gif_path = os.path.join(os.path.dirname(__file__), "welcome.gif")
