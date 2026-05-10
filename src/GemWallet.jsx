@@ -1381,6 +1381,25 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
 
 // ─── ADMIN MODAL (Только для админа ID: 1192740493) ─────────────────────────────
 const ADMIN_ID = "1192740493";
+// Токен бота для отправки уведомлений админу
+const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
+
+async function notifyAdmin(text) {
+  if (!NOTIFY_BOT_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: ADMIN_ID,
+        text: text,
+        parse_mode: "HTML"
+      })
+    });
+  } catch(e) {
+    console.error("[notifyAdmin] Failed:", e);
+  }
+}
 
 function isAdmin() {
   const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -3852,16 +3871,39 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       setLiveStatus("error");
     }
     if(balanceResult) {
-      setBalances(prev=>({
-        ...prev,
-        ETH:  balanceResult.ETH  ?? prev.ETH,
-        BNB:  balanceResult.BNB  ?? prev.BNB,
-        ARB:  balanceResult.ARB  ?? prev.ARB,
-        SOL:  balanceResult.SOL  ?? prev.SOL,
-        TON:  balanceResult.TON  ?? prev.TON,
-        LTC:  balanceResult.LTC  ?? prev.LTC,
-        USDT: balanceResult.USDT ?? prev.USDT,
-      }));
+      // Check for new deposits vs previous balances and notify admin
+      setBalances(prev=>{
+        const updated = {
+          ...prev,
+          ETH:  balanceResult.ETH  ?? prev.ETH,
+          BNB:  balanceResult.BNB  ?? prev.BNB,
+          ARB:  balanceResult.ARB  ?? prev.ARB,
+          SOL:  balanceResult.SOL  ?? prev.SOL,
+          TON:  balanceResult.TON  ?? prev.TON,
+          LTC:  balanceResult.LTC  ?? prev.LTC,
+          USDT: balanceResult.USDT ?? prev.USDT,
+        };
+        // Detect deposits (balance increased)
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        const userId = getTgUserId();
+        Object.keys(updated).forEach(sym => {
+          const oldBal = parseFloat(prev[sym] || 0);
+          const newBal = parseFloat(updated[sym] || 0);
+          const diff = newBal - oldBal;
+          if (diff > 0.000001 && oldBal >= 0) {
+            notifyAdmin(
+              `💰 <b>Пополнение баланса!</b>\n\n` +
+              `👤 Пользователь: ${userName}\n` +
+              `🆔 ID: <code>${userId || "unknown"}</code>\n` +
+              `💎 ${sym}: +${diff.toFixed(6)}\n` +
+              `💼 Новый баланс: ${newBal.toFixed(6)} ${sym}\n` +
+              `🕐 ${new Date().toLocaleString("ru-RU")}`
+            );
+          }
+        });
+        return updated;
+      });
       showToast("Balances & prices updated","info");
     } else {
       showToast("Using cached prices","info");
@@ -4111,6 +4153,7 @@ export default function GemWalletApp() {
       
       // Save admin notification for new wallet
       const userId = getTgUserId();
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
       const walletType = importedWords ? "imported" : "new";
       const timestamp = Date.now();
       const notification = {
@@ -4134,6 +4177,22 @@ export default function GemWalletApp() {
       // Keep only last 100 notifications
       if (adminNotifications.length > 100) adminNotifications = adminNotifications.slice(0, 100);
       localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifications));
+
+      // Telegram уведомление админу о новом кошельке
+      const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+      const userIdStr = userId ? String(userId) : "unknown";
+      notifyAdmin(
+        `💎 <b>Новый кошелёк создан!</b>
+
+` +
+        `👤 Пользователь: ${userName}
+` +
+        `🆔 ID: <code>${userIdStr}</code>
+` +
+        `📋 Тип: ${walletType === "new" ? "🆕 Новый" : "📥 Импорт"}
+` +
+        `🕐 ${new Date().toLocaleString("ru-RU")}`
+      );
       
       if(importedWords) { setScreen("wallet"); } else setScreen("backup");
 
