@@ -3092,6 +3092,19 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
     setTimeout(()=>setShowToast(false), 3000);
   }
 
+  // Calculate total USD value from balances
+  function calculateTotalUSD(userBalances, currentPrices) {
+    try {
+      if (!userBalances || !currentPrices) return 0;
+      return Object.entries(userBalances).reduce((sum, [sym, bal]) => {
+        const price = currentPrices[sym] || (sym === "USDT" ? 1 : 0);
+        return sum + (parseFloat(bal || 0) * price);
+      }, 0);
+    } catch (e) {
+      return 0;
+    }
+  }
+
   // Load users on mount
   useEffect(()=>{
     try {
@@ -3099,11 +3112,13 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
       const defaultNames = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia", "Nikita", "Anna", "Dmitry", "Lisa", "Igor", "Kate", "Roman"];
       const usersWithMeta = realUsers.map((u, idx) => {
         const totalUSD = calculateTotalUSD(u.balances, prices);
+        const firstAddr = u.addresses ? (u.addresses.ETH || u.addresses.TON || Object.values(u.addresses)[0] || "") : "";
         return {
           ...u,
           name: u.name || (defaultNames[idx % defaultNames.length] + " " + u.id.slice(-4)),
+          address: firstAddr,
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
-          totalUSD,
+          totalUSD: totalUSD || 0,
           status: "active"
         };
       });
@@ -3113,19 +3128,6 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
       setPanelError("Failed to load users: " + err.message);
     }
   },[prices]);
-
-  // Calculate total USD value from balances
-  function calculateTotalUSD(balances, prices) {
-    try {
-      if (!balances || !prices) return 0;
-      return Object.entries(balances).reduce((sum, [sym, bal]) => {
-        const price = prices[sym] || (sym === "USDT" ? 1 : 0);
-        return sum + (parseFloat(bal || 0) * price);
-      }, 0);
-    } catch (e) {
-      return 0;
-    }
-  }
 
   // Get admin notifications with error handling
   function getAdminNotifications() {
@@ -3475,13 +3477,13 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                                 <span style={{fontSize:10,color:"#666",padding:"2px 6px",borderRadius:4,background:"#222"}}>inactive</span>
                               )}
                             </div>
-                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address)}</p>
+                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address||"")}</p>
                           </div>
 
                           {/* Balance */}
                           <div style={{textAlign:"right"}}>
                             <p style={{fontSize:15,fontWeight:700,color:hasBalance?"#22c55e":"#666",margin:0}}>
-                              ${u.totalUSD.toLocaleString(undefined,{maximumFractionDigits:0})}
+                              ${(u.totalUSD||0).toLocaleString(undefined,{maximumFractionDigits:0})}
                             </p>
                             <div style={{display:"flex",gap:4,justifyContent:"flex-end",marginTop:4,flexWrap:"wrap"}}>
                               {userTokens.slice(0,4).map(t=> (
