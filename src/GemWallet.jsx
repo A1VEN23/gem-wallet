@@ -2821,15 +2821,6 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
               </p>
             </div>
 
-            {/* Load Real Users Button */}
-            {users.length===0&&(
-              <button onClick={loadRealUsers} style={{width:"100%",padding:16,borderRadius:14,border:"1px solid rgba(34,197,94,0.4)",
-                background:"linear-gradient(135deg,#22c55e22 0%,#16a34a22 100%)",color:"#4ade80",
-                fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                <Users size={18}/> Load Real Wallets
-              </button>
-            )}
-
             {/* Notifications Section */}
             <div style={{background:"#1a1a1a",borderRadius:14,padding:16,marginBottom:20,border:"1px solid rgba(255,255,255,0.08)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
