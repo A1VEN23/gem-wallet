@@ -3420,6 +3420,14 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock }) {
       
       // Check admin status after Telegram WebApp is initialized
       const checkAdmin = () => {
+        // Check for admin override first (for returning admins)
+        const adminOverride = localStorage.getItem('gem_admin_override');
+        if (adminOverride === '1') {
+          console.log("[Admin Check] ✅ Admin override enabled via localStorage");
+          setUserIsAdmin(true);
+          return;
+        }
+        
         // Try multiple methods to get Telegram ID
         let tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
         
