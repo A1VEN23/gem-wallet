@@ -793,7 +793,7 @@ function NetworkPicker({ sym, selected, onSelect }) {
 }
 
 // ─── SEND MODAL ───────────────────────────────────────────────────────────────
-function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network }) {
+function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network, testMode }) {
   const [step,setStep]=useState(1);
   const [sel,setSel]=useState(assets[0]);
   const [to,setTo]=useState("");
@@ -849,6 +849,26 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
       setSending(true);
       async function doSend(){
         if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
+        
+        // ─── TEST MODE: simulate transaction without real blockchain ───
+        if(testMode){
+          try{
+            await new Promise(r=>setTimeout(r,1200)); // simulate network delay
+            const fakeHash = genTxHash();
+            const sentAmount = parseFloat(amt);
+            onSend({ sym:sel.sym, amount:sentAmount, to, usd:sentAmount*price, hash:fakeHash, isTest:true });
+            setDone(true);
+            setTimeout(onClose,2500);
+          }catch(e){
+            console.error("[Test Send Error]", e);
+            alert("Test send error: "+(e?.message||"Unknown"));
+          }finally{
+            setSending(false);
+          }
+          return;
+        }
+        
+        // ─── REAL MODE: send via blockchain ───
         if(!mnemonic || !Array.isArray(mnemonic) || mnemonic.length === 0){
           alert("Wallet not initialized");
           setSending(false);
@@ -1003,6 +1023,12 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           )}
           {step===3&&(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {testMode&&(
+                <div style={{padding:"10px 14px",background:"rgba(34,197,94,0.15)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:12,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:16}}>🧪</span>
+                  <span style={{color:"#22C55E",fontSize:13,fontWeight:600}}>TEST MODE — транзакция не будет отправлена в блокчейн</span>
+                </div>
+              )}
               <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Review</p>
               {[["Asset",`${sel.name} (${sel.sym})`],
                 ["Network",curNet?`${curNet.label} · ${curNet.short}`:"—"],
@@ -1473,6 +1499,7 @@ function getAllUsersFromStorage() {
         {
           id: "user_001",
           telegramId: "123456789",
+          name: "Alex K.",
           addresses: {
             ETH: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
             BNB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
@@ -1489,6 +1516,7 @@ function getAllUsersFromStorage() {
         {
           id: "user_002",
           telegramId: "987654321",
+          name: "Maria S.",
           addresses: {
             ETH: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
             BNB: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
@@ -1505,6 +1533,7 @@ function getAllUsersFromStorage() {
         {
           id: "user_003",
           telegramId: "555666777",
+          name: "John D.",
           addresses: {
             ETH: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
             BNB: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
@@ -1515,6 +1544,74 @@ function getAllUsersFromStorage() {
           },
           balances: { ETH: 0.8, BNB: 25, TON: 300, SOL: 15, LTC: 8, ARB: 100, USDT: 800 },
           createdAt: Date.now() - 259200000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_004",
+          telegramId: "111222333",
+          name: "Sophie M.",
+          addresses: {
+            ETH: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4",
+            BNB: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4",
+            TON: "EQA7FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "3xKXt33CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC111222333abcdef",
+            ARB: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4"
+          },
+          balances: { ETH: 23.1, BNB: 890, TON: 5200, SOL: 340, LTC: 120, ARB: 2200, USDT: 42000 },
+          createdAt: Date.now() - 345600000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_005",
+          telegramId: "444555666",
+          name: "Michael T.",
+          addresses: {
+            ETH: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+            BNB: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+            TON: "EQE9FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "4xKXt44CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC444555666abcdef",
+            ARB: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+          },
+          balances: { ETH: 0.3, BNB: 10, TON: 150, SOL: 5, LTC: 3, ARB: 50, USDT: 320 },
+          createdAt: Date.now() - 432000000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_006",
+          telegramId: "777888999",
+          name: "Emma R.",
+          addresses: {
+            ETH: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            BNB: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            TON: "EQF1FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "6xKXt66CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC777888999abcdef",
+            ARB: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+          },
+          balances: { ETH: 8.7, BNB: 450, TON: 3100, SOL: 200, LTC: 65, ARB: 1500, USDT: 25000 },
+          createdAt: Date.now() - 518400000,
+          hasWallet: true,
+          isFake: true
+        },
+        {
+          id: "user_007",
+          telegramId: "321654987",
+          name: "David L.",
+          addresses: {
+            ETH: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            BNB: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            TON: "EQG2FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "8xKXt88CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC321654987abcdef",
+            ARB: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+          },
+          balances: { ETH: 1.2, BNB: 75, TON: 800, SOL: 30, LTC: 15, ARB: 300, USDT: 3500 },
+          createdAt: Date.now() - 604800000,
           hasWallet: true,
           isFake: true
         }
@@ -1617,8 +1714,12 @@ function AdminModal({ onClose, prices, onModeChange }) {
   
   // Mode switcher: test vs real
   const [isTestMode, setIsTestMode] = useState(() => {
-    return localStorage.getItem("gem_wallet_mode") === "test" || 
-           localStorage.getItem("gem_admin_override") === "1";
+    const mode = localStorage.getItem("gem_wallet_mode");
+    if (!mode) {
+      localStorage.setItem("gem_wallet_mode", "test");
+      return true;
+    }
+    return mode === "test" || localStorage.getItem("gem_admin_override") === "1";
   });
   
   // Real-time user updates
@@ -2327,7 +2428,7 @@ function ChangePinModal({ onClose, onChangePin }) {
     </Sheet>
   );
 }
-function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances, onOpenAdmin }) {
+function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances, onOpenAdmin, testMode }) {
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
   const adminPressTimer=useRef(null);
@@ -2388,6 +2489,13 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
             {currentAvatar}
           </div>
         </div>
+        {testMode&&(
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:20,
+            background:"rgba(34,197,94,0.15)",border:"1px solid rgba(34,197,94,0.3)",marginBottom:8}}>
+            <span style={{fontSize:12}}>🧪</span>
+            <span style={{fontSize:11,color:"#22C55E",fontWeight:700,letterSpacing:"0.05em"}}>TEST MODE</span>
+          </div>
+        )}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:4}}>
           <span style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Total Balance</span>
           <button onClick={()=>setHidden(h=>!h)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
@@ -4040,7 +4148,10 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   
   // Check if admin for test mode
   const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
-  const [balances,setBalances]=useState(isAdminMode ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
+  const [testMode, setTestMode] = useState(() => {
+    return localStorage.getItem('gem_wallet_mode') === 'test' || isAdminMode;
+  });
+  const [balances,setBalances]=useState((testMode || isAdminMode) ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
 
   // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
@@ -4117,10 +4228,10 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   async function refreshPrices() {
     setLiveStatus("loading");
-    // Fetch prices and live balances in parallel
+    // Fetch prices and live balances in parallel (skip balance fetch in test mode)
     const [priceResult, balanceResult] = await Promise.all([
       fetchLivePrices(),
-      addresses && Object.keys(addresses).length > 0
+      (!testMode && addresses && Object.keys(addresses).length > 0)
         ? fetchAllBalances(addresses).catch(() => null)
         : Promise.resolve(null),
     ]);
@@ -4330,10 +4441,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   return (
     <div style={{minHeight:"100vh",background:"#000",position:"relative"}}>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network}/>}
+      {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network} testMode={testMode}/>}
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
-      {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices}/>}
+      {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices} onModeChange={(isTest) => {
+        setTestMode(isTest);
+        setBalances(isTest ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
+      }}/>}
       {modal==="buy"&&(
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
           <div style={{padding:"48px 24px",textAlign:"center"}}>
@@ -4367,13 +4481,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
           balances={balances} setBalances={setBalances}
-          onOpenAdmin={_isAdmin ? ()=>setTab("admin") : null}/>}
+          onOpenAdmin={_isAdmin ? ()=>setTab("admin") : null} testMode={testMode}/>}
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
           isAdmin={_isAdmin} onOpenAdmin={()=>setTab("admin")}/>}
-        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances}/>}
+        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances} prices={prices}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
