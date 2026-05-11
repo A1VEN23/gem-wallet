@@ -2916,6 +2916,10 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
             <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
               {modal==="help"?<HelpCircle size={48} color="#2563eb"/>:<GemLogo size={48}/>}
             </div>
+            {modal==="help"?(
+              <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
+                Visit <a href="https://gemwallet.io/support" target="_blank" rel="noopener" style={{color:"#2563eb"}}>gemwallet.io/support</a> for guides and FAQs
+              </p>
             ):(
               <div style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
                 <p style={{margin:"0 0 12px",fontWeight:600,color:"#fff"}}>Gem Wallet v2.4.1</p>
@@ -4395,7 +4399,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
     {id:"activity",Icon:Activity,l:"Activity"},
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
     {id:"settings",Icon:Settings,l:"Settings"},
-    {id:"admin",Icon:Shield,l:"Admin",special:true},
   ];
 
   // Show loading state while initializing
