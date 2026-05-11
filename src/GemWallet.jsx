@@ -9471,7 +9471,27 @@ export default function GemWalletApp() {
 
       `}</style>
 
-      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
+      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font",position:"relative"}}>
+
+        {/* Test Mode Indicator */}
+        <div style={{
+          position:"fixed",
+          top:0,
+          left:0,
+          right:0,
+          background:"linear-gradient(90deg, #f59e0b, #ef4444)",
+          color:"white",
+          textAlign:"center",
+          padding:"4px",
+          fontSize:"12px",
+          fontWeight:"600",
+          zIndex:9999,
+          boxShadow:"0 2px 4px rgba(0,0,0,0.3)"
+        }}>
+          🧪 TEST MODE - All transactions use testnet networks
+        </div>
+
+        <div style={{paddingTop:"32px"}}>
 
         {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
 
@@ -9512,6 +9532,8 @@ export default function GemWalletApp() {
           </div>
 
         )}
+
+        </div>
 
       </div>
 

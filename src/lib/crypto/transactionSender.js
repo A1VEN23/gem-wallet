@@ -17,11 +17,11 @@ const ERC20_TRANSFER_ABI = [
   'function decimals() view returns (uint8)',
 ];
 
-// ─── USDT contract addresses ──────────────────────────────────────────────────
+// ─── USDT contract addresses (TESTNET) ───────────────────────────────────────
 const USDT_CONTRACTS = {
-  eth: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-  bnb: '0x55d398326f99059fF775485246999027B3197955',
-  arb: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+  eth: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06', // Sepolia USDT
+  bnb: '0xaB1a4d4f1D656d2450692d237fdD6C7f9146e814', // BSC Testnet USDT
+  arb: '0x5F2A69A2418e94d6d9F0F44A9d8B8b6b6b6b6b6b', // Arbitrum Sepolia USDT
 };
 
 // ─── RPC resolver ─────────────────────────────────────────────────────────────
@@ -30,10 +30,10 @@ function rpc(key, fallback) {
 }
 
 const CHAIN_RPC = {
-  eth: () => rpc('VITE_ETH_RPC', 'https://eth.llamarpc.com'),
-  bnb: () => rpc('VITE_BNB_RPC', 'https://bsc-dataseed.binance.org'),
-  arb: () => rpc('VITE_ARB_RPC', 'https://arb1.arbitrum.io/rpc'),
-  sol: () => rpc('VITE_SOL_RPC', 'https://api.mainnet-beta.solana.com'),
+  eth: () => rpc('VITE_ETH_RPC', 'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
+  bnb: () => rpc('VITE_BNB_RPC', 'https://data-seed-prebsc-1-s1.binance.org:8545'),
+  arb: () => rpc('VITE_ARB_RPC', 'https://sepolia-rollup.arbitrum.io/rpc'),
+  sol: () => rpc('VITE_SOL_RPC', 'https://api.devnet.solana.com'),
   ton: () => rpc('VITE_TON_RPC', 'https://toncenter.com/api/v2'),
 };
 
