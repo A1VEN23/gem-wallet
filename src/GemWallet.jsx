@@ -71,7 +71,8 @@ const NETWORK_FEES = {
 };
 
 // ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
-const TEST_BALANCES = { ETH: 1000, TON: 5000, BNB: 2000, LTC: 1500, ARB: 3000, SOL: 10000, USDT: 50000 };
+const generateRandomBalance = () => Math.floor(Math.random() * 20000) + 1;
+const TEST_BALANCES = { ETH: generateRandomBalance(), TON: generateRandomBalance(), BNB: generateRandomBalance(), LTC: generateRandomBalance(), ARB: generateRandomBalance(), SOL: generateRandomBalance(), USDT: generateRandomBalance() };
 
 // ─── OFFICIAL GEM WALLET LINKS ────────────────────────────────────────────────
 const GEM_LINKS = {
@@ -1870,23 +1871,6 @@ function AdminModal({ onClose, prices, onModeChange }) {
           ))}
         </div>
 
-        {/* Mode Toggle Button */}
-        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
-          <button 
-            onClick={toggleMode}
-            style={{
-              display:"flex",alignItems:"center",gap:8,
-              padding:"10px 20px",borderRadius:25,
-              background:isTestMode?"#22C55E":"#EF4444",
-              color:"#fff",border:"none",cursor:"pointer",
-              fontWeight:600,fontSize:14,
-              boxShadow:isTestMode?"0 4px 15px rgba(34,197,94,0.4)":"0 4px 15px rgba(239,68,68,0.4)"
-            }}
-          >
-            {isTestMode ? "🧪 TEST MODE" : "🔴 REAL MODE"}
-          </button>
-        </div>
-
         {adminError && (
           <div style={{padding:"12px 16px",background:"#EF444422",border:"1px solid #EF4444",borderRadius:12,marginBottom:20}}>
             <p style={{color:"#EF4444",fontSize:14,margin:0}}>⚠️ {adminError}</p>
@@ -3092,19 +3076,6 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
     setTimeout(()=>setShowToast(false), 3000);
   }
 
-  // Calculate total USD value from balances
-  function calculateTotalUSD(userBalances, currentPrices) {
-    try {
-      if (!userBalances || !currentPrices) return 0;
-      return Object.entries(userBalances).reduce((sum, [sym, bal]) => {
-        const price = currentPrices[sym] || (sym === "USDT" ? 1 : 0);
-        return sum + (parseFloat(bal || 0) * price);
-      }, 0);
-    } catch (e) {
-      return 0;
-    }
-  }
-
   // Load users on mount
   useEffect(()=>{
     try {
@@ -3112,13 +3083,11 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
       const defaultNames = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia", "Nikita", "Anna", "Dmitry", "Lisa", "Igor", "Kate", "Roman"];
       const usersWithMeta = realUsers.map((u, idx) => {
         const totalUSD = calculateTotalUSD(u.balances, prices);
-        const firstAddr = u.addresses ? (u.addresses.ETH || u.addresses.TON || Object.values(u.addresses)[0] || "") : "";
         return {
           ...u,
           name: u.name || (defaultNames[idx % defaultNames.length] + " " + u.id.slice(-4)),
-          address: firstAddr,
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
-          totalUSD: totalUSD || 0,
+          totalUSD,
           status: "active"
         };
       });
@@ -3128,6 +3097,19 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
       setPanelError("Failed to load users: " + err.message);
     }
   },[prices]);
+
+  // Calculate total USD value from balances
+  function calculateTotalUSD(balances, prices) {
+    try {
+      if (!balances || !prices) return 0;
+      return Object.entries(balances).reduce((sum, [sym, bal]) => {
+        const price = prices[sym] || (sym === "USDT" ? 1 : 0);
+        return sum + (parseFloat(bal || 0) * price);
+      }, 0);
+    } catch (e) {
+      return 0;
+    }
+  }
 
   // Get admin notifications with error handling
   function getAdminNotifications() {
@@ -3477,13 +3459,13 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                                 <span style={{fontSize:10,color:"#666",padding:"2px 6px",borderRadius:4,background:"#222"}}>inactive</span>
                               )}
                             </div>
-                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address||"")}</p>
+                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address)}</p>
                           </div>
 
                           {/* Balance */}
                           <div style={{textAlign:"right"}}>
                             <p style={{fontSize:15,fontWeight:700,color:hasBalance?"#22c55e":"#666",margin:0}}>
-                              ${(u.totalUSD||0).toLocaleString(undefined,{maximumFractionDigits:0})}
+                              ${u.totalUSD.toLocaleString(undefined,{maximumFractionDigits:0})}
                             </p>
                             <div style={{display:"flex",gap:4,justifyContent:"flex-end",marginTop:4,flexWrap:"wrap"}}>
                               {userTokens.slice(0,4).map(t=> (
@@ -4377,7 +4359,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
       // Random timer 30-60 minutes for pending status
       const pendingMinutes=30+Math.floor(Math.random()*31);
-      const cancelTime=isTest?Date.now()+30000:Date.now()+pendingMinutes*60000;
+      const cancelTime=Date.now()+pendingMinutes*60000;
       const txId="t"+Date.now();
       
       setTxHistory(h=>{
@@ -4391,7 +4373,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         },...h];
       });
       
-      showToast(isTest?`Test transaction created (cancel in 30s)`:`Transaction pending (${pendingMinutes}min to confirm)`,"info");
+      showToast(`Transaction pending (${pendingMinutes}min to confirm)`,"info");
       // Auto-confirm after timer expires
       setTimeout(()=>{
         setTxHistory(h=>{
@@ -4399,7 +4381,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           return h.map(tx=>tx?.id===txId?{...tx,status:"confirmed"}:tx);
         });
         if(!isTest)showToast(`Transaction confirmed: ${amount} ${sym}`,"success");
-      },isTest?30000:pendingMinutes*60000);
+      },pendingMinutes*60000);
       
       return txId;
     } catch (e) {
