@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
 
 export default function Settings() {
-  console.log('Settings component rendered!');
   const { lock, deleteWallet, getMnemonic } = useWallet();
   const [showSeed, setShowSeed] = useState(false);
   const [seedPassword, setSeedPassword] = useState('');
@@ -11,6 +10,14 @@ export default function Settings() {
   const [seedError, setSeedError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showTestMode, setShowTestMode] = useState(false);
+  const [transactions, setTransactions] = useState(() => {
+    const saved = localStorage.getItem('test_transactions');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [txType, setTxType] = useState('incoming');
+  const [token, setToken] = useState('ETH');
+  const [amount, setAmount] = useState('');
+  const [usdAmount, setUsdAmount] = useState('');
   const navigate = useNavigate();
 
   const handleLock = () => {
@@ -31,6 +38,66 @@ export default function Settings() {
   const handleDelete = () => {
     deleteWallet();
     navigate('/');
+  };
+
+  const createTransaction = () => {
+    if (!amount || !usdAmount) {
+      alert('Заполните количество и USD сумму');
+      return;
+    }
+
+    const newTx = {
+      id: Date.now(),
+      type: txType,
+      token: token,
+      amount: parseFloat(amount),
+      usdAmount: parseFloat(usdAmount),
+      timestamp: new Date().toISOString(),
+      status: 'completed'
+    };
+
+    const newTxs = [newTx, ...transactions];
+    setTransactions(newTxs);
+    localStorage.setItem('test_transactions', JSON.stringify(newTxs));
+
+    // Update balance
+    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
+    const newBalance = txType === 'incoming' 
+      ? currentBalance + parseFloat(amount)
+      : currentBalance - parseFloat(amount);
+    localStorage.setItem('test_balance', newBalance.toString());
+
+    // Clear form
+    setAmount('');
+    setUsdAmount('');
+
+    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!`);
+  };
+
+  const deleteTransaction = (id) => {
+    const txToDelete = transactions.find(tx => tx.id === id);
+    if (!txToDelete) return;
+
+    // Reverse balance change
+    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
+    const reversedBalance = txToDelete.type === 'incoming' 
+      ? currentBalance - txToDelete.amount
+      : currentBalance + txToDelete.amount;
+    localStorage.setItem('test_balance', reversedBalance.toString());
+
+    // Remove transaction
+    const newTxs = transactions.filter(tx => tx.id !== id);
+    setTransactions(newTxs);
+    localStorage.setItem('test_transactions', JSON.stringify(newTxs));
+  };
+
+  const clearTestData = () => {
+    if (confirm('Вы уверены, что хотите удалить все тестовые данные?')) {
+      localStorage.removeItem('test_transactions');
+      localStorage.removeItem('test_balance');
+      setTransactions([]);
+      alert('Тестовые данные удалены');
+    }
   };
 
   return (
@@ -94,11 +161,8 @@ export default function Settings() {
       </div>
 
       {/* Test Mode Section */}
-      <div className="settings-section" style={{ border: '2px solid red' }}>
-        <div className="settings-item" onClick={() => {
-          console.log('Test mode clicked!');
-          setShowTestMode(s => !s);
-        }}>
+      <div className="settings-section">
+        <div className="settings-item" onClick={() => setShowTestMode(s => !s)}>
           <span className="s-icon">🧪</span>
           <div className="s-info">
             <span className="s-title">Тестовый режим</span>
@@ -108,17 +172,146 @@ export default function Settings() {
         </div>
 
         {showTestMode && (
-          <div className="settings-sub-form" style={{ background: 'yellow' }}>
-            <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
-              🧪 Тестовый режим активен!
-            </p>
+          <div className="settings-sub-form">
+            {/* Transaction Creation Form */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Тип транзакции:
+              </label>
+              <select 
+                value={txType} 
+                onChange={(e) => setTxType(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              >
+                <option value="incoming">Входящая</option>
+                <option value="outgoing">Исходящая</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Токен:
+              </label>
+              <select 
+                value={token} 
+                onChange={(e) => setToken(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              >
+                <option value="ETH">ETH</option>
+                <option value="USDT">USDT</option>
+                <option value="BNB">BNB</option>
+                <option value="SOL">SOL</option>
+                <option value="TON">TON</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Количество токенов:
+              </label>
+              <input
+                type="number"
+                placeholder="0.0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Сумма в USD:
+              </label>
+              <input
+                type="number"
+                placeholder="0.0"
+                value={usdAmount}
+                onChange={(e) => setUsdAmount(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              />
+            </div>
+
             <button 
               className="btn-secondary" 
-              onClick={() => alert('Тестовая функция работает!')}
-              style={{ width: '100%' }}
+              onClick={createTransaction}
+              style={{ width: '100%', marginBottom: '16px' }}
             >
-              Тестовая кнопка
+              Создать транзакцию
             </button>
+
+            {/* Transaction History */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--text)' }}>
+                  История транзакций ({transactions.length})
+                </h4>
+                {transactions.length > 0 && (
+                  <button 
+                    onClick={clearTestData}
+                    style={{ 
+                      background: 'none', 
+                      border: '1px solid var(--red)', 
+                      color: 'var(--red)', 
+                      borderRadius: '4px', 
+                      padding: '4px 8px', 
+                      fontSize: '11px', 
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    Очистить все
+                  </button>
+                )}
+              </div>
+              
+              {transactions.length === 0 ? (
+                <p style={{ fontSize: '12px', color: 'var(--text3)', textAlign: 'center', padding: '20px 0' }}>
+                  Нет транзакций
+                </p>
+              ) : (
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {transactions.map(tx => (
+                    <div 
+                      key={tx.id}
+                      style={{ 
+                        background: 'var(--bg2)', 
+                        border: '1px solid var(--border)', 
+                        borderRadius: '6px', 
+                        padding: '12px', 
+                        marginBottom: '8px',
+                        fontSize: '12px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ color: tx.type === 'incoming' ? '#22C55E' : '#EF4444', fontWeight: '600' }}>
+                          {tx.type === 'incoming' ? '↓ Входящая' : '↑ Исходящая'}
+                        </span>
+                        <button
+                          onClick={() => deleteTransaction(tx.id)}
+                          style={{ 
+                            background: 'none', 
+                            border: 'none', 
+                            color: '#EF4444', 
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
+                        {tx.token}: {tx.amount}
+                      </div>
+                      <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
+                        USD: ${tx.usdAmount}
+                      </div>
+                      <div style={{ color: 'var(--text3)', fontSize: '11px' }}>
+                        {new Date(tx.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
