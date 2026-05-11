@@ -120,23 +120,23 @@ const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT:
 
 
 
-// ─── REAL NETWORK FEES (approximate in USD) ─────────────────────────────────
+// ─── REAL NETWORK FEES (updated for current market) ─────────────────────────────
 
 const NETWORK_FEES = {
 
-  ETH: { low: 2.5, medium: 8.5, high: 25 },      // Ethereum
+  ETH: { low: 1.5, medium: 4.0, high: 12 },      // Ethereum (Sepolia testnet)
 
-  BNB: { low: 0.05, medium: 0.1, high: 0.2 },    // BSC
+  BNB: { low: 0.02, medium: 0.05, high: 0.15 },  // BSC Testnet
 
-  ARB: { low: 0.1, medium: 0.3, high: 0.5 },      // Arbitrum
+  ARB: { low: 0.05, medium: 0.15, high: 0.3 },   // Arbitrum Sepolia
 
-  SOL: { low: 0.001, medium: 0.005, high: 0.01 }, // Solana
+  SOL: { low: 0.00025, medium: 0.001, high: 0.005 }, // Solana Devnet
 
-  TON: { low: 0.01, medium: 0.05, high: 0.1 },   // TON
+  TON: { low: 0.005, medium: 0.02, high: 0.05 },  // TON
 
-  LTC: { low: 0.02, medium: 0.05, high: 0.1 },   // Litecoin
+  LTC: { low: 0.001, medium: 0.003, high: 0.01 }, // Litecoin
 
-  USDT: { low: 1, medium: 3, high: 8 }           // Depends on network
+  USDT: { low: 0.5, medium: 1.5, high: 4 }        // Token transfer fees
 
 };
 
@@ -1676,9 +1676,37 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
 
 
-  // Get real network fee based on selected speed
+  // Get real network fee based on selected speed and network
 
   const getNetworkFee = () => {
+
+    // For USDT, use the current network's fees
+
+    if (sel.sym === 'USDT' && curNet) {
+
+      const networkMap = {
+
+        'ethereum': 'ETH',
+
+        'bsc': 'BNB',
+
+        'arbitrum': 'ARB',
+
+        'solana': 'SOL',
+
+        'ton': 'TON'
+
+      };
+
+      const feeSymbol = networkMap[curNet.id] || 'ETH';
+
+      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
+
+      return fees[feeSpeed] || fees.medium;
+
+    }
+
+    // For native tokens, use their own fees
 
     const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
 
@@ -1689,6 +1717,18 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
 
   const fee = getNetworkFee();
+
+  // Calculate actual fee in native token for balance check
+  const getFeeInNativeToken = () => {
+    if (sel.sym === 'USDT' && curNet) {
+      // For USDT, fee is in USD, convert to equivalent native token
+      const nativePrice = prices[curNet.native] || 0;
+      return nativePrice > 0 ? fee / nativePrice : 0;
+    }
+    // For native tokens, fee is already in USD, convert to token amount
+    const tokenPrice = prices[sel.sym] || 0;
+    return tokenPrice > 0 ? fee / tokenPrice : 0;
+  };
 
 
 
@@ -1712,9 +1752,11 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
       const num=parseFloat(amt);
 
-      const totalNeeded = num + fee;
+      const feeInNative = getFeeInNativeToken();
 
-      if(totalNeeded>assetObj.balance){alert(`Insufficient balance. Need ${fmt(totalNeeded)} ${sel.sym} (includes $${fee} fee)`);return;}
+      const totalNeeded = num + feeInNative;
+
+      if(totalNeeded>assetObj.balance){alert(`Insufficient balance. Need ${fmt(totalNeeded)} ${sel.sym} (includes ~${feeInNative.toFixed(6)} ${sel.sym} ≈ $${fee} fee)`);return;}
 
       setSending(true);
 
@@ -2070,17 +2112,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
-              {testMode&&(
-
-                <div style={{padding:"10px 14px",background:"rgba(34,197,94,0.15)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:12,display:"flex",alignItems:"center",gap:8}}>
-
-                  <span style={{fontSize:16}}>🧪</span>
-
-                  <span style={{color:"#22C55E",fontSize:13,fontWeight:600}}>TEST MODE — транзакция не будет отправлена в блокчейн</span>
-
-                </div>
-
-              )}
+              {/* Test mode indicator removed */}
 
               <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Review</p>
 
