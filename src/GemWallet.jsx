@@ -2521,13 +2521,6 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
             {currentAvatar}
           </div>
         </div>
-        {testMode&&(
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:20,
-            background:"rgba(34,197,94,0.15)",border:"1px solid rgba(34,197,94,0.3)",marginBottom:8}}>
-            <span style={{fontSize:12}}>🧪</span>
-            <span style={{fontSize:11,color:"#22C55E",fontWeight:700,letterSpacing:"0.05em"}}>TEST MODE</span>
-          </div>
-        )}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:4}}>
           <span style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>Total Balance</span>
           <button onClick={()=>setHidden(h=>!h)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
