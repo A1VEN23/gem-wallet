@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
 
 export default function Settings() {
+  console.log('Settings component rendered!');
   const { lock, deleteWallet, getMnemonic } = useWallet();
   const [showSeed, setShowSeed] = useState(false);
   const [seedPassword, setSeedPassword] = useState('');
@@ -93,8 +94,11 @@ export default function Settings() {
       </div>
 
       {/* Test Mode Section */}
-      <div className="settings-section">
-        <div className="settings-item" onClick={() => setShowTestMode(s => !s)}>
+      <div className="settings-section" style={{ border: '2px solid red' }}>
+        <div className="settings-item" onClick={() => {
+          console.log('Test mode clicked!');
+          setShowTestMode(s => !s);
+        }}>
           <span className="s-icon">🧪</span>
           <div className="s-info">
             <span className="s-title">Тестовый режим</span>
@@ -104,7 +108,7 @@ export default function Settings() {
         </div>
 
         {showTestMode && (
-          <div className="settings-sub-form">
+          <div className="settings-sub-form" style={{ background: 'yellow' }}>
             <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
               🧪 Тестовый режим активен!
             </p>
