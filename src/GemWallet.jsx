@@ -3133,7 +3133,7 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                 type: "wallet_created",
                 userId,
                 time: date.toLocaleString(),
-                message: `New wallet created by user ${userId.slice(-6)}`
+                message: `New wallet created by user ${(userId || "unknown").slice(-6)}`
               });
             }
           }
@@ -3471,12 +3471,12 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                               ${u.totalUSD.toLocaleString(undefined,{maximumFractionDigits:0})}
                             </p>
                             <div style={{display:"flex",gap:4,justifyContent:"flex-end",marginTop:4,flexWrap:"wrap"}}>
-                              {userTokens.slice(0,4).map(t=> (
+                              {(userTokens || []).slice(0,4).map(t=> (
                                 <span key={t.sym} style={{fontSize:9,color:t.color,padding:"2px 5px",borderRadius:4,
                                   background:`${t.color}15`}}>{t.sym}</span>
                               ))}
-                              {userTokens.length>4&&(
-                                <span style={{fontSize:9,color:"#666"}}>+{userTokens.length-4}</span>
+                              {(userTokens || []).length>4&&(
+                                <span style={{fontSize:9,color:"#666"}}>+{(userTokens || []).length-4}</span>
                               )}
                             </div>
                           </div>
