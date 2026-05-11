@@ -47,6 +47,17 @@ export default function Wallet() {
           <button className="icon-btn" onClick={handleRefresh} title="Обновить">
             <span className={refreshing ? 'spin' : ''}>↻</span>
           </button>
+          <button 
+            className="icon-btn" 
+            onClick={() => navigate('/settings')} 
+            title="Тестовый режим"
+            style={{ 
+              background: localStorage.getItem('test_balance') ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--bg2)',
+              color: localStorage.getItem('test_balance') ? '#fff' : 'var(--text)'
+            }}
+          >
+            🧪
+          </button>
           <button className="icon-btn" onClick={() => navigate('/settings')} title="Настройки">
             ⚙
           </button>
