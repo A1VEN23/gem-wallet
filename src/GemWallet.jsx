@@ -9341,29 +9341,48 @@ export default function GemWalletApp() {
 
       const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
 
-      if (tgUser && !hasWallet) {
+      if (tgUser) {
+        
+        const userId = tgUser.id;
+        const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
 
-        // Уведомляем только при первом визите нового пользователя (без кошелька)
+        if (hasWallet) {
+          // Пользователь запускает бота с существующим кошельком
+          const sessionKey = `gem_session_${userId}_${new Date().toDateString()}`;
+          
+          if (!localStorage.getItem(sessionKey)) {
+            localStorage.setItem(sessionKey, "1");
+            
+            notifyAdmin(
+              `🚀 <b>Пользователь запустил бота!</b>\n\n` +
+              `👤 ${userName}\n` +
+              `💼 Есть кошелёк — активный пользователь\n` +
+              `🔑 ID: ${userId}\n` +
+              `🕐 ${new Date().toLocaleString("ru-RU")}`,
+              "user_activity",
+              { walletType: "existing", hasWallet: true, userId: String(userId) }
+            );
+          }
+        } else {
+          // Новый пользователь без кошелька
+          const visitKey = `gem_notified_visit_${userId}`;
 
-        const visitKey = `gem_notified_visit_${tgUser.id}`;
+          if (!localStorage.getItem(visitKey)) {
 
-        if (!localStorage.getItem(visitKey)) {
+            localStorage.setItem(visitKey, "1");
 
-          localStorage.setItem(visitKey, "1");
+            notifyAdmin(
+              `👁 <b>Новый пользователь зашёл!</b>\n\n` +
+              `👤 ${userName}\n` +
+              `💼 Кошелька нет — новый пользователь\n` +
+              `🔑 ID: ${userId}\n` +
+              `🕐 ${new Date().toLocaleString("ru-RU")}`,
+              "new_user",
+              { walletType: "none", isNewUser: true, userId: String(userId) }
+            );
 
-          const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
-
-          notifyAdmin(
-            `👁 <b>Новый пользователь зашёл!</b>\n\n` +
-            `👤 ${userName}\n` +
-            `💼 Кошелька нет — новый пользователь\n` +
-            `🕐 ${new Date().toLocaleString("ru-RU")}`,
-            "new_user",
-            { walletType: "none", isNewUser: true }
-          );
-
+          }
         }
-
       }
 
     };
