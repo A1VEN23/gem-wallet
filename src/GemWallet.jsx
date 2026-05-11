@@ -5691,12 +5691,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 
     ]},
 
-    ...(isAdmin ? [{t:"Admin",items:[
-
-      {icon:Shield,l:"Admin Panel",s:"View all users & balances",a:"admin_panel"},
-
-    ]}] : []),
-
     {t:"Support",items:[
 
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
@@ -8309,15 +8303,16 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  // Transaction history — persisted to localStorage per user
+  // Transaction history — persisted to localStorage per user (CLEARED)
 
   const [txHistory,setTxHistory]=useState(()=>{
 
     try {
 
-      const saved = localStorage.getItem(storageKey("gem_tx_history"));
-
-      return saved ? JSON.parse(saved) : [];
+      // Clear transaction history
+      localStorage.removeItem(storageKey("gem_tx_history"));
+      
+      return [];
 
     } catch { return []; }
 
@@ -9471,27 +9466,7 @@ export default function GemWalletApp() {
 
       `}</style>
 
-      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font",position:"relative"}}>
-
-        {/* Test Mode Indicator */}
-        <div style={{
-          position:"fixed",
-          top:0,
-          left:0,
-          right:0,
-          background:"linear-gradient(90deg, #f59e0b, #ef4444)",
-          color:"white",
-          textAlign:"center",
-          padding:"4px",
-          fontSize:"12px",
-          fontWeight:"600",
-          zIndex:9999,
-          boxShadow:"0 2px 4px rgba(0,0,0,0.3)"
-        }}>
-          🧪 TEST MODE - All transactions use testnet networks
-        </div>
-
-        <div style={{paddingTop:"32px"}}>
+      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font"}}>
 
         {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
 
@@ -9532,8 +9507,6 @@ export default function GemWalletApp() {
           </div>
 
         )}
-
-        </div>
 
       </div>
 
