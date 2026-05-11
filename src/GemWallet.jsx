@@ -2914,17 +2914,8 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
         <Sheet onClose={()=>setModal(null)} title={modal==="help"?"Help Center":"About Gem"}>
           <div style={{padding:"24px",textAlign:"center"}}>
             <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {modal==="help"?<HelpCircle size={48} color="#2563eb"/>:(
-                <div onClick={handleCrystalClick} style={{cursor:"pointer",userSelect:"none",position:"relative"}}>
-                  <GemLogo size={48}/>
-                  {crystalClicks>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#2563eb",color:"#fff",fontSize:10,fontWeight:700,borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{crystalClicks}</span>}
-                </div>
-              )}
+              {modal==="help"?<HelpCircle size={48} color="#2563eb"/>:<GemLogo size={48}/>}
             </div>
-            {modal==="help"?(
-              <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
-                Visit <a href="https://gemwallet.io/support" target="_blank" rel="noopener" style={{color:"#2563eb"}}>gemwallet.io/support</a> for guides and FAQs
-              </p>
             ):(
               <div style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:1.6}}>
                 <p style={{margin:"0 0 12px",fontWeight:600,color:"#fff"}}>Gem Wallet v2.4.1</p>
