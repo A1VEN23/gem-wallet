@@ -71,7 +71,7 @@ const NETWORK_FEES = {
 };
 
 // ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
-const generateTestBalances = () => {
+const getTestBalances = () => {
   const totalUSD = Math.floor(Math.random() * 5000) + 15000;
   const prices = { ETH: 3200, TON: 6.5, BNB: 580, LTC: 72, ARB: 0.85, SOL: 145, USDT: 1 };
   const weights = { ETH: 0.25, TON: 0.15, BNB: 0.15, LTC: 0.1, ARB: 0.1, SOL: 0.15, USDT: 0.1 };
@@ -83,7 +83,6 @@ const generateTestBalances = () => {
   }
   return balances;
 };
-const TEST_BALANCES = generateTestBalances();
 
 // ─── OFFICIAL GEM WALLET LINKS ────────────────────────────────────────────────
 const GEM_LINKS = {
@@ -4194,7 +4193,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   });
   const [balances,setBalances]=useState(() => {
     const mode = localStorage.getItem('gem_wallet_mode');
-    return mode === 'real' ? {...INITIAL_BALANCES} : {...TEST_BALANCES};
+    return mode === 'real' ? {...INITIAL_BALANCES} : {...getTestBalances()};
   });
 
   // Transaction history — persisted to localStorage per user
@@ -4490,7 +4489,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
       {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices} onModeChange={(isTest) => {
         setTestMode(isTest);
-        setBalances(isTest ? {...TEST_BALANCES} : {...INITIAL_BALANCES});
+        setBalances(isTest ? {...getTestBalances()} : {...INITIAL_BALANCES});
       }}/>}
       {modal==="buy"&&(
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
