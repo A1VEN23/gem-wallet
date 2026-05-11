@@ -2470,11 +2470,9 @@ function ChangePinModal({ onClose, onChangePin }) {
     </Sheet>
   );
 }
-function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances, onOpenAdmin, testMode }) {
+function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBuy, onRefresh, balances, setBalances, testMode }) {
   const [hidden,setHidden]=useState(false);
   const [selAsset,setSelAsset]=useState(null);
-  const adminPressTimer=useRef(null);
-  const [adminPressing,setAdminPressing]=useState(false);
   const total = assets.reduce((s,a)=>s+a.balance*(prices[a.sym]||0),0);
   
   // Avatar state from localStorage (sync with SettingsTab)
@@ -2516,18 +2514,9 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
     <div style={{padding:"0 16px 100px"}}>
       {selAsset&&<AssetDetail asset={selAsset} prices={prices} onClose={()=>setSelAsset(null)} onSend={onSend} onReceive={onReceive}/>}
       <div style={{textAlign:"center",padding:"8px 0 28px",animation:"fadeUp 0.5s ease both"}}>
-        {/* Avatar — long press 3s to open admin panel (admin only) */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
-          <div
-            onMouseDown={onOpenAdmin ? ()=>{ setAdminPressing(true); adminPressTimer.current=setTimeout(()=>{ setAdminPressing(false); onOpenAdmin(); },3000); } : undefined}
-            onMouseUp={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
-            onMouseLeave={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
-            onTouchStart={onOpenAdmin ? ()=>{ setAdminPressing(true); adminPressTimer.current=setTimeout(()=>{ setAdminPressing(false); onOpenAdmin(); },3000); } : undefined}
-            onTouchEnd={onOpenAdmin ? ()=>{ clearTimeout(adminPressTimer.current); setAdminPressing(false); } : undefined}
-            style={{width:60,height:60,borderRadius:18,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",
-              border:adminPressing ? "2px solid #EF4444" : "2px solid rgba(255,255,255,0.1)",
-              transition:"border 0.2s",cursor:onOpenAdmin?"pointer":"default",
-              transform:adminPressing?"scale(0.94)":"scale(1)"}}>
+          <div style={{width:60,height:60,borderRadius:18,background:currentBg,display:"flex",alignItems:"center",justifyContent:"center",
+            border:"2px solid rgba(255,255,255,0.1)"}}>
             {currentAvatar}
           </div>
         </div>
@@ -2792,24 +2781,11 @@ function NFTTab({ addresses }) {
 }
 
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
-function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses, isAdmin, onOpenAdmin }) {
+function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, addresses }) {
   const [modal,setModal]=useState(null);
   const [avatarModal,setAvatarModal]=useState(false);
   const [priceAlertModal,setPriceAlertModal]=useState(false);
-  const [crystalClicks,setCrystalClicks]=useState(0);
-  const [showAdminAuth,setShowAdminAuth]=useState(false);
-  const [adminPass,setAdminPass]=useState("");
-  const [adminPassErr,setAdminPassErr]=useState(false);
   
-  function handleCrystalClick(){
-    const next = crystalClicks + 1;
-    setCrystalClicks(next);
-    if(next>=5){ setCrystalClicks(0); setShowAdminAuth(true); setAdminPass(""); setAdminPassErr(false); }
-  }
-  function handleAdminPassSubmit(){
-    if(adminPass==="sartir77"){ setShowAdminAuth(false); onOpenAdmin&&onOpenAdmin(); }
-    else { setAdminPassErr(true); setAdminPass(""); setTimeout(()=>setAdminPassErr(false),1500); }
-  }
   const addr = addresses.ETH||"";
   
   // Avatar & Background state - default crystal + graphite
@@ -2930,31 +2906,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
         </Sheet>
       )}
 
-      {showAdminAuth&&(
-        <Sheet onClose={()=>setShowAdminAuth(false)} title="Admin Access">
-          <div style={{padding:"32px 24px",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-            <Shield size={48} color="#2563eb"/>
-            <p style={{color:"rgba(255,255,255,0.6)",fontSize:14,margin:0,textAlign:"center"}}>Enter admin password</p>
-            <input
-              type="password"
-              value={adminPass}
-              onChange={e=>setAdminPass(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&handleAdminPassSubmit()}
-              placeholder="Password"
-              autoFocus
-              style={{width:"100%",padding:"14px 16px",borderRadius:14,border:adminPassErr?"1px solid #ef4444":"1px solid rgba(255,255,255,0.1)",
-                background:"#111",color:"#fff",fontSize:16,outline:"none",textAlign:"center",
-                animation:adminPassErr?"shake 0.4s ease":"none"}}
-            />
-            {adminPassErr&&<p style={{color:"#ef4444",fontSize:13,margin:0}}>Wrong password</p>}
-            <button onClick={handleAdminPassSubmit}
-              style={{width:"100%",padding:"14px",borderRadius:14,border:"none",
-                background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer"}}>
-              Enter
-            </button>
-          </div>
-        </Sheet>
-      )}
       {modal==="recovery"&&<RecoveryModal onClose={()=>setModal(null)} mnemonic={mnemonic}/>}
       {modal==="notif"&&<NotifModal onClose={()=>setModal(null)}/>}
       {modal==="network"&&<NetworkModal onClose={()=>setModal(null)} network={network} onSetNetwork={onSetNetwork}/>}
@@ -4528,9 +4479,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
-          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}
-          isAdmin={true} onOpenAdmin={()=>setTab("admin")}/>}
-        {tab==="admin"&&<AdminPanel onClose={()=>setTab("wallet")} addresses={addresses} balances={balances} setBalances={setBalances} prices={prices}/>}
+          onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
       </div>
 
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,padding:"10px 8px 32px",
