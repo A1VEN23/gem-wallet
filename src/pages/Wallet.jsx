@@ -11,7 +11,11 @@ export default function Wallet() {
 
   const net = networks[activeNetwork];
   const address = addresses[activeNetwork];
-  const balance = balances[activeNetwork] || '0';
+  const realBalance = balances[activeNetwork] || '0';
+  
+  // Check if test balance exists and use it
+  const testBalance = localStorage.getItem('test_balance');
+  const balance = testBalance ? parseFloat(testBalance).toFixed(6) : realBalance;
 
   useEffect(() => {
     if (address) refreshBalance(activeNetwork);
@@ -54,6 +58,15 @@ export default function Wallet() {
         <div className="net-badge">
           <NetworkIcon network={net} size={28} />
           <span>{net?.name}</span>
+          {testBalance && <span style={{ 
+            background: '#f59e0b', 
+            color: '#fff', 
+            fontSize: '10px', 
+            padding: '2px 6px', 
+            borderRadius: '4px', 
+            marginLeft: '8px',
+            fontWeight: '600'
+          }}>ТЕСТ</span>}
         </div>
         <div className="balance-amount">
           <span className="balance-num">{parseFloat(balance).toFixed(6)}</span>
@@ -63,6 +76,17 @@ export default function Wallet() {
           <span className="addr-text">{shortAddr}</span>
           <span className="copy-icon">{copied ? '✓' : '⎘'}</span>
         </div>
+        {testBalance && (
+          <div style={{ 
+            marginTop: '8px', 
+            fontSize: '11px', 
+            color: '#f59e0b', 
+            textAlign: 'center',
+            fontWeight: '500'
+          }}>
+            Тестовый режим (создано транзакций: {JSON.parse(localStorage.getItem('test_transactions') || '[]').length})
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
