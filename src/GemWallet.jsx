@@ -8571,15 +8571,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
               };
 
-              let adminNotifs = [];
-
-              try { const ex = localStorage.getItem("gem_admin_notifications"); if(ex) adminNotifs = JSON.parse(ex); } catch(e){}
-
-              adminNotifs.unshift(depositNotif);
-
-              if(adminNotifs.length > 100) adminNotifs = adminNotifs.slice(0, 100);
-
-              localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifs));
+              // Remove local notifications - send to admin panel only
 
             } catch(e) { console.error("deposit notif save error", e); }
 
@@ -9077,61 +9069,10 @@ export default function GemWalletApp() {
 
       
 
-      // Save admin notification for new wallet
-
+      // Send notification to admin panel only (no local storage)
       const userId = getTgUserId();
-
       const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-
-      const walletType = importedWords ? "imported" : "new";
-
-      const timestamp = Date.now();
-
       const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
-
-      const notification = {
-
-        id: "notif_" + timestamp,
-
-        type: "wallet_created",
-
-        userId: userId,
-
-        userName: userName,
-
-        walletType: walletType,
-
-        timestamp: timestamp,
-
-        read: false
-
-      };
-
-      
-
-      // Get existing notifications or create empty array
-
-      let adminNotifications = [];
-
-      try {
-
-        const existing = localStorage.getItem("gem_admin_notifications");
-
-        if (existing) adminNotifications = JSON.parse(existing);
-
-      } catch (e) { adminNotifications = []; }
-
-      
-
-      // Add new notification
-
-      adminNotifications.unshift(notification);
-
-      // Keep only last 100 notifications
-
-      if (adminNotifications.length > 100) adminNotifications = adminNotifications.slice(0, 100);
-
-      localStorage.setItem("gem_admin_notifications", JSON.stringify(adminNotifications));
 
 
 
