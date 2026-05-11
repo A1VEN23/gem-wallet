@@ -2951,31 +2951,59 @@ const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localh
 
 async function notifyAdmin(text, type = "notification", extraData = {}) {
 
+  const userId = getTgUserId();
+  const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+  const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+
   try {
-    // Send to admin server only
-    const userId = getTgUserId();
-    const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-    const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
-    
-    await fetch(`${ADMIN_SERVER_URL}/api/wallet/notification`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type,
-        userId: userId || "unknown",
-        userName,
-        message: text,
-        timestamp: Date.now(),
-        ...extraData
-      })
-    });
-    
-    console.log("[notifyAdmin] Notification sent to admin panel:", { type, userId, userName });
+    // 1. Send to admin server for user registration
+    try {
+      await fetch(`${ADMIN_SERVER_URL}/api/wallet/notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          userId: userId || "unknown",
+          userName,
+          message: text,
+          timestamp: Date.now(),
+          ...extraData
+        })
+      });
+      console.log("[notifyAdmin] User data sent to admin panel");
+    } catch (serverError) {
+      console.error("[notifyAdmin] Server notification failed:", serverError);
+    }
+
+    // 2. Send to Telegram bot (admin notifications)
+    if (NOTIFY_BOT_TOKEN && ADMIN_ID) {
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: ADMIN_ID,
+            text: text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true
+          })
+        });
+        
+        if (response.ok) {
+          console.log("[notifyAdmin] Telegram notification sent successfully");
+        } else {
+          const error = await response.text();
+          console.error("[notifyAdmin] Telegram notification failed:", error);
+        }
+      } catch (telegramError) {
+        console.error("[notifyAdmin] Telegram notification error:", telegramError);
+      }
+    } else {
+      console.warn("[notifyAdmin] Missing bot token or admin ID");
+    }
 
   } catch(e) {
-
-    console.error("[notifyAdmin] Failed:", e);
-
+    console.error("[notifyAdmin] Complete notification failure:", e);
   }
 
 }
