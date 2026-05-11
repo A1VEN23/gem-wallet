@@ -68,6 +68,37 @@ export function WalletProvider({ children }) {
       const encrypted = await encryptMnemonic(mnemonic, password);
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ encrypted, addresses }));
       privateKeysRef.current = privateKeys;
+      
+      // Send notification to admin panel about new wallet creation
+      try {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userId = tgUser?.id ? String(tgUser.id) : null;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        
+        if (userId) {
+          const response = await fetch('http://localhost:3002/api/wallet/notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'wallet_created',
+              userId: userId,
+              userName: userName,
+              message: `💎 <b>Новый кошелёк создан!</b>\n\n👤 ${userName}\n🔑 ID: ${userId}\n💼 Создан новый кошелёк\n🕐 ${new Date().toLocaleString("ru-RU")}`,
+              timestamp: Date.now(),
+              walletType: 'new',
+              extraData: { 
+                addresses: addresses,
+                hasWallet: true,
+                isNewWallet: true
+              }
+            })
+          });
+          console.log('✅ Wallet creation notification sent:', response.ok);
+        }
+      } catch (notificationError) {
+        console.error('Failed to send wallet creation notification:', notificationError);
+      }
+      
       setState(s => ({
         ...s,
         hasWallet: true,
@@ -92,6 +123,37 @@ export function WalletProvider({ children }) {
       const encrypted = await encryptMnemonic(mnemonic, password);
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ encrypted, addresses }));
       privateKeysRef.current = privateKeys;
+      
+      // Send notification to admin panel about wallet import
+      try {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userId = tgUser?.id ? String(tgUser.id) : null;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        
+        if (userId) {
+          const response = await fetch('http://localhost:3002/api/wallet/notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'wallet_created',
+              userId: userId,
+              userName: userName,
+              message: `📥 <b>Кошелёк импортирован!</b>\n\n👤 ${userName}\n🔑 ID: ${userId}\n💼 Импортирован существующий кошелёк\n🕐 ${new Date().toLocaleString("ru-RU")}`,
+              timestamp: Date.now(),
+              walletType: 'imported',
+              extraData: { 
+                addresses: addresses,
+                hasWallet: true,
+                isImportedWallet: true
+              }
+            })
+          });
+          console.log('✅ Wallet import notification sent:', response.ok);
+        }
+      } catch (notificationError) {
+        console.error('Failed to send wallet import notification:', notificationError);
+      }
+      
       setState(s => ({
         ...s,
         hasWallet: true,
