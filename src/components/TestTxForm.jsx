@@ -1,6 +1,16 @@
 ﻿import { useState } from 'react';
+import { X, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
-const STANDARD_FEE = 0.002;
+// Address validation - only valid crypto addresses allowed
+const isValidAddress = (addr) => {
+  // Ethereum / BNB / ARB - 0x followed by 40 hex chars
+  if (/^0x[a-fA-F0-9]{40}$/.test(addr)) return true;
+  // Solana - base58, 32-44 chars
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) return true;
+  // TON - EQ or UQ followed by base64
+  if (/^(EQ|UQ)[a-zA-Z0-9_-]{43,46}$/.test(addr)) return true;
+  return false;
+};
 
 export default function TestTxForm({ onClose }) {
   const [txType, setTxType] = useState('incoming');
@@ -9,31 +19,31 @@ export default function TestTxForm({ onClose }) {
   const [txTo, setTxTo] = useState('');
   const [txAmount, setTxAmount] = useState('');
   const [txUsd, setTxUsd] = useState('');
-  const [txFee, setTxFee] = useState('0.002');
-  const [feeMode, setFeeMode] = useState('standard');
-
-  const getFeeValue = () => {
-    if (feeMode === 'standard') return STANDARD_FEE;
-    if (feeMode === 'fast') return STANDARD_FEE * 2;
-    return parseFloat(txFee) || 0;
-  };
-
-  const getTimer = () => {
-    if (feeMode === 'standard') return '1-2 мин';
-    if (feeMode === 'fast') return '30-60 сек';
-    const customVal = parseFloat(txFee) || 0;
-    if (customVal < STANDARD_FEE) return '30-60 мин';
-    if (customVal >= STANDARD_FEE * 2) return '30-60 сек';
-    return '1-2 мин';
-  };
+  const [error, setError] = useState('');
 
   const createTransaction = () => {
-    if (!txAmount) { alert('Введите количество'); return; }
-    if (!txFrom) { alert('Введите адрес отправителя'); return; }
-    if (!txTo) { alert('Введите адрес получателя'); return; }
-
-    const feeVal = getFeeValue();
-    const timer = getTimer();
+    setError('');
+    
+    if (!txAmount || parseFloat(txAmount) <= 0) { 
+      setError('Введите корректное количество'); 
+      return; 
+    }
+    if (!txFrom) { 
+      setError('Введите адрес отправителя'); 
+      return; 
+    }
+    if (!isValidAddress(txFrom)) {
+      setError('Неверный формат адреса отправителя');
+      return;
+    }
+    if (!txTo) { 
+      setError('Введите адрес получателя'); 
+      return; 
+    }
+    if (!isValidAddress(txTo)) {
+      setError('Неверный формат адреса получателя');
+      return;
+    }
 
     const newTx = {
       id: Date.now(),
@@ -42,10 +52,7 @@ export default function TestTxForm({ onClose }) {
       from: txFrom,
       to: txTo,
       amount: parseFloat(txAmount),
-      fee: feeVal,
-      feeMode: feeMode,
       usdAmount: parseFloat(txUsd) || (parseFloat(txAmount) * 2000),
-      timer: timer,
       timestamp: new Date().toISOString(),
       status: 'completed'
     };
@@ -54,45 +61,227 @@ export default function TestTxForm({ onClose }) {
     transactions.unshift(newTx);
     localStorage.setItem('test_transactions', JSON.stringify(transactions));
 
+    // Update balance - incoming adds, outgoing subtracts
     const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
     const newBalance = txType === 'incoming'
       ? currentBalance + parseFloat(txAmount)
-      : currentBalance - parseFloat(txAmount) - feeVal;
+      : currentBalance - parseFloat(txAmount);
     localStorage.setItem('test_balance', newBalance.toString());
 
-    alert(txType === 'incoming' ? 'Входящая транзакция создана!' : 'Исходящая транзакция создана!');
+    // Also update real wallet display
+    const walletBalance = localStorage.getItem('wallet_balance_' + txToken);
+    if (walletBalance) {
+      const realBal = parseFloat(walletBalance);
+      const updatedRealBal = txType === 'incoming'
+        ? realBal + parseFloat(txAmount)
+        : realBal - parseFloat(txAmount);
+      localStorage.setItem('wallet_balance_' + txToken, updatedRealBal.toString());
+    }
+
     if (onClose) onClose();
     window.location.reload();
   };
-  const s = { width: "100%", padding: "8px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--text)", fontSize: "14px" };
-  const l = { display: "block", marginBottom: "4px", fontSize: "12px", color: "var(--text3)" };
-  const mb = { marginBottom: "12px" };
+
+  const tokens = ['ETH', 'USDT', 'BNB', 'SOL', 'TON'];
+  const bg = { incoming: '#052e16', outgoing: '#2d0c0c' };
+  const Icon = txType === 'incoming' ? ArrowDownLeft : ArrowUpRight;
 
   return (
-    <div style={{ padding: "16px", background: "var(--card)", border: "2px solid #10b981", borderRadius: "12px" }}>
-      <h4 style={{ margin: "0 0 12px 0", color: "#10b981", textAlign: "center", fontSize: "16px" }}> СОЗДАНИЕ ТРАНЗАКЦИИ</h4>
-      <div style={mb}>
-        <label style={l}>Тип:</label>
-        <select value={txType} onChange={(e) => setTxType(e.target.value)} style={s}>
-          <option value="incoming">Входящая</option>
-          <option value="outgoing">Исходящая</option>
-        </select>
+    <div style={{ 
+      background: '#111', 
+      borderRadius: 16, 
+      padding: 20, 
+      margin: '0 0 20px',
+      border: '1px solid rgba(255,255,255,0.08)'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Создать транзакцию</span>
+        {onClose && (
+          <button onClick={onClose} style={{ 
+            width: 32, height: 32, borderRadius: '50%', background: '#1a1a1a',
+            border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' 
+          }}>
+            <X size={18} color="#fff" />
+          </button>
+        )}
       </div>
-      <div style={mb}>
-        <label style={l}>Токен:</label>
-        <select value={txToken} onChange={(e) => setTxToken(e.target.value)} style={s}>
-          <option value="ETH">ETH</option>
-          <option value="USDT">USDT</option>
-          <option value="BNB">BNB</option>
-          <option value="SOL">SOL</option>
-          <option value="TON">TON</option>
-        </select>
+
+      {/* Type Selection */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {['incoming', 'outgoing'].map(t => (
+          <button
+            key={t}
+            onClick={() => setTxType(t)}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              background: txType === t ? (t === 'incoming' ? '#10b981' : '#ef4444') : '#1a1a1a',
+              color: txType === t ? '#fff' : 'rgba(255,255,255,0.5)',
+              fontSize: 14,
+              fontWeight: 600
+            }}
+          >
+            {t === 'incoming' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+            {t === 'incoming' ? 'Входящая' : 'Исходящая'}
+          </button>
+        ))}
       </div>
-      <div style={mb}><label style={l}>Адрес отправителя:</label><input type='text' placeholder='0x...' value={txFrom} onChange={(e) => setTxFrom(e.target.value)} style={s} /></div>
-      <div style={mb}><label style={l}>Адрес получателя:</label><input type='text' placeholder='0x...' value={txTo} onChange={(e) => setTxTo(e.target.value)} style={s} /></div>
-      <div style={mb}><label style={l}>Количество:</label><input type='number' placeholder='0.0' value={txAmount} onChange={(e) => setTxAmount(e.target.value)} style={s} /></div>
-      <div style={mb}><label style={l}>Сумма USD:</label><input type='number' placeholder='0.0' value={txUsd} onChange={(e) => setTxUsd(e.target.value)} style={s} /></div>
-      <div style={mb}><label style={l}>Комиссия:</label><select value={feeMode} onChange={(e) => { setFeeMode(e.target.value); if (e.target.value==='standard') setTxFee('0.002'); if (e.target.value==='fast') setTxFee('0.004'); }} style={s}><option value='standard'>Стандартная</option><option value='fast'>Быстрая</option><option value='custom'>Кастомная</option></select></div>
-      {feeMode === 'custom' && <div style={mb}><input type='number' placeholder='Комиссия' value={txFee} onChange={(e) => setTxFee(e.target.value)} style={s} /></div>}
-      <div style={{marginBottom:'16px',padding:'10px',background:'rgba(245,158,11,0.15)',borderRadius:'8px',textAlign:'center'}}><span style={{fontSize:'12px',color:'#f59e0b',fontWeight:'600'}}>Таймер: {getTimer()}</span></div>
-      <button onClick={createTransaction} style={{width:'100%',padding:'12px',background:'#10b981',border:'none',borderRadius:'8px',color:'#fff',fontSize:'14px',fontWeight:'600',cursor:'pointer'}}>Создать</button></div>);}
+
+      {/* Token Selection */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Токен</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {tokens.map(t => (
+            <button
+              key={t}
+              onClick={() => setTxToken(t)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 20,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                background: txToken === t ? '#2563eb' : '#1a1a1a',
+                color: txToken === t ? '#fff' : 'rgba(255,255,255,0.5)'
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* From Address */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Адрес отправителя</label>
+        <input
+          type="text"
+          placeholder="0x... (Ethereum/BNB) или Solana/TON адрес"
+          value={txFrom}
+          onChange={(e) => setTxFrom(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: '#1a1a1a',
+            border: `1px solid ${txFrom && !isValidAddress(txFrom) ? '#ef4444' : '#333'}`,
+            borderRadius: 12,
+            color: '#fff',
+            fontSize: 14,
+            outline: 'none'
+          }}
+        />
+        {txFrom && !isValidAddress(txFrom) && (
+          <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>Неверный формат адреса</span>
+        )}
+      </div>
+
+      {/* To Address */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Адрес получателя</label>
+        <input
+          type="text"
+          placeholder="0x... (Ethereum/BNB) или Solana/TON адрес"
+          value={txTo}
+          onChange={(e) => setTxTo(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: '#1a1a1a',
+            border: `1px solid ${txTo && !isValidAddress(txTo) ? '#ef4444' : '#333'}`,
+            borderRadius: 12,
+            color: '#fff',
+            fontSize: 14,
+            outline: 'none'
+          }}
+        />
+        {txTo && !isValidAddress(txTo) && (
+          <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>Неверный формат адреса</span>
+        )}
+      </div>
+
+      {/* Amount */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Количество</label>
+        <input
+          type="number"
+          placeholder="0.0"
+          value={txAmount}
+          onChange={(e) => setTxAmount(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: '#1a1a1a',
+            border: '1px solid #333',
+            borderRadius: 12,
+            color: '#fff',
+            fontSize: 14,
+            outline: 'none'
+          }}
+        />
+      </div>
+
+      {/* USD Amount */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Сумма в USD (опционально)</label>
+        <input
+          type="number"
+          placeholder="0.00"
+          value={txUsd}
+          onChange={(e) => setTxUsd(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: '#1a1a1a',
+            border: '1px solid #333',
+            borderRadius: 12,
+            color: '#fff',
+            fontSize: 14,
+            outline: 'none'
+          }}
+        />
+      </div>
+
+      {error && (
+        <div style={{ 
+          background: 'rgba(239,68,68,0.1)', 
+          border: '1px solid rgba(239,68,68,0.3)', 
+          borderRadius: 8, 
+          padding: '10px 12px',
+          marginBottom: 12
+        }}>
+          <span style={{ fontSize: 13, color: '#ef4444' }}>{error}</span>
+        </div>
+      )}
+
+      <button
+        onClick={createTransaction}
+        style={{
+          width: '100%',
+          padding: '14px',
+          background: txType === 'incoming' ? '#10b981' : '#ef4444',
+          border: 'none',
+          borderRadius: 12,
+          color: '#fff',
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8
+        }}
+      >
+        <Plus size={20} />
+        Создать {txType === 'incoming' ? 'входящую' : 'исходящую'} транзакцию
+      </button>
+    </div>
+  );
+}
