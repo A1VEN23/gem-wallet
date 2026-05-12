@@ -4266,173 +4266,133 @@ function TxDeclinedSuccessModal({ onClose }) {
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
 
 function TxDetail({ tx, onClose, onCancel }) {
-
   const [copied,setCopied]=useState(false);
-
+  const [showHash, setShowHash] = useState(true);
   const [showCancelConfirm,setShowCancelConfirm]=useState(false);
-
   const [showDeclinedSuccess,setShowDeclinedSuccess]=useState(false);
-
   const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
-
-  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
-
+  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight,incoming:ArrowDownLeft,outgoing:ArrowUpRight};
   const Icon=icons[tx.type]||ArrowUpRight;
-
-  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
-
+  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
   const status = tx.status||"confirmed";
-
   
-
   function handleCancel() {
-
     onCancel(tx.id);
-
     setShowDeclinedSuccess(true);
-
   }
 
-
-
   useEffect(()=>{
-
     if(tx.status!=="pending"||!tx.cancelTime)return;
-
     const interval=setInterval(()=>{
-
       const left=Math.max(0,tx.cancelTime-Date.now());
-
       setTimeLeft(left);
-
       if(left===0)clearInterval(interval);
-
     },1000);
-
     return()=>clearInterval(interval);
-
   },[tx.status,tx.cancelTime]);
 
+  const getRealisticFee = () => {
+    if (tx.fee) return tx.fee;
+    const baseFees = {
+      ETH: 0.0005, BNB: 0.0002, SOL: 0.000005, TON: 0.005, LTC: 0.00001, ARB: 0.0001, USDT: 0.85
+    };
+    const sym = tx.sym || tx.token || "ETH";
+    const fee = baseFees[sym] || 0.50;
+    return typeof fee === 'number' && sym !== 'USDT' ? `~${fee.toFixed(6)} ${sym}` : `~$${fee}`;
+  };
+
+  const displayTime = tx.time || (tx.timestamp ? new Date(tx.timestamp).toLocaleString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }) : new Date().toLocaleString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }));
+
+  const displayAddr = tx.addr || tx.from || tx.to || "0x" + Math.random().toString(16).slice(2, 42);
+
   return (
-
     <Sheet onClose={onClose} title="Transaction Details">
-
       <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:10}}>
-
         <div style={{textAlign:"center",padding:"12px 0 20px"}}>
-
-          <div style={{width:56,height:56,borderRadius:"50%",
-
-            background:tx.type==="send"?"#2d0c0c":tx.type==="receive"?"#052e16":"#0d1033",
-
-            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",
-
-            border:`1px solid ${tx.color}44`}}>
-
-            <Icon size={24} color={tx.color}/>
-
+          <div style={{width:64,height:64,borderRadius:"50%",
+            background:tx.type==="send"||tx.type==="outgoing"?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)",
+            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",
+            border:`2px solid ${statusColors[status]}44`}}>
+            <Icon size={28} color={statusColors[status]}/>
           </div>
-
-          <p style={{fontSize:24,fontWeight:700,color:tx.type==="send"?"#EF4444":"#22C55E",margin:0}}>{tx.usd}</p>
-
-          <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:"4px 0 0",textTransform:"capitalize"}}>{tx.type} · {tx.label}</p>
-
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:statusColors[status]+"22",
-
-            borderRadius:20,padding:"4px 12px",marginTop:10,border:`1px solid ${statusColors[status]}44`}}>
-
-            <div style={{width:6,height:6,borderRadius:"50%",background:statusColors[status]}}/>
-
-            <span style={{fontSize:12,color:statusColors[status],fontWeight:600,textTransform:"capitalize"}}>{status}</span>
-
+          <p style={{fontSize:28,fontWeight:800,color:"#fff",margin:0}}>{tx.usd || "$0.00"}</p>
+          <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",margin:"6px 0 0",fontWeight:500}}>
+            {tx.type === 'incoming' || tx.type === 'receive' ? 'Получено' : 'Отправлено'} · {tx.label || tx.sym || tx.token || 'Token'}
+          </p>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:statusColors[status]+"15",
+            borderRadius:20,padding:"6px 14px",marginTop:12,border:`1px solid ${statusColors[status]}30`}}>
+            {status === 'confirmed' || status === 'completed' ? <CheckCircle size={14} color="#22C55E"/> : 
+             status === 'pending' ? <Clock size={14} color="#F59E0B"/> : <AlertCircle size={14} color="#EF4444"/>}
+            <span style={{fontSize:13,color:statusColors[status],fontWeight:700,textTransform:"capitalize"}}>
+              {status === 'confirmed' || status === 'completed' ? 'Выполнено' : status}
+            </span>
           </div>
-
         </div>
 
-        {[status==="declined"?["Status","❌ Declined"]:["Status",status==="confirmed"?"✅ Confirmed":status==="pending"?"⏳ Pending":"❌ Failed"],
+        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:20,padding:"8px",border:"1px solid rgba(255,255,255,0.05)"}}>
+          {[
+            ["Status", status === 'confirmed' || status === 'completed' ? <span style={{color:"#22C55E"}}>✅ Completed</span> : <span style={{color:"#EF4444"}}>❌ Failed</span>],
+            ["Time", displayTime],
+            ["Address", displayAddr.slice(0,12)+"..."+displayAddr.slice(-10)],
+            ["Fee", getRealisticFee()],
+            ["Block", tx.block || "#"+Math.floor(19000000+Math.random()*500000).toLocaleString()],
+          ].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:k==="Block"?"none":"1px solid rgba(255,255,255,0.02)"}}>
+              <span style={{fontSize:14,color:"rgba(255,255,255,0.4)"}}>{k}</span>
+              <span style={{fontSize:14,color:"#fff",fontWeight:500}}>{v}</span>
+            </div>
+          ))}
+        </div>
 
-          ["Time",tx.time],["Address",tx.addr],["Fee","~$0.84"],
-
-          tx.status==="pending"&&timeLeft>0?["Cancel in",`${Math.floor(timeLeft/60000)}m ${Math.floor((timeLeft%60000)/1000)}s`]:null,
-
-          ["Block",tx.block||"#"+Math.floor(19000000+Math.random()*500000).toLocaleString()]].filter(Boolean).map(([k,v])=>(
-
-          <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 16px",background:"#1a1a1a",borderRadius:12}}>
-
-            <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>{k}</span>
-
-            <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{v}</span>
-
+        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:20,padding:"16px",border:"1px solid rgba(255,255,255,0.05)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>TX Hash</p>
+            <button 
+              onClick={() => setShowHash(!showHash)}
+              style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}
+            >
+              {showHash ? <EyeOff size={16}/> : <Eye size={16}/>}
+            </button>
           </div>
-
-        ))}
-
-        <div style={{background:"#1a1a1a",borderRadius:12,padding:"12px 16px"}}>
-
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>TX Hash</p>
-
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{tx.hash||genTxHash()}</p>
-
+          <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.4}}>
+            {showHash ? (tx.hash || genTxHash()) : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+          </p>
         </div>
 
         {showCancelConfirm&&(
-
           <CancelConfirmModal 
-
             tx={tx} 
-
             onConfirm={handleCancel} 
-
             onClose={()=>setShowCancelConfirm(false)}/>
-
         )}
-
         {showDeclinedSuccess&&(
-
           <TxDeclinedSuccessModal onClose={()=>{setShowDeclinedSuccess(false);onClose();}}/>
-
         )}
-
         {status==="pending"&&onCancel&&(
-
           <button onClick={()=>setShowCancelConfirm(true)}
-
             style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid #EF444444",
-
               background:"#EF444422",color:"#EF4444",
-
               fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-
             <X size={15}/> Cancel Transaction
-
           </button>
-
         )}
-
         <button onClick={()=>{
-
-            if(tx.hash&&navigator.clipboard)navigator.clipboard.writeText(tx.hash);
-
+            const hashToCopy = tx.hash || "0x...";
+            if(navigator.clipboard)navigator.clipboard.writeText(hashToCopy);
             setCopied(true);setTimeout(()=>setCopied(false),2000);
-
           }}
-
           style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
-
             background:"rgba(255,255,255,0.04)",color:copied?"#22C55E":"rgba(255,255,255,0.6)",
-
             fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-
           {copied?<><Check size={15}/>Copied!</>:<><Copy size={15}/>Copy TX Hash</>}
-
         </button>
-
       </div>
-
     </Sheet>
-
   );
-
 }
 
 

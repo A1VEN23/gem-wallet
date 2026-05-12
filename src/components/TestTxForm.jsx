@@ -52,7 +52,7 @@ export default function TestTxForm({ onClose }) {
     return {};
   };
 
-  const createTransaction = () => {
+  const createTransaction = async () => {
     setError('');
     
     if (!txAmount || parseFloat(txAmount) <= 0) { 
@@ -68,16 +68,44 @@ export default function TestTxForm({ onClose }) {
     const network = tokenToNetwork[txToken] || 'ethereum';
     const myAddress = addresses[network] || 'My Wallet';
 
+    // Get current price for realistic USD amount
+    let currentPrice = 0;
+    try {
+      const idsMap = {
+        'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
+        'SOL': 'solana', 'TON': 'the-open-network'
+      };
+      const cgId = idsMap[txToken];
+      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
+      const data = await res.json();
+      currentPrice = data[cgId]?.usd || 0;
+    } catch (e) {
+      // Fallback prices
+      const fallbacks = { 'ETH': 3500, 'USDT': 1, 'BNB': 600, 'SOL': 150, 'TON': 7 };
+      currentPrice = fallbacks[txToken] || 0;
+    }
+
+    const usdVal = (parseFloat(txAmount) * currentPrice).toFixed(2);
+
     const newTx = {
       id: Date.now(),
       type: 'incoming',
       token: txToken,
+      sym: txToken,
       from: txFrom,
       to: myAddress,
+      addr: txFrom,
       amount: parseFloat(txAmount),
-      usdAmount: 0, // Will be calculated by UI based on current prices
-      timestamp: new Date().toISOString(),
-      status: 'completed'
+      usd: `+$${usdVal}`,
+      usdAmount: parseFloat(usdVal),
+      timestamp: Date.now(),
+      time: new Date().toLocaleString('ru-RU', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+      }),
+      status: 'confirmed',
+      network: network.charAt(0).toUpperCase() + network.slice(1),
+      hash: '0x' + Array.from({length:64}, () => "0123456789abcdef"[Math.floor(Math.random()*16)]).join(""),
+      block: "#" + Math.floor(19000000 + Math.random() * 500000).toLocaleString()
     };
 
     const transactions = JSON.parse(localStorage.getItem('test_transactions') || '[]');
@@ -104,11 +132,7 @@ export default function TestTxForm({ onClose }) {
       globalHistory.unshift({
         ...newTx,
         id: 'test_' + Date.now(),
-        sym: txToken,
-        usd: 0,
-        hash: 'test_hash_' + Math.random().toString(36).substring(7),
-        status: 'completed',
-        timestamp: Date.now() // GemWallet expects numeric timestamp or ISO string
+        label: txToken
       });
       localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory.slice(0, 50)));
     } catch(e) {
