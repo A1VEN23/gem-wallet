@@ -1636,6 +1636,19 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const feeConfig = FEE_UNITS[sel.sym] || { unit: "gwei", kind: "evm", limit: 21000 };
   const unit = feeConfig.unit;
 
+  const getNetworkFee = () => {
+    if (feeMode === "custom") return parseFloat(customFee) || 0;
+    
+    if (sel.sym === 'USDT' && curNet) {
+      const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
+      const feeSymbol = networkMap[curNet.id] || 'ETH';
+      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
+      return fees[feeSpeed] || fees.medium;
+    }
+    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+    return fees[feeSpeed] || fees.medium;
+  };
+
   const getFeeUsd = (val) => {
     if (!feeConfig) return 0;
     const v = parseFloat(val) || 0;
@@ -1698,19 +1711,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
       setAddrError("");
     }
   }
-
-  const getNetworkFee = () => {
-    if (feeMode === "custom") return parseFloat(customFee) || 0;
-    
-    if (sel.sym === 'USDT' && curNet) {
-      const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
-      const feeSymbol = networkMap[curNet.id] || 'ETH';
-      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
-      return fees[feeSpeed] || fees.medium;
-    }
-    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
-    return fees[feeSpeed] || fees.medium;
-  };
 
   function next() {
     if(step===1){

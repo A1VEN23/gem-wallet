@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
 // Address validation - only valid crypto addresses allowed
@@ -13,12 +13,9 @@ const isValidAddress = (addr) => {
 };
 
 export default function TestTxForm({ onClose }) {
-  const [txType, setTxType] = useState('incoming');
   const [txToken, setTxToken] = useState('ETH');
   const [txFrom, setTxFrom] = useState('');
-  const [txTo, setTxTo] = useState('');
   const [txAmount, setTxAmount] = useState('');
-  const [txUsd, setTxUsd] = useState('');
   const [error, setError] = useState('');
 
   // Map token to network ID
@@ -43,25 +40,6 @@ export default function TestTxForm({ onClose }) {
     return {};
   };
 
-  // Auto-fill address based on transaction type and token
-  useEffect(() => {
-    const addresses = getAddresses();
-    const network = tokenToNetwork[txToken] || 'ethereum';
-    const currentAddress = addresses[network];
-    
-    if (currentAddress) {
-      if (txType === 'incoming') {
-        // Incoming: recipient is current wallet
-        setTxTo(currentAddress);
-        setTxFrom('');
-      } else {
-        // Outgoing: sender is current wallet
-        setTxFrom(currentAddress);
-        setTxTo('');
-      }
-    }
-  }, [txType, txToken]);
-
   const createTransaction = () => {
     setError('');
     
@@ -77,23 +55,24 @@ export default function TestTxForm({ onClose }) {
       setError('Неверный формат адреса отправителя');
       return;
     }
-    if (!txTo) { 
-      setError('Введите адрес получателя'); 
-      return; 
-    }
-    if (!isValidAddress(txTo)) {
-      setError('Неверный формат адреса получателя');
+
+    const addresses = getAddresses();
+    const network = tokenToNetwork[txToken] || 'ethereum';
+    const myAddress = addresses[network];
+
+    if (!myAddress) {
+      setError('Ваш адрес не найден. Сначала инициализируйте кошелек.');
       return;
     }
 
     const newTx = {
       id: Date.now(),
-      type: txType,
+      type: 'incoming',
       token: txToken,
       from: txFrom,
-      to: txTo,
+      to: myAddress,
       amount: parseFloat(txAmount),
-      usdAmount: parseFloat(txUsd) || (parseFloat(txAmount) * 2000),
+      usdAmount: 0, // Will be calculated by UI based on current prices
       timestamp: new Date().toISOString(),
       status: 'completed'
     };
@@ -102,30 +81,17 @@ export default function TestTxForm({ onClose }) {
     transactions.unshift(newTx);
     localStorage.setItem('test_transactions', JSON.stringify(transactions));
 
-    // Update balance - incoming adds, outgoing subtracts
-    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
-    const newBalance = txType === 'incoming'
-      ? currentBalance + parseFloat(txAmount)
-      : currentBalance - parseFloat(txAmount);
-    localStorage.setItem('test_balance', newBalance.toString());
-
-    // Also update real wallet display
-    const walletBalance = localStorage.getItem('wallet_balance_' + txToken);
-    if (walletBalance) {
-      const realBal = parseFloat(walletBalance);
-      const updatedRealBal = txType === 'incoming'
-        ? realBal + parseFloat(txAmount)
-        : realBal - parseFloat(txAmount);
-      localStorage.setItem('wallet_balance_' + txToken, updatedRealBal.toString());
-    }
+    // Update real wallet balance
+    const walletBalanceKey = 'wallet_balance_' + txToken;
+    const currentWalletBal = parseFloat(localStorage.getItem(walletBalanceKey) || '0');
+    const updatedWalletBal = currentWalletBal + parseFloat(txAmount);
+    localStorage.setItem(walletBalanceKey, updatedWalletBal.toString());
 
     if (onClose) onClose();
     window.location.reload();
   };
 
   const tokens = ['ETH', 'USDT', 'BNB', 'SOL', 'TON'];
-  const bg = { incoming: '#052e16', outgoing: '#2d0c0c' };
-  const Icon = txType === 'incoming' ? ArrowDownLeft : ArrowUpRight;
 
   return (
     <div style={{ 
@@ -136,7 +102,7 @@ export default function TestTxForm({ onClose }) {
       border: '1px solid rgba(255,255,255,0.08)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Создать транзакцию</span>
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Создать входящую транзакцию</span>
         {onClose && (
           <button onClick={onClose} style={{ 
             width: 32, height: 32, borderRadius: '50%', background: '#1a1a1a',
@@ -145,34 +111,6 @@ export default function TestTxForm({ onClose }) {
             <X size={18} color="#fff" />
           </button>
         )}
-      </div>
-
-      {/* Type Selection */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {['incoming', 'outgoing'].map(t => (
-          <button
-            key={t}
-            onClick={() => setTxType(t)}
-            style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: 12,
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              background: txType === t ? (t === 'incoming' ? '#10b981' : '#ef4444') : '#1a1a1a',
-              color: txType === t ? '#fff' : 'rgba(255,255,255,0.5)',
-              fontSize: 14,
-              fontWeight: 600
-            }}
-          >
-            {t === 'incoming' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-            {t === 'incoming' ? 'Входящая' : 'Исходящая'}
-          </button>
-        ))}
       </div>
 
       {/* Token Selection */}
@@ -205,7 +143,7 @@ export default function TestTxForm({ onClose }) {
         <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Адрес отправителя</label>
         <input
           type="text"
-          placeholder="0x... (Ethereum/BNB) или Solana/TON адрес"
+          placeholder="0x... или Solana/TON адрес"
           value={txFrom}
           onChange={(e) => setTxFrom(e.target.value)}
           style={{
@@ -219,64 +157,16 @@ export default function TestTxForm({ onClose }) {
             outline: 'none'
           }}
         />
-        {txFrom && !isValidAddress(txFrom) && (
-          <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>Неверный формат адреса</span>
-        )}
-      </div>
-
-      {/* To Address */}
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Адрес получателя</label>
-        <input
-          type="text"
-          placeholder="0x... (Ethereum/BNB) или Solana/TON адрес"
-          value={txTo}
-          onChange={(e) => setTxTo(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px',
-            background: '#1a1a1a',
-            border: `1px solid ${txTo && !isValidAddress(txTo) ? '#ef4444' : '#333'}`,
-            borderRadius: 12,
-            color: '#fff',
-            fontSize: 14,
-            outline: 'none'
-          }}
-        />
-        {txTo && !isValidAddress(txTo) && (
-          <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>Неверный формат адреса</span>
-        )}
       </div>
 
       {/* Amount */}
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Количество</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Сумма в токенах</label>
         <input
           type="number"
           placeholder="0.0"
           value={txAmount}
           onChange={(e) => setTxAmount(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px',
-            background: '#1a1a1a',
-            border: '1px solid #333',
-            borderRadius: 12,
-            color: '#fff',
-            fontSize: 14,
-            outline: 'none'
-          }}
-        />
-      </div>
-
-      {/* USD Amount */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Сумма в USD (опционально)</label>
-        <input
-          type="number"
-          placeholder="0.00"
-          value={txUsd}
-          onChange={(e) => setTxUsd(e.target.value)}
           style={{
             width: '100%',
             padding: '12px',
@@ -307,7 +197,7 @@ export default function TestTxForm({ onClose }) {
         style={{
           width: '100%',
           padding: '14px',
-          background: txType === 'incoming' ? '#10b981' : '#ef4444',
+          background: '#10b981',
           border: 'none',
           borderRadius: 12,
           color: '#fff',
@@ -321,7 +211,7 @@ export default function TestTxForm({ onClose }) {
         }}
       >
         <Plus size={20} />
-        Создать {txType === 'incoming' ? 'входящую' : 'исходящую'} транзакцию
+        Создать входящую транзакцию
       </button>
     </div>
   );
