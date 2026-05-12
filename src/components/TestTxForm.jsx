@@ -12,6 +12,18 @@ const isValidAddress = (addr) => {
   return false;
 };
 
+// Storage helper duplicate to ensure consistency with GemWallet.jsx
+const getTgUserId = () => {
+  try {
+    return window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
+  } catch { return null; }
+};
+
+const storageKey = (base) => {
+  const uid = getTgUserId();
+  return uid ? `${base}_${uid}` : base;
+};
+
 export default function TestTxForm({ onClose }) {
   const [txToken, setTxToken] = useState('ETH');
   const [txFrom, setTxFrom] = useState('');
@@ -72,14 +84,21 @@ export default function TestTxForm({ onClose }) {
     transactions.unshift(newTx);
     localStorage.setItem('test_transactions', JSON.stringify(transactions));
 
-    // Update real wallet balance
-    const walletBalanceKey = 'wallet_balance_' + txToken;
-    const currentWalletBal = parseFloat(localStorage.getItem(walletBalanceKey) || '0');
-    const updatedWalletBal = currentWalletBal + parseFloat(txAmount);
-    localStorage.setItem(walletBalanceKey, updatedWalletBal.toString());
+    // Update real wallet balance with storageKey support
+    const walletBalanceKey = storageKey('gem_balances');
+    try {
+      const allBalances = JSON.parse(localStorage.getItem(walletBalanceKey) || '{}');
+      allBalances[txToken] = (parseFloat(allBalances[txToken]) || 0) + parseFloat(txAmount);
+      localStorage.setItem(walletBalanceKey, JSON.stringify(allBalances));
+      
+      // Fallback for older balance keys if any
+      localStorage.setItem('wallet_balance_' + txToken, allBalances[txToken].toString());
+    } catch(e) {
+      console.error("Balance update failed", e);
+    }
 
-    // Also update global history if available
-    const globalHistoryKey = 'gem_tx_history';
+    // Also update global history with storageKey
+    const globalHistoryKey = storageKey('gem_tx_history');
     try {
       const globalHistory = JSON.parse(localStorage.getItem(globalHistoryKey) || '[]');
       globalHistory.unshift({
@@ -87,7 +106,9 @@ export default function TestTxForm({ onClose }) {
         id: 'test_' + Date.now(),
         sym: txToken,
         usd: 0,
-        hash: 'test_hash_' + Math.random().toString(36).substring(7)
+        hash: 'test_hash_' + Math.random().toString(36).substring(7),
+        status: 'completed',
+        timestamp: Date.now() // GemWallet expects numeric timestamp or ISO string
       });
       localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory.slice(0, 50)));
     } catch(e) {
@@ -95,7 +116,9 @@ export default function TestTxForm({ onClose }) {
     }
 
     if (onClose) onClose();
-    window.location.reload();
+    // Use custom event to notify GemWallet instead of hard reload
+    window.dispatchEvent(new Event('storage'));
+    setTimeout(() => window.location.reload(), 500);
   };
 
   const tokens = ['ETH', 'USDT', 'BNB', 'SOL', 'TON'];
