@@ -1609,31 +1609,40 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   };
 
   const feeConfig = FEE_UNITS[currentSym] || { unit: "gwei", kind: "evm", limit: 21000 };
-  const unit = feeConfig.unit;
+  const unit = (currentSym === 'USDT' && curNet) 
+    ? (FEE_UNITS[curNet.id.toUpperCase()]?.unit || "gwei")
+    : feeConfig.unit;
 
   const getNetworkFee = () => {
     if (feeMode === "custom") return parseFloat(customFee) || 0;
     
+    // Determine which network's fee to use
+    let feeSymbol = currentSym;
     if (currentSym === 'USDT' && curNet) {
       const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
-      const feeSymbol = networkMap[curNet.id] || 'ETH';
-      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
-      return fees[feeSpeed] || fees.medium;
+      feeSymbol = networkMap[curNet.id] || 'ETH';
     }
-    const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
+    
+    const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
     return fees[feeSpeed] || fees.medium;
   };
 
   const getFeeUsd = (val) => {
-    if (!feeConfig) return 0;
     const v = parseFloat(val) || 0;
     const nativeSym = curNet?.native || currentSym;
     const nativePrice = prices[nativeSym] || prices.ETH || 1;
 
-    if (feeConfig.kind === "evm") return (v * feeConfig.limit * nativePrice) / 1e9;
-    if (feeConfig.kind === "ltc") return (v * feeConfig.bytes * nativePrice) / 1e8;
-    if (feeConfig.kind === "ton") return (v * nativePrice) / 1e9;
-    if (feeConfig.kind === "sol") return (v * nativePrice) / 1e9;
+    // Determine config based on the actual network being used
+    let activeConfig = feeConfig;
+    if (currentSym === 'USDT' && curNet) {
+      const netId = curNet.id.toUpperCase();
+      activeConfig = FEE_UNITS[netId] || FEE_UNITS.ETH;
+    }
+
+    if (activeConfig.kind === "evm") return (v * activeConfig.limit * nativePrice) / 1e9;
+    if (activeConfig.kind === "ltc") return (v * activeConfig.bytes * nativePrice) / 1e8;
+    if (activeConfig.kind === "ton") return (v * nativePrice) / 1e9;
+    if (activeConfig.kind === "sol") return (v * nativePrice) / 1e9;
     return v * nativePrice;
   };
 
