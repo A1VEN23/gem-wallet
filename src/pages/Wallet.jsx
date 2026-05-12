@@ -7,6 +7,10 @@ export default function Wallet() {
   const { addresses, balances, networks, activeNetwork, setActiveNetwork, refreshBalance, lock } = useWallet();
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showQuickTx, setShowQuickTx] = useState(false);
+  const [txType, setTxType] = useState('incoming');
+  const [txAmount, setTxAmount] = useState('');
+  const [txToken, setTxToken] = useState('ETH');
   const navigate = useNavigate();
 
   const net = networks[activeNetwork];
@@ -32,6 +36,39 @@ export default function Wallet() {
     setRefreshing(true);
     await refreshBalance(activeNetwork);
     setRefreshing(false);
+  };
+
+  const createQuickTransaction = () => {
+    if (!txAmount) {
+      alert('Введите количество');
+      return;
+    }
+
+    const newTx = {
+      id: Date.now(),
+      type: txType,
+      token: txToken,
+      amount: parseFloat(txAmount),
+      usdAmount: parseFloat(txAmount) * 2000, // примерная цена
+      timestamp: new Date().toISOString(),
+      status: 'completed'
+    };
+
+    const transactions = JSON.parse(localStorage.getItem('test_transactions') || '[]');
+    transactions.unshift(newTx);
+    localStorage.setItem('test_transactions', JSON.stringify(transactions));
+
+    // Update balance
+    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
+    const newBalance = txType === 'incoming' 
+      ? currentBalance + parseFloat(txAmount)
+      : currentBalance - parseFloat(txAmount);
+    localStorage.setItem('test_balance', newBalance.toString());
+
+    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!`);
+    setTxAmount('');
+    setShowQuickTx(false);
+    window.location.reload();
   };
 
   const shortAddr = address
@@ -96,6 +133,104 @@ export default function Wallet() {
             fontWeight: '500'
           }}>
             Тестовый режим (создано транзакций: {JSON.parse(localStorage.getItem('test_transactions') || '[]').length})
+          </div>
+        )}
+      </div>
+
+      {/* Quick Transaction Button */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <button 
+          onClick={() => setShowQuickTx(!showQuickTx)}
+          style={{ 
+            width: '100%', 
+            padding: '16px', 
+            background: 'linear-gradient(135deg, #10b981, #059669)', 
+            border: 'none', 
+            borderRadius: '12px', 
+            color: '#fff', 
+            fontSize: '16px', 
+            fontWeight: '600', 
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          💰 Создать транзакцию
+        </button>
+
+        {showQuickTx && (
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '16px', 
+            background: 'var(--card)', 
+            border: '2px solid #10b981', 
+            borderRadius: '12px' 
+          }}>
+            <h4 style={{ margin: '0 0 12px 0', color: 'var(--text)' }}>💰 Быстрая транзакция</h4>
+            
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Тип:
+              </label>
+              <select 
+                value={txType} 
+                onChange={(e) => setTxType(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              >
+                <option value="incoming">Входящая</option>
+                <option value="outgoing">Исходящая</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Токен:
+              </label>
+              <select 
+                value={txToken} 
+                onChange={(e) => setTxToken(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              >
+                <option value="ETH">ETH</option>
+                <option value="USDT">USDT</option>
+                <option value="BNB">BNB</option>
+                <option value="SOL">SOL</option>
+                <option value="TON">TON</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Количество:
+              </label>
+              <input
+                type="number"
+                placeholder="0.0"
+                value={txAmount}
+                onChange={(e) => setTxAmount(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+              />
+            </div>
+
+            <button 
+              onClick={createQuickTransaction}
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                background: '#10b981', 
+                border: 'none', 
+                borderRadius: '8px', 
+                color: '#fff', 
+                fontSize: '14px', 
+                fontWeight: '600', 
+                cursor: 'pointer' 
+              }}
+            >
+              Создать
+            </button>
           </div>
         )}
       </div>

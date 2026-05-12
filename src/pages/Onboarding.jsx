@@ -49,6 +49,8 @@ export default function Onboarding() {
               <span className="gem-inner">◈</span>
             </div>
           </div>
+          <h1>Gem Wallet</h1>
+          <p className="subtitle">Некастодиальный крипто-кошелёк<br />в Telegram</p>
           <div className="onboard-btns">
             <button className="btn-primary" onClick={() => setStep('create')}>
               Создать кошелёк
