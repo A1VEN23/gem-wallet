@@ -11,6 +11,12 @@ export default function Wallet() {
   const [txType, setTxType] = useState('incoming');
   const [txAmount, setTxAmount] = useState('');
   const [txToken, setTxToken] = useState('ETH');
+  const [txFrom, setTxFrom] = useState('');
+  const [txTo, setTxTo] = useState('');
+  const [txFee, setTxFee] = useState('');
+  const [txUsd, setTxUsd] = useState('');
+  const [feeMode, setFeeMode] = useState('standard');
+  const [txTimer, setTxTimer] = useState(null);
   const navigate = useNavigate();
 
   const net = networks[activeNetwork];
@@ -38,18 +44,42 @@ export default function Wallet() {
     setRefreshing(false);
   };
 
+  const STANDARD_FEE = 0.002;
+
+  const getFeeValue = () => {
+    if (feeMode === 'standard') return STANDARD_FEE;
+    if (feeMode === 'fast') return STANDARD_FEE * 2;
+    return parseFloat(txFee) || 0;
+  };
+
+  const getTimer = () => {
+    if (feeMode === 'standard') return '1-2 мин';
+    if (feeMode === 'fast') return '30-60 сек';
+    const customVal = parseFloat(txFee) || 0;
+    if (customVal < STANDARD_FEE) return '30-60 мин';
+    if (customVal >= STANDARD_FEE * 2) return '30-60 сек';
+    return '1-2 мин';
+  };
+
   const createQuickTransaction = () => {
-    if (!txAmount) {
-      alert('Введите количество');
-      return;
-    }
+    if (!txAmount) { alert('Введите количество'); return; }
+    if (!txFrom) { alert('Введите адрес отправителя'); return; }
+    if (!txTo) { alert('Введите адрес получателя'); return; }
+
+    const feeVal = getFeeValue();
+    const timer = getTimer();
 
     const newTx = {
       id: Date.now(),
       type: txType,
       token: txToken,
+      from: txFrom,
+      to: txTo,
       amount: parseFloat(txAmount),
-      usdAmount: parseFloat(txAmount) * 2000, // примерная цена
+      fee: feeVal,
+      feeMode: feeMode,
+      usdAmount: parseFloat(txUsd) || (parseFloat(txAmount) * 2000),
+      timer: timer,
       timestamp: new Date().toISOString(),
       status: 'completed'
     };
@@ -58,15 +88,15 @@ export default function Wallet() {
     transactions.unshift(newTx);
     localStorage.setItem('test_transactions', JSON.stringify(transactions));
 
-    // Update balance
     const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
     const newBalance = txType === 'incoming' 
       ? currentBalance + parseFloat(txAmount)
-      : currentBalance - parseFloat(txAmount);
+      : currentBalance - parseFloat(txAmount) - feeVal;
     localStorage.setItem('test_balance', newBalance.toString());
 
-    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!`);
-    setTxAmount('');
+    setTxTimer(timer);
+    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!\nКомиссия: ${feeVal} | Таймер: ${timer}`);
+    setTxAmount(''); setTxFrom(''); setTxTo(''); setTxFee(''); setTxUsd('');
     setShowQuickTx(false);
     window.location.reload();
   };
@@ -139,27 +169,7 @@ export default function Wallet() {
 
       {/* Quick Transaction Button */}
       <div style={{ margin: '0 16px 16px' }}>
-        <button 
-          onClick={() => setShowQuickTx(!showQuickTx)}
-          style={{ 
-            width: '100%', 
-            padding: '16px', 
-            background: 'linear-gradient(135deg, #10b981, #059669)', 
-            border: 'none', 
-            borderRadius: '12px', 
-            color: '#fff', 
-            fontSize: '16px', 
-            fontWeight: '600', 
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          💰 Создать транзакцию
-        </button>
+        <button onClick={() => setShowQuickTx(!showQuickTx)} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '16px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>💰 СОЗДАТЬ ТРАНЗАКЦИЮ</button>
 
         {showQuickTx && (
           <div style={{ 
@@ -169,31 +179,19 @@ export default function Wallet() {
             border: '2px solid #10b981', 
             borderRadius: '12px' 
           }}>
-            <h4 style={{ margin: '0 0 12px 0', color: 'var(--text)' }}>💰 Быстрая транзакция</h4>
+            <h4 style={{ margin: '0 0 12px 0', color: '#10b981', textAlign: 'center', fontSize: '16px' }}>💰 СОЗДАНИЕ ТРАНЗАКЦИИ</h4>
             
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Тип:
-              </label>
-              <select 
-                value={txType} 
-                onChange={(e) => setTxType(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              >
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Тип:</label>
+              <select value={txType} onChange={(e) => setTxType(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
                 <option value="incoming">Входящая</option>
                 <option value="outgoing">Исходящая</option>
               </select>
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Токен:
-              </label>
-              <select 
-                value={txToken} 
-                onChange={(e) => setTxToken(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              >
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Токен:</label>
+              <select value={txToken} onChange={(e) => setTxToken(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
                 <option value="ETH">ETH</option>
                 <option value="USDT">USDT</option>
                 <option value="BNB">BNB</option>
@@ -202,35 +200,43 @@ export default function Wallet() {
               </select>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Количество:
-              </label>
-              <input
-                type="number"
-                placeholder="0.0"
-                value={txAmount}
-                onChange={(e) => setTxAmount(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              />
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Адрес отправителя:</label>
+              <input type="text" placeholder="0x..." value={txFrom} onChange={(e) => setTxFrom(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
             </div>
 
-            <button 
-              onClick={createQuickTransaction}
-              style={{ 
-                width: '100%', 
-                padding: '12px', 
-                background: '#10b981', 
-                border: 'none', 
-                borderRadius: '8px', 
-                color: '#fff', 
-                fontSize: '14px', 
-                fontWeight: '600', 
-                cursor: 'pointer' 
-              }}
-            >
-              Создать
-            </button>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Адрес получателя:</label>
+              <input type="text" placeholder="0x..." value={txTo} onChange={(e) => setTxTo(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Количество:</label>
+              <input type="number" placeholder="0.0" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Сумма USD:</label>
+              <input type="number" placeholder="0.0" value={txUsd} onChange={(e) => setTxUsd(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Комиссия:</label>
+              <select value={feeMode} onChange={(e) => { setFeeMode(e.target.value); if (e.target.value === 'standard') setTxFee('0.002'); if (e.target.value === 'fast') setTxFee('0.004'); }} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
+                <option value="standard">Стандартная (0.002)</option>
+                <option value="fast">Быстрая (0.004)</option>
+                <option value="custom">Кастомная</option>
+              </select>
+              {feeMode === 'custom' && (
+                <input type="number" placeholder="Комиссия" value={txFee} onChange={(e) => setTxFee(e.target.value)} style={{ width: '100%', padding: '8px', marginTop: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
+              )}
+            </div>
+
+            <div style={{ marginBottom: '16px', padding: '10px', background: 'rgba(245,158,11,0.15)', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: '600' }}>⏱ Таймер: {getTimer()}</span>
+            </div>
+
+            <button onClick={createQuickTransaction} style={{ width: '100%', padding: '12px', background: '#10b981', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Создать</button>
           </div>
         )}
       </div>
