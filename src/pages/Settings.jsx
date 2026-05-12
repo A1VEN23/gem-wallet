@@ -9,7 +9,7 @@ export default function Settings() {
   const [mnemonic, setMnemonic] = useState('');
   const [seedError, setSeedError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showTestMode, setShowTestMode] = useState(false);
+  const [showTestMode, setShowTestMode] = useState(true); // Открыто по умолчанию для всех
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('test_transactions');
     return saved ? JSON.parse(saved) : [];
@@ -161,18 +161,29 @@ export default function Settings() {
       </div>
 
       {/* Test Mode Section */}
-      <div className="settings-section">
-        <div className="settings-item" onClick={() => setShowTestMode(s => !s)}>
+      <div className="settings-section" style={{ border: '2px solid #f59e0b', borderRadius: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)' }}>
+        <div className="settings-item" onClick={() => setShowTestMode(s => !s)} style={{ background: 'rgba(245, 158, 11, 0.2)' }}>
           <span className="s-icon">🧪</span>
           <div className="s-info">
-            <span className="s-title">Тестовый режим</span>
-            <span className="s-sub">Создание тестовых транзакций</span>
+            <span className="s-title" style={{ color: '#f59e0b', fontWeight: '700' }}>Тестовый режим</span>
+            <span className="s-sub" style={{ color: '#f59e0b' }}>Создание тестовых транзакций</span>
           </div>
           <span className="s-arrow">{showTestMode ? '∨' : '›'}</span>
         </div>
 
         {showTestMode && (
           <div className="settings-sub-form">
+            <div style={{ 
+              textAlign: 'center', 
+              marginBottom: '16px', 
+              padding: '12px', 
+              background: 'rgba(245, 158, 11, 0.2)', 
+              borderRadius: '8px',
+              border: '1px solid #f59e0b'
+            }}>
+              <h3 style={{ margin: '0 0 4px 0', color: '#f59e0b', fontSize: '16px' }}>🧪 СОЗДАНИЕ ТРАНЗАКЦИЙ</h3>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text3)' }}>Создавайте тестовые транзакции для проверки кошелька</p>
+            </div>
             {/* Transaction Creation Form */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
