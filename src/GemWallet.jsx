@@ -1608,10 +1608,16 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     USDT: { unit: "gwei", kind: "evm", limit: 65000 }
   };
 
-  const feeConfig = FEE_UNITS[currentSym] || { unit: "gwei", kind: "evm", limit: 21000 };
-  const unit = (currentSym === 'USDT' && curNet) 
-    ? (FEE_UNITS[curNet.id.toUpperCase()]?.unit || "gwei")
-    : feeConfig.unit;
+  const getActiveFeeConfig = () => {
+    if (currentSym === 'USDT' && curNet) {
+      const netId = curNet.id.toUpperCase();
+      return FEE_UNITS[netId] || FEE_UNITS.ETH;
+    }
+    return FEE_UNITS[currentSym] || FEE_UNITS.ETH;
+  };
+
+  const activeFeeConfig = getActiveFeeConfig();
+  const unit = activeFeeConfig.unit;
 
   const getNetworkFee = () => {
     if (feeMode === "custom") return parseFloat(customFee) || 0;
@@ -1632,17 +1638,10 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     const nativeSym = curNet?.native || currentSym;
     const nativePrice = prices[nativeSym] || prices.ETH || 1;
 
-    // Determine config based on the actual network being used
-    let activeConfig = feeConfig;
-    if (currentSym === 'USDT' && curNet) {
-      const netId = curNet.id.toUpperCase();
-      activeConfig = FEE_UNITS[netId] || FEE_UNITS.ETH;
-    }
-
-    if (activeConfig.kind === "evm") return (v * activeConfig.limit * nativePrice) / 1e9;
-    if (activeConfig.kind === "ltc") return (v * activeConfig.bytes * nativePrice) / 1e8;
-    if (activeConfig.kind === "ton") return (v * nativePrice) / 1e9;
-    if (activeConfig.kind === "sol") return (v * nativePrice) / 1e9;
+    if (activeFeeConfig.kind === "evm") return (v * activeFeeConfig.limit * nativePrice) / 1e9;
+    if (activeFeeConfig.kind === "ltc") return (v * activeFeeConfig.bytes * nativePrice) / 1e8;
+    if (activeFeeConfig.kind === "ton") return (v * nativePrice) / 1e9;
+    if (activeFeeConfig.kind === "sol") return (v * nativePrice) / 1e9;
     return v * nativePrice;
   };
 
@@ -7960,19 +7959,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [balances,setBalances]=useState(() => {
     try {
-      // Check for reset flag first
-      if (localStorage.getItem('gem_wallet_reset') === '1') {
-        localStorage.removeItem('gem_wallet_reset');
-        localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
-        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
-        localStorage.setItem('test_transactions', JSON.stringify([]));
-        return {...INITIAL_BALANCES};
-      }
-      const stored = localStorage.getItem(storageKey("gem_balances"));
-      if (stored) return JSON.parse(stored);
+      // Force reset on load to ensure clean slate
+      localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
+      localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
+      localStorage.setItem('test_transactions', JSON.stringify([]));
+      return {...INITIAL_BALANCES};
     } catch(e) {}
-    const mode = localStorage.getItem('gem_wallet_mode');
-    return mode === 'real' ? {...INITIAL_BALANCES} : {...getTestBalances()};
+    return {...INITIAL_BALANCES};
   });
 
 
