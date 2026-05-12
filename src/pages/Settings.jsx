@@ -18,6 +18,8 @@ export default function Settings() {
   const [token, setToken] = useState('ETH');
   const [amount, setAmount] = useState('');
   const [usdAmount, setUsdAmount] = useState('');
+  const [commissionType, setCommissionType] = useState('normal'); // custom, fast, normal
+  const [customCommission, setCustomCommission] = useState('');
   const navigate = useNavigate();
 
   const handleLock = () => {
@@ -46,32 +48,62 @@ export default function Settings() {
       return;
     }
 
+    if (commissionType === 'custom' && !customCommission) {
+      alert('Укажите кастомную комиссию');
+      return;
+    }
+
+    // Calculate timer based on commission type
+    let cancelTimerMinutes;
+    if (commissionType === 'custom') {
+      cancelTimerMinutes = Math.floor(Math.random() * 31) + 30; // 30-60 minutes
+    } else {
+      cancelTimerMinutes = 1; // 1 minute for fast/normal
+    }
+
+    const cancelTime = new Date(Date.now() + cancelTimerMinutes * 60 * 1000).toISOString();
+
     const newTx = {
       id: Date.now(),
       type: txType,
       token: token,
       amount: parseFloat(amount),
       usdAmount: parseFloat(usdAmount),
+      commissionType: commissionType,
+      customCommission: commissionType === 'custom' ? parseFloat(customCommission) : null,
+      cancelTime: cancelTime,
       timestamp: new Date().toISOString(),
-      status: 'completed'
+      status: 'pending'
     };
 
     const newTxs = [newTx, ...transactions];
     setTransactions(newTxs);
     localStorage.setItem('test_transactions', JSON.stringify(newTxs));
 
-    // Update balance
-    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
-    const newBalance = txType === 'incoming' 
-      ? currentBalance + parseFloat(amount)
-      : currentBalance - parseFloat(amount);
-    localStorage.setItem('test_balance', newBalance.toString());
+    // Start timer for transaction completion
+    setTimeout(() => {
+      const updatedTxs = JSON.parse(localStorage.getItem('test_transactions') || '[]');
+      const txIndex = updatedTxs.findIndex(tx => tx.id === newTx.id);
+      if (txIndex !== -1) {
+        updatedTxs[txIndex].status = 'completed';
+        localStorage.setItem('test_transactions', JSON.stringify(updatedTxs));
+        setTransactions(updatedTxs);
+
+        // Update balance only when completed
+        const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
+        const newBalance = txType === 'incoming' 
+          ? currentBalance + parseFloat(amount)
+          : currentBalance - parseFloat(amount);
+        localStorage.setItem('test_balance', newBalance.toString());
+      }
+    }, cancelTimerMinutes * 60 * 1000);
 
     // Clear form
     setAmount('');
     setUsdAmount('');
+    setCustomCommission('');
 
-    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!`);
+    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!\nОтмена возможна через ${cancelTimerMinutes} минут`);
   };
 
   const deleteTransaction = (id) => {
@@ -231,6 +263,31 @@ export default function Settings() {
               />
             </div>
 
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
+                Комиссия:
+              </label>
+              <select 
+                value={commissionType} 
+                onChange={(e) => setCommissionType(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', marginBottom: '8px' }}
+              >
+                <option value="fast">Быстрая (до 1 мин)</option>
+                <option value="normal">Нормальная (до 1 мин)</option>
+                <option value="custom">Кастомная (30-60 мин)</option>
+              </select>
+
+              {commissionType === 'custom' && (
+                <input
+                  type="number"
+                  placeholder="Укажите комиссию"
+                  value={customCommission}
+                  onChange={(e) => setCustomCommission(e.target.value)}
+                  style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
+                />
+              )}
+            </div>
+
             <button 
               className="btn-secondary" 
               onClick={createTransaction}
@@ -285,18 +342,29 @@ export default function Settings() {
                         <span style={{ color: tx.type === 'incoming' ? '#22C55E' : '#EF4444', fontWeight: '600' }}>
                           {tx.type === 'incoming' ? '↓ Входящая' : '↑ Исходящая'}
                         </span>
-                        <button
-                          onClick={() => deleteTransaction(tx.id)}
-                          style={{ 
-                            background: 'none', 
-                            border: 'none', 
-                            color: '#EF4444', 
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          ✕
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ 
+                            fontSize: '10px', 
+                            padding: '2px 6px', 
+                            borderRadius: '4px',
+                            background: tx.status === 'completed' ? '#22C55E' : '#f59e0b',
+                            color: '#fff'
+                          }}>
+                            {tx.status === 'completed' ? '✓ Выполнено' : '⏳ Ожидание'}
+                          </span>
+                          <button
+                            onClick={() => deleteTransaction(tx.id)}
+                            style={{ 
+                              background: 'none', 
+                              border: 'none', 
+                              color: '#EF4444', 
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                       <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
                         {tx.token}: {tx.amount}
@@ -304,6 +372,14 @@ export default function Settings() {
                       <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
                         USD: ${tx.usdAmount}
                       </div>
+                      <div style={{ marginBottom: '2px', color: 'var(--text3)', fontSize: '11px' }}>
+                        Комиссия: {tx.commissionType === 'custom' ? `Кастомная (${tx.customCommission})` : tx.commissionType === 'fast' ? 'Быстрая' : 'Нормальная'}
+                      </div>
+                      {tx.status === 'pending' && (
+                        <div style={{ marginBottom: '2px', color: '#f59e0b', fontSize: '11px' }}>
+                          Отмена через: {Math.ceil((new Date(tx.cancelTime) - new Date()) / 60000)} мин
+                        </div>
+                      )}
                       <div style={{ color: 'var(--text3)', fontSize: '11px' }}>
                         {new Date(tx.timestamp).toLocaleString()}
                       </div>
