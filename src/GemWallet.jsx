@@ -1627,11 +1627,14 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const getFeeUsd = (val) => {
     if (!feeConfig) return 0;
     const v = parseFloat(val) || 0;
-    if (feeConfig.kind === "evm") return (v * feeConfig.limit * price) / 1e9;
-    if (feeConfig.kind === "ltc") return (v * feeConfig.bytes * price) / 1e8;
-    if (feeConfig.kind === "ton") return (v * price) / 1e9;
-    if (feeConfig.kind === "sol") return (v * price) / 1e9; // Simplified
-    return v * price;
+    const nativeSym = curNet?.native || currentSym;
+    const nativePrice = prices[nativeSym] || prices.ETH || 1;
+
+    if (feeConfig.kind === "evm") return (v * feeConfig.limit * nativePrice) / 1e9;
+    if (feeConfig.kind === "ltc") return (v * feeConfig.bytes * nativePrice) / 1e8;
+    if (feeConfig.kind === "ton") return (v * nativePrice) / 1e9;
+    if (feeConfig.kind === "sol") return (v * nativePrice) / 1e9;
+    return v * nativePrice;
   };
 
   const fee = getNetworkFee();
@@ -5021,14 +5024,14 @@ function ActivityTab({ txHistory, onCancelTx }) {
     swap: "#3B82F6"
   };
 
-  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#F59E0B"};
   
   const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
-  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
+  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined" || t?.status==="failed"):safeTxHistory.filter(t=>t?.type===filter);
   
   const getStatusIcon = (status) => {
     if(status==="confirmed" || status==="completed")return <CheckCircle size={12} color="#22C55E"/>;
-    if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
+    if(status==="pending" || status==="declined")return <Clock size={12} color="#F59E0B"/>;
     return <AlertCircle size={12} color="#EF4444"/>;
   };
 
@@ -5109,9 +5112,9 @@ function ActivityTab({ txHistory, onCancelTx }) {
                     </span>
                   )}
                 </div>
-                <span style={{fontSize:15,fontWeight:700,color:isIncoming ? "#22C55E" : (isDeclined ? "rgba(255,255,255,0.4)" : "#EF4444")}}>
-                  {isIncoming ? "+" : "-"}{cleanUsd}
-                </span>
+        <span style={{fontSize:15,fontWeight:700,color:isIncoming ? "#22C55E" : (isDeclined && tx.status !== 'declined' ? "#EF4444" : (tx.status === 'declined' ? "#F59E0B" : "#EF4444"))}}>
+          {isIncoming ? "+" : "-"}{cleanUsd}
+        </span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>
