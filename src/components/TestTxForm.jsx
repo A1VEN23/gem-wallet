@@ -1,6 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
 import { X, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
-import { useWallet } from '../context/WalletContext.jsx';
 
 // Address validation - only valid crypto addresses allowed
 const isValidAddress = (addr) => {
@@ -14,7 +13,6 @@ const isValidAddress = (addr) => {
 };
 
 export default function TestTxForm({ onClose }) {
-  const { addresses } = useWallet();
   const [txType, setTxType] = useState('incoming');
   const [txToken, setTxToken] = useState('ETH');
   const [txFrom, setTxFrom] = useState('');
@@ -32,8 +30,22 @@ export default function TestTxForm({ onClose }) {
     'TON': 'ton'
   };
 
+  // Get addresses from localStorage
+  const getAddresses = () => {
+    const stored = localStorage.getItem('wallet_addresses');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  };
+
   // Auto-fill address based on transaction type and token
   useEffect(() => {
+    const addresses = getAddresses();
     const network = tokenToNetwork[txToken] || 'ethereum';
     const currentAddress = addresses[network];
     
@@ -48,7 +60,7 @@ export default function TestTxForm({ onClose }) {
         setTxTo('');
       }
     }
-  }, [txType, txToken, addresses]);
+  }, [txType, txToken]);
 
   const createTransaction = () => {
     setError('');
