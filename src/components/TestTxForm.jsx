@@ -116,9 +116,8 @@ export default function TestTxForm({ onClose }) {
     }
 
     if (onClose) onClose();
-    // Use custom event to notify GemWallet instead of hard reload
+    // Dispatch storage event so other components can update
     window.dispatchEvent(new Event('storage'));
-    setTimeout(() => window.location.reload(), 500);
   };
 
   const tokens = ['ETH', 'USDT', 'BNB', 'SOL', 'TON'];

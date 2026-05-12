@@ -8092,47 +8092,53 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   });
 
   const [balances,setBalances]=useState(() => {
-
+    try {
+      const stored = localStorage.getItem(storageKey("gem_balances"));
+      if (stored) return JSON.parse(stored);
+    } catch(e) {}
     const mode = localStorage.getItem('gem_wallet_mode');
-
     return mode === 'real' ? {...INITIAL_BALANCES} : {...getTestBalances()};
-
   });
 
 
-
-  // Transaction history — persisted to localStorage per user (CLEARED)
 
   const [txHistory,setTxHistory]=useState(()=>{
-
     try {
-
-      // Clear transaction history
-      localStorage.removeItem(storageKey("gem_tx_history"));
-      
-      return [];
-
+      const stored = localStorage.getItem(storageKey("gem_tx_history"));
+      return stored ? JSON.parse(stored) : [];
     } catch { return []; }
-
   });
 
-
+  // Listen for storage events to update balances and history from other components (like TestTxForm)
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const storedHist = localStorage.getItem(storageKey("gem_tx_history"));
+        if (storedHist) setTxHistory(JSON.parse(storedHist));
+        
+        const storedBals = localStorage.getItem(storageKey("gem_balances"));
+        if (storedBals) setBalances(prev => ({ ...prev, ...JSON.parse(storedBals) }));
+      } catch (e) { console.error("Sync error:", e); }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Auto-save txHistory to localStorage whenever it changes
-
   useEffect(()=>{
-
     try {
-
       if (Array.isArray(txHistory)) {
-
         localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(txHistory));
-
       }
-
     } catch(e) { console.error("[txHistory save]", e); }
-
   }, [txHistory]);
+
+  // Auto-save balances to localStorage whenever they change (in test mode/via TestTxForm)
+  useEffect(()=>{
+    try {
+      localStorage.setItem(storageKey("gem_balances"), JSON.stringify(balances));
+    } catch(e) { console.error("[balances save]", e); }
+  }, [balances]);
 
 
 
