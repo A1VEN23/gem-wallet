@@ -63,6 +63,13 @@ const fmtUSD = n => "$"+fmt(n);
 
 const fmtCrypto = (n, d=6) => parseFloat(n.toFixed(d));
 
+const fmtK = (n) => {
+  const val = parseFloat(n) || 0;
+  if (val >= 1000000) return (val / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (val >= 1000) return (val / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return val.toString();
+};
+
 
 
 // ─── STORAGE HELPERS (Telegram-linked localStorage) ─────────────────────────
@@ -1887,7 +1894,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                         <div style={{fontSize:12,color:"#f59e0b"}}>~1-2 мин</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{feeValue} {unit}</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{fmtK(feeValue)} {unit}</div>
                         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(feeValue))}</div>
                       </div>
                     </button>
@@ -1903,7 +1910,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                       <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${customFee} ${unit}` : "Введите сумму"}</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${fmtK(customFee)} ${unit}` : "Введите сумму"}</div>
                       {customFee && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(customFee))}</div>}
                     </div>
                   </button>
@@ -1918,7 +1925,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
               <div style={{padding:"14px",background:"rgba(245,158,11,0.1)",borderRadius:12,textAlign:"center",border:"1px solid rgba(245,158,11,0.2)"}}>
                 <span style={{fontSize:13,color:"#f59e0b",fontWeight:600}}>
-                   Итого к оплате: {fee} {unit} (≈ {fmtUSD(feeUsd)})
+                   Итого к оплате: {fmtK(fee)} {unit} (≈ {fmtUSD(feeUsd)})
                 </span>
               </div>
             </div>
@@ -1945,7 +1952,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
                   <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Комиссия</span>
                   <div style={{textAlign:"right"}}>
-                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{fee} {unit}</span>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{fmtK(fee)} {unit}</span>
                     <button onClick={()=>setStep(3)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:"0 0 0 8px",cursor:"pointer"}}>Изменить</button>
                   </div>
                 </div>
