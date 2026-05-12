@@ -43,19 +43,17 @@ export default function Onboarding() {
   return (
     <div className="onboarding">
       {step === 'welcome' && (
-        <div className="onboard-welcome">
-          <div className="gem-logo">
-            <div className="gem-shape">
-              <span className="gem-inner">◈</span>
+        <div className="onboard-welcome" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px' }}>
+          <div className="gem-logo" style={{ marginBottom: '40px' }}>
+            <div className="gem-shape" style={{ width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '24px', boxShadow: '0 10px 40px rgba(102, 126, 234, 0.4)' }}>
+              <span className="gem-inner" style={{ fontSize: '60px', color: '#fff' }}>◈</span>
             </div>
           </div>
-          <h1>Gem Wallet</h1>
-          <p className="subtitle">Некастодиальный крипто-кошелёк<br />в Telegram</p>
-          <div className="onboard-btns">
-            <button className="btn-primary" onClick={() => setStep('create')}>
+          <div className="onboard-btns" style={{ width: '100%', maxWidth: '280px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button className="btn-primary" onClick={() => setStep('create')} style={{ padding: '16px', fontSize: '16px', fontWeight: 600, borderRadius: '12px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer' }}>
               Создать кошелёк
             </button>
-            <button className="btn-secondary" onClick={() => setStep('import')}>
+            <button className="btn-secondary" onClick={() => setStep('import')} style={{ padding: '16px', fontSize: '16px', fontWeight: 600, borderRadius: '12px', background: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}>
               Импортировать
             </button>
           </div>
