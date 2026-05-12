@@ -1,5 +1,6 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { X, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { useWallet } from '../context/WalletContext.jsx';
 
 // Address validation - only valid crypto addresses allowed
 const isValidAddress = (addr) => {
@@ -13,6 +14,7 @@ const isValidAddress = (addr) => {
 };
 
 export default function TestTxForm({ onClose }) {
+  const { addresses } = useWallet();
   const [txType, setTxType] = useState('incoming');
   const [txToken, setTxToken] = useState('ETH');
   const [txFrom, setTxFrom] = useState('');
@@ -20,6 +22,33 @@ export default function TestTxForm({ onClose }) {
   const [txAmount, setTxAmount] = useState('');
   const [txUsd, setTxUsd] = useState('');
   const [error, setError] = useState('');
+
+  // Map token to network ID
+  const tokenToNetwork = {
+    'ETH': 'ethereum',
+    'USDT': 'ethereum',
+    'BNB': 'bsc',
+    'SOL': 'solana',
+    'TON': 'ton'
+  };
+
+  // Auto-fill address based on transaction type and token
+  useEffect(() => {
+    const network = tokenToNetwork[txToken] || 'ethereum';
+    const currentAddress = addresses[network];
+    
+    if (currentAddress) {
+      if (txType === 'incoming') {
+        // Incoming: recipient is current wallet
+        setTxTo(currentAddress);
+        setTxFrom('');
+      } else {
+        // Outgoing: sender is current wallet
+        setTxFrom(currentAddress);
+        setTxTo('');
+      }
+    }
+  }, [txType, txToken, addresses]);
 
   const createTransaction = () => {
     setError('');
