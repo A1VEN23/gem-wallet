@@ -124,11 +124,13 @@ export default function Settings() {
   };
 
   const clearTestData = () => {
-    if (confirm('Вы уверены, что хотите удалить все тестовые данные?')) {
+    if (confirm('Вы уверены, что хотите удалить всю историю транзакций и очистить балансы?')) {
+      localStorage.setItem('gem_wallet_reset', '1');
       localStorage.removeItem('test_transactions');
       localStorage.removeItem('test_balance');
       setTransactions([]);
-      alert('Тестовые данные удалены');
+      alert('Балансы и история очищены. Кошелёк будет обновлен.');
+      window.location.reload();
     }
   };
 

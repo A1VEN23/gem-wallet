@@ -8053,6 +8053,14 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [balances,setBalances]=useState(() => {
     try {
+      // Check for reset flag first
+      if (localStorage.getItem('gem_wallet_reset') === '1') {
+        localStorage.removeItem('gem_wallet_reset');
+        localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
+        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
+        localStorage.setItem('test_transactions', JSON.stringify([]));
+        return {...INITIAL_BALANCES};
+      }
       const stored = localStorage.getItem(storageKey("gem_balances"));
       if (stored) return JSON.parse(stored);
     } catch(e) {}
