@@ -4993,221 +4993,138 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
 
 function ActivityTab({ txHistory, onCancelTx }) {
-
   const [sel,setSel]=useState(null);
-
   const [filter,setFilter]=useState("all");
-
   const [showAddTx,setShowAddTx]=useState(false);
-
-  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
-
-  const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
-
-  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
-
-  // Safe filter with null check
-
-  const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
-
-  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
-
   
-
-  const getStatusIcon = (status) => {
-
-    if(status==="confirmed")return <CheckCircle size={12} color="#22C55E"/>;
-
-    if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
-
-    return <AlertCircle size={12} color="#EF4444"/>;
-
+  const icons = {
+    receive: ArrowDownLeft,
+    incoming: ArrowDownLeft,
+    send: ArrowUpRight,
+    outgoing: ArrowUpRight,
+    swap: ArrowLeftRight
   };
 
+  const bg = {
+    receive: "rgba(34,197,94,0.1)",
+    incoming: "rgba(34,197,94,0.1)",
+    send: "rgba(239,68,68,0.1)",
+    outgoing: "rgba(239,68,68,0.1)",
+    swap: "rgba(59,130,246,0.1)"
+  };
 
+  const colors = {
+    receive: "#22C55E",
+    incoming: "#22C55E",
+    send: "#EF4444",
+    outgoing: "#EF4444",
+    swap: "#3B82F6"
+  };
+
+  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+  
+  const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
+  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
+  
+  const getStatusIcon = (status) => {
+    if(status==="confirmed" || status==="completed")return <CheckCircle size={12} color="#22C55E"/>;
+    if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
+    return <AlertCircle size={12} color="#EF4444"/>;
+  };
 
   return (
-
     <div style={{padding:"0 16px 100px"}}>
-
       {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
-
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"0 4px",flexWrap:"wrap"}}>
-
         <span style={{fontSize:17,fontWeight:700,color:"#fff",flex:1}}>Activity</span>
-
         <button onClick={()=>setShowAddTx(!showAddTx)} style={{width:36,height:36,borderRadius:"50%",background:"#10b981",
-
           border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
-
           <Plus size={24} color="#fff"/>
-
         </button>
-
         {["all","send","receive","swap","declined"].map(f=>(
-
           <button key={f} onClick={()=>setFilter(f)}
-
             style={{padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
-
               background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)",
-
               transition:"all 0.2s",boxShadow:filter===f?"0 4px 14px rgba(37,99,235,0.3)":"none"}}>
-
             {f==="declined"?"Declined":f.charAt(0).toUpperCase()+f.slice(1)}
-
           </button>
-
         ))}
-
       </div>
-
       {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)}/>}
-
       {filtered.length===0&&(
-
         <div style={{textAlign:"center",padding:"60px 24px"}}>
-
           <div style={{margin:"0 0 20px",display:"flex",justifyContent:"center"}}>
-
             <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#1a1a1a,#252525)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.05)"}}>
-
               <EmptyMailboxIcon size={40}/>
-
             </div>
-
           </div>
-
           <p style={{color:"rgba(255,255,255,0.5)",fontSize:15,fontWeight:500}}>No transactions yet</p>
-
           <p style={{color:"rgba(255,255,255,0.3)",fontSize:13,marginTop:6}}>Your transaction history will appear here</p>
-
         </div>
-
       )}
-
       {filtered.map((tx,i)=>{
-
         if (!tx || typeof tx !== 'object') return null;
-
-        const Icon=icons[tx?.type]||ArrowUpRight;
-
-        const isNegative = tx?.type==="send"||tx?.status==="declined";
-
+        const type = tx.type || "send";
+        const Icon = icons[type] || ArrowUpRight;
+        const txColor = colors[type] || "#fff";
+        const txBg = bg[type] || "rgba(255,255,255,0.05)";
+        const isIncoming = type === "receive" || type === "incoming";
+        const isDeclined = tx.status === "declined" || tx.status === "failed";
+        
+        // Clean USD display: remove extra + or - from string if already present
+        let cleanUsd = (tx.usd || "$0.00").toString().replace(/^[+-]+/, "");
+        
         return (
-
           <div key={tx?.id||i} onClick={()=>tx&&setSel(tx)}
-
             style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:18,
-
               cursor:"pointer",transition:"all 0.2s ease",
-
-              background:"linear-gradient(145deg,#1a1a1a,#161616)",
-
+              background:"rgba(255,255,255,0.03)",
               border:"1px solid rgba(255,255,255,0.04)",
-
-              boxShadow:"0 2px 8px rgba(0,0,0,0.2)",
-
               marginBottom:10,
-
               animation:`fadeUp 0.4s ${0.06*i}s ease both`,opacity:0,animationFillMode:"forwards"}}
-
             onMouseEnter={e=>{
-
-              e.currentTarget.style.background="linear-gradient(145deg,#1f1f1f,#1a1a1a)";
-
-              e.currentTarget.style.transform="translateY(-2px)";
-
-              e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.3)";
-
+              e.currentTarget.style.background="rgba(255,255,255,0.06)";
+              e.currentTarget.style.transform="translateY(-1px)";
             }}
-
             onMouseLeave={e=>{
-
-              e.currentTarget.style.background="linear-gradient(145deg,#1a1a1a,#161616)";
-
+              e.currentTarget.style.background="rgba(255,255,255,0.03)";
               e.currentTarget.style.transform="translateY(0)";
-
-              e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.2)";
-
             }}>
-
-            <div style={{width:48,height:48,borderRadius:14,background:bg[tx?.type]||"#1a1a1a",
-
-              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx?.color||"#fff"}30`,flexShrink:0,
-
-              boxShadow:`0 4px 12px ${tx?.color||"#fff"}20`}}>
-
-              <Icon size={22} color={tx?.color||"#fff"}/>
-
+            <div style={{width:44,height:44,borderRadius:12,background:txBg,
+              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${txColor}20`,flexShrink:0}}>
+              <Icon size={20} color={txColor}/>
             </div>
-
             <div style={{flex:1,minWidth:0}}>
-
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-
                   <span style={{fontSize:15,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>
-
-                    {tx?.type}
-
+                    {type === 'incoming' ? 'Receive' : type === 'outgoing' ? 'Send' : type}
                   </span>
-
-                  {tx?.status&&tx?.status!=="confirmed"&&(
-
+                  {tx?.status&&tx?.status!=="confirmed"&&tx?.status!=="completed"&&(
                     <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx?.status],
-
-                      background:statusColors[tx?.status]+"15",padding:"3px 8px",borderRadius:6,textTransform:"capitalize",
-
-                      fontWeight:600,border:`1px solid ${statusColors[tx?.status]}30`}}>
-
+                      background:statusColors[tx?.status]+"15",padding:"2px 6px",borderRadius:6,textTransform:"capitalize",
+                      fontWeight:600}}>
                       {getStatusIcon(tx?.status)}
-
                       {tx?.status}
-
                     </span>
-
                   )}
-
                 </div>
-
-                <span style={{fontSize:15,fontWeight:700,color:isNegative?"#EF4444":tx?.status==="pending"?"#F59E0B":"#22C55E"}}>
-
-                  {isNegative?"-":"+"}{tx?.usd||""}
-
+                <span style={{fontSize:15,fontWeight:700,color:isIncoming ? "#22C55E" : (isDeclined ? "rgba(255,255,255,0.4)" : "#EF4444")}}>
+                  {isIncoming ? "+" : "-"}{cleanUsd}
                 </span>
-
               </div>
-
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-
-                <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",letterSpacing:"-0.3px"}}>
-
-                  {tx?.addr?.slice(0,8)}...{tx?.addr?.slice(-6)}
-
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>
+                  {tx?.label || tx?.sym || "Token"}
                 </span>
-
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>{tx?.time||""}</span>
-
+                <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{tx?.time||""}</span>
               </div>
-
-              <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:2,display:"block"}}>{tx?.label||""}</span>
-
             </div>
-
-            <ChevronRight size={16} color="rgba(255,255,255,0.15)"/>
-
           </div>
-
         );
-
       })}
-
     </div>
-
   );
-
 }
 
 
