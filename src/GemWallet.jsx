@@ -7657,104 +7657,25 @@ function OnboardScreen({ onCreate, onImport }) {
 
       {/* Logo */}
 
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,marginBottom:40,
-
-        animation:"fadeUp 0.6s ease both"}}>
-
-        <div style={{width:96,height:96,borderRadius:28,background:"linear-gradient(135deg,#1e293b,#0f172a)",
-
-          border:"1px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",
-
-          boxShadow:"0 0 60px #2563eb22"}}>
-
-          <CrystalIcon size={56}/>
-
+      {/* Avatar */}
+      <div style={{marginBottom:40,animation:"fadeUp 0.6s ease both"}}>
+        <div style={{width:120,height:120,borderRadius:32,background:"linear-gradient(135deg,#667eea,#764ba2)",
+          display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 40px rgba(102,126,234,0.4)"}}>
+          <CrystalIcon size={64}/>
         </div>
-
-        <div style={{textAlign:"center"}}>
-
-          <h1 style={{fontSize:32,fontWeight:700,color:"#fff",margin:"0 0 8px",letterSpacing:"-0.03em"}}>
-
-            Привет, {firstName}! 👋
-
-          </h1>
-
-          <p style={{fontSize:15,color:"rgba(255,255,255,0.5)",margin:0,lineHeight:1.6}}>
-
-            Добро пожаловать в <b style={{color:"#fff"}}>Gem Wallet</b>
-
-          </p>
-
-        </div>
-
       </div>
-
-
-
-      {/* Features */}
-
-      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12,marginBottom:32,
-
-        animation:"fadeUp 0.6s 0.1s ease both",opacity:0,animationFillMode:"forwards"}}>
-
-        {[
-
-          {icon:"🔐", title:"Только твои ключи", desc:"Никаких посредников — полный контроль"},
-
-          {icon:"⛓️", title:"Мульти-чейн", desc:"ETH, TON, BNB, SOL, LTC и другие"},
-
-          {icon:"⚡", title:"Быстро и безопасно", desc:"Переводы, свопы, хранение — всё в одном"},
-
-        ].map(f=>(
-
-          <div key={f.title} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
-
-            background:"rgba(255,255,255,0.04)",borderRadius:16,border:"1px solid rgba(255,255,255,0.07)"}}>
-
-            <span style={{fontSize:24}}>{f.icon}</span>
-
-            <div>
-
-              <p style={{margin:0,fontSize:14,fontWeight:600,color:"#fff"}}>{f.title}</p>
-
-              <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.4)"}}>{f.desc}</p>
-
-            </div>
-
-          </div>
-
-        ))}
-
-      </div>
-
-
 
       {/* Buttons */}
-
-      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12,
-
-        animation:"fadeUp 0.6s 0.2s ease both",opacity:0,animationFillMode:"forwards"}}>
-
-        <button onClick={()=>onCreate()} style={{width:"100%",padding:"18px 24px",borderRadius:16,border:"none",
-
-          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,
-
-          cursor:"pointer",boxShadow:"0 8px 32px #2563eb44",letterSpacing:"0.01em"}}>
-
-          💎 Создать новый кошелёк
-
+      <div style={{width:"100%",maxWidth:280,display:"flex",flexDirection:"column",gap:12,
+        animation:"fadeUp 0.6s 0.1s ease both",opacity:0,animationFillMode:"forwards"}}>
+        <button onClick={()=>onCreate()} style={{width:"100%",padding:"16px",borderRadius:12,border:"none",
+          background:"#10b981",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
+          Создать кошелёк
         </button>
-
-        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"18px 24px",borderRadius:16,
-
-          border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",
-
-          color:"rgba(255,255,255,0.7)",fontSize:15,fontWeight:500,cursor:"pointer"}}>
-
-          📥 Импортировать кошелёк
-
+        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"16px",borderRadius:12,
+          border:"2px solid rgba(255,255,255,0.3)",background:"transparent",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
+          Импортировать
         </button>
-
       </div>
 
     </div>
