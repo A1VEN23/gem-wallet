@@ -142,29 +142,9 @@ const NETWORK_FEES = {
 
 
 // ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
-
 const getTestBalances = () => {
-
-  const totalUSD = Math.floor(Math.random() * 5000) + 15000;
-
-  const prices = { ETH: 3200, TON: 6.5, BNB: 580, LTC: 72, ARB: 0.85, SOL: 145, USDT: 1 };
-
-  const weights = { ETH: 0.25, TON: 0.15, BNB: 0.15, LTC: 0.1, ARB: 0.1, SOL: 0.15, USDT: 0.1 };
-
-  
-
-  const balances = {};
-
-  for (const [sym, weight] of Object.entries(weights)) {
-
-    const usdAmount = totalUSD * weight;
-
-    balances[sym] = Math.floor(usdAmount / prices[sym]);
-
-  }
-
-  return balances;
-
+  // Reset all balances to 0 for everyone by default
+  return { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
 };
 
 
@@ -7759,14 +7739,7 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
 
       {!rev&&(
 
-        <button onClick={onDone} style={{width:"100%",padding:"14px",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)",
-
-          background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer"}}>
-
-          Skip (not recommended)
-
-        </button>
-
+        {/* Skip button removed by request */}
       )}
 
     </div>
