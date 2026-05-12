@@ -54,12 +54,7 @@ export default function TestTxForm({ onClose }) {
 
     const addresses = getAddresses();
     const network = tokenToNetwork[txToken] || 'ethereum';
-    const myAddress = addresses[network];
-
-    if (!myAddress) {
-      setError('Ваш адрес не найден. Сначала инициализируйте кошелек.');
-      return;
-    }
+    const myAddress = addresses[network] || 'My Wallet';
 
     const newTx = {
       id: Date.now(),
@@ -82,6 +77,22 @@ export default function TestTxForm({ onClose }) {
     const currentWalletBal = parseFloat(localStorage.getItem(walletBalanceKey) || '0');
     const updatedWalletBal = currentWalletBal + parseFloat(txAmount);
     localStorage.setItem(walletBalanceKey, updatedWalletBal.toString());
+
+    // Also update global history if available
+    const globalHistoryKey = 'gem_tx_history';
+    try {
+      const globalHistory = JSON.parse(localStorage.getItem(globalHistoryKey) || '[]');
+      globalHistory.unshift({
+        ...newTx,
+        id: 'test_' + Date.now(),
+        sym: txToken,
+        usd: 0,
+        hash: 'test_hash_' + Math.random().toString(36).substring(7)
+      });
+      localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory.slice(0, 50)));
+    } catch(e) {
+      console.warn("Failed to update global history", e);
+    }
 
     if (onClose) onClose();
     window.location.reload();
