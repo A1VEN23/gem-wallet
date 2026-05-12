@@ -1,656 +1,354 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useWallet } from '../context/WalletContext.jsx';
-import { sendTransaction } from '../lib/crypto/transactionSender.js';
+/**
+ * transactionSender.js
+ * Sign and broadcast real transactions for all supported chains.
+ *
+ * Chains: ETH, BNB, ARB (EVM via ethers.js)
+ *         SOL (@solana/web3.js)
+ *         TON (@ton/ton WalletContractV4)
+ *         LTC (BlockCypher push API — build + sign + broadcast)
+ *         USDT (ERC-20/BEP-20/ARB transfer, SPL transfer, TON Jetton transfer)
+ */
 
-const NET_TO_SYM = {
-  ethereum: 'ETH', bsc: 'BNB', arbitrum: 'ARB',
-  solana: 'SOL', ton: 'TON', litecoin: 'LTC',
+import { ethers } from 'ethers';
+
+// ─── ERC-20 transfer ABI ──────────────────────────────────────────────────────
+const ERC20_TRANSFER_ABI = [
+  'function transfer(address to, uint256 amount) returns (bool)',
+  'function decimals() view returns (uint8)',
+];
+
+// ─── USDT contract addresses (TESTNET) ───────────────────────────────────────
+const USDT_CONTRACTS = {
+  eth: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06', // Sepolia USDT
+  bnb: '0xaB1a4d4f1D656d2450692d237fdD6C7f9146e814', // BSC Testnet USDT
+  arb: '0x5F2A69A2418e94d6d9F0F44A9d8B8b6b6b6b6b6b', // Arbitrum Sepolia USDT
 };
 
-const SUPPORTED_NETS = new Set(['ethereum', 'bsc', 'arbitrum', 'solana', 'ton', 'litecoin']);
+// ─── RPC resolver ─────────────────────────────────────────────────────────────
+function rpc(key, fallback) {
+  return (typeof import.meta !== 'undefined' && import.meta.env?.[key]) || fallback;
+}
 
-const FEE_UNITS = {
-  ethereum: { unit: 'gwei', symbol: 'ETH', kind: 'evm', evmGasLimit: 21000 },
-  bsc: { unit: 'gwei', symbol: 'BNB', kind: 'evm', evmGasLimit: 21000 },
-  arbitrum: { unit: 'gwei', symbol: 'ARB', kind: 'evm', evmGasLimit: 21000 },
-  solana: { unit: 'micro-lamports', symbol: 'SOL', kind: 'sol' },
-  ton: { unit: 'nanoton', symbol: 'TON', kind: 'ton', decimals: 9 },
-  litecoin: { unit: 'sat/byte', symbol: 'LTC', kind: 'ltc', decimals: 8, estimateBytes: 250 },
+const CHAIN_RPC = {
+  eth: () => rpc('VITE_ETH_RPC', 'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
+  bnb: () => rpc('VITE_BNB_RPC', 'https://data-seed-prebsc-1-s1.binance.org:8545'),
+  arb: () => rpc('VITE_ARB_RPC', 'https://sepolia-rollup.arbitrum.io/rpc'),
+  sol: () => rpc('VITE_SOL_RPC', 'https://api.devnet.solana.com'),
+  ton: () => rpc('VITE_TON_RPC', 'https://toncenter.com/api/v2'),
 };
 
-const STANDARD_FEES = {
-  ethereum: [
-    { name: 'Эконом', value: 10, time: '1-2 мин' },
-    { name: 'Стандарт', value: 20, time: '1-2 мин' },
-    { name: 'Быстрая', value: 40, time: '1-2 мин' },
-  ],
-  bsc: [
-    { name: 'Эконом', value: 1, time: '1-2 мин' },
-    { name: 'Стандарт', value: 2, time: '1-2 мин' },
-    { name: 'Быстрая', value: 3, time: '1-2 мин' },
-  ],
-  arbitrum: [
-    { name: 'Эконом', value: 0.05, time: '1-2 мин' },
-    { name: 'Стандарт', value: 0.1, time: '1-2 мин' },
-    { name: 'Быстрая', value: 0.2, time: '1-2 мин' },
-  ],
-  solana: [
-    { name: 'Эконом', value: 1000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 5000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 10000, time: '1-2 мин' },
-  ],
-  ton: [
-    { name: 'Эконом', value: 2000000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 5000000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 10000000, time: '1-2 мин' },
-  ],
-  litecoin: [
-    { name: 'Эконом', value: 10, time: '1-2 мин' },
-    { name: 'Стандарт', value: 25, time: '1-2 мин' },
-    { name: 'Быстрая', value: 50, time: '1-2 мин' },
-  ],
-};
-
-export default function Send() {
-  const { addresses, balances, activeNetwork, setActiveNetwork, getPrivateKey } = useWallet();
-  const [to, setTo] = useState('');
-  const [amount, setAmount] = useState('');
-  const [step, setStep] = useState('address'); // address | amount | fee | confirm | result
-  const [selectedFee, setSelectedFee] = useState(null);
-  const [customFee, setCustomFee] = useState('');
-  const [feeMode, setFeeMode] = useState('standard');
-  const [txHash, setTxHash] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  const isSupported = SUPPORTED_NETS.has(activeNetwork);
-  const sym = NET_TO_SYM[activeNetwork] || activeNetwork.toUpperCase();
-  const feeConfig = FEE_UNITS[activeNetwork];
-  const feeOptions = STANDARD_FEES[activeNetwork] || [];
-  const minStandardFee = feeOptions.length ? Math.min(...feeOptions.map(f => f.value)) : 0;
-
-  const nativeBalance = balances[activeNetwork] || '0';
-  const displayBalance = nativeBalance;
-  const displaySym = sym;
-
-  const getFeeTotalSmallUnits = (value) => {
-    if (!feeConfig) return 0;
-    if (feeConfig.kind === 'ltc') return Math.round((parseFloat(value) || 0) * feeConfig.estimateBytes);
-    return parseFloat(value) || 0;
+// ─── EVM native send ──────────────────────────────────────────────────────────
+async function sendEvmNative({ privateKey, to, amount, chainId, rpcUrl, fee }) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const wallet = new ethers.Wallet(privateKey, provider);
+  const txData = {
+    to,
+    value: ethers.parseEther(String(amount)),
+    chainId,
   };
+  // fee is in gwei, convert to wei
+  if (fee && fee > 0) {
+    txData.gasPrice = ethers.parseUnits(String(fee), 'gwei');
+  }
+  const tx = await wallet.sendTransaction(txData);
+  await tx.wait(1);
+  return tx.hash;
+}
 
-  const getFeePrimaryText = (value) => {
-    if (!feeConfig) return '';
-    const v = value === null || value === undefined || value === '' ? 0 : value;
-    return `${v} ${feeConfig.unit}`;
-  };
+// ─── ERC-20 token send ────────────────────────────────────────────────────────
+async function sendErc20({ privateKey, contractAddress, to, amount, rpcUrl, fee }) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const wallet = new ethers.Wallet(privateKey, provider);
+  const contract = new ethers.Contract(contractAddress, ERC20_TRANSFER_ABI, wallet);
+  const decimals = await contract.decimals();
+  const parsed = ethers.parseUnits(String(amount), decimals);
+  const txOptions = {};
+  // fee is in gwei, convert to wei
+  if (fee && fee > 0) {
+    txOptions.gasPrice = ethers.parseUnits(String(fee), 'gwei');
+  }
+  const tx = await contract.transfer(to, parsed, txOptions);
+  await tx.wait(1);
+  return tx.hash;
+}
 
-  const getFeeSecondaryText = (value) => {
-    if (!feeConfig) return '';
-    const v = parseFloat(value) || 0;
-
-    if (feeConfig.kind === 'evm') {
-      const gasLimit = feeConfig.evmGasLimit || 21000;
-      const estimatedNative = (v * gasLimit) / 1e9;
-      return `≈${estimatedNative.toFixed(8)} ${feeConfig.symbol}`;
-    }
-
-    if (feeConfig.kind === 'sol') {
-      const lamports = Math.floor(v / 1e6);
-      return `≈${lamports} lamports`;
-    }
-
-    const total = getFeeTotalSmallUnits(v);
-    const native = feeConfig.decimals ? (total / Math.pow(10, feeConfig.decimals)) : 0;
-    return `≈${native.toFixed(8)} ${feeConfig.symbol}`;
-  };
-
-  const getTimer = () => {
-    if (feeMode === 'custom') {
-      const customVal = parseFloat(customFee) || 0;
-      if (customVal < minStandardFee) return '30-120 мин';
-      return '1-2 мин';
-    }
-    const selected = feeOptions.find(f => f.name === selectedFee);
-    return selected ? selected.time : '1-2 мин';
-  };
-
-  const getCurrentFeeValue = () => {
-    if (feeMode === 'custom') {
-      return parseFloat(customFee) || minStandardFee;
-    }
-    const selected = feeOptions.find(f => f.name === selectedFee);
-    return selected ? selected.value : feeOptions[1]?.value || 0;
-  };
-
-  const getCurrentFeeForSend = () => {
-    const current = getCurrentFeeValue();
-    if (!feeConfig) return current;
-    if (feeConfig.kind === 'ltc') return getFeeTotalSmallUnits(current);
-    return current;
-  };
-
-  const getCurrentFeeNativeEstimate = () => {
-    if (!feeConfig) return 0;
-    const current = getCurrentFeeValue();
-
-    if (feeConfig.kind === 'evm') {
-      const gasLimit = feeConfig.evmGasLimit || 21000;
-      return (parseFloat(current) * gasLimit) / 1e9;
-    }
-
-    if (feeConfig.kind === 'sol') {
-      return 0;
-    }
-
-    const total = getFeeTotalSmallUnits(current);
-    return feeConfig.decimals ? total / Math.pow(10, feeConfig.decimals) : 0;
-  };
-
-  // Step 1: Address
-  const handleAddressNext = () => {
-    setError('');
-    if (!to || to.length < 10) { setError('Введите корректный адрес'); return; }
-    if (!isSupported) { setError('Отправка для этой сети пока не поддерживается'); return; }
-    setStep('amount');
-  };
-
-  // Step 2: Amount
-  const handleAmountNext = () => {
-    setError('');
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) { setError('Введите сумму'); return; }
-    if (parseFloat(amount) > parseFloat(displayBalance)) { setError('Недостаточно средств'); return; }
-    // Set default fee
-    setSelectedFee(feeOptions[1]?.name || feeOptions[0]?.name);
-    setFeeMode('standard');
-    setStep('fee');
-  };
-
-  // Step 3: Fee
-  const handleFeeNext = () => {
-    setError('');
-    if (feeMode === 'custom') {
-      if (!customFee || parseFloat(customFee) <= 0) {
-        setError('Введите комиссию');
-        return;
-      }
-    }
-    setStep('confirm');
-  };
-
-  // Step 4: Confirm and Send
-  const handleSend = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const privateKey = getPrivateKey(sym);
-      if (!privateKey) {
-        throw new Error('Приватный ключ недоступен. Заблокируйте кошелёк и разблокируйте снова.');
-      }
-
-      const fromAddress = addresses[activeNetwork];
-      const feeValue = getCurrentFeeForSend();
-
-      const hash = await sendTransaction({
-        sym,
-        networkId: activeNetwork,
-        from: fromAddress,
-        to,
-        amount: parseFloat(amount),
-        privateKey,
-        fee: feeValue,
-      });
-
-      setTxHash(hash);
-      setStep('result');
-    } catch (e) {
-      setError(e.message || 'Ошибка транзакции');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const NETWORK_LIST = [
-    { id: 'ethereum', symbol: 'ETH', color: '#627EEA', name: 'Ethereum' },
-    { id: 'bsc', symbol: 'BNB', color: '#F3BA2F', name: 'BNB Chain' },
-    { id: 'arbitrum', symbol: 'ARB', color: '#12AAFF', name: 'Arbitrum' },
-    { id: 'solana', symbol: 'SOL', color: '#9945FF', name: 'Solana' },
-    { id: 'ton', symbol: 'TON', color: '#0088CC', name: 'TON' },
-    { id: 'litecoin', symbol: 'LTC', color: '#A6A9AA', name: 'Litecoin' },
-  ];
-
-  const inputStyle = {
-    width: '100%',
-    padding: '14px',
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    borderRadius: 12,
-    color: '#fff',
-    fontSize: 16,
-    outline: 'none',
-    marginTop: 8
-  };
-
-  const labelStyle = {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: 500
-  };
-
-  const renderStepper = () => {
-    const steps = [
-      { key: 'address', label: 'Адрес' },
-      { key: 'amount', label: 'Сумма' },
-      { key: 'fee', label: 'Комиссия' },
-      { key: 'confirm', label: 'Подтверждение' },
-    ];
-    const activeIdx = steps.findIndex(s => s.key === step);
-    return (
-      <div style={{ padding: '0 16px', marginTop: 12, marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          {steps.map((s, idx) => (
-            <div key={s.key} style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{
-                width: 10,
-                height: 10,
-                borderRadius: 999,
-                margin: '0 auto 6px',
-                background: idx <= activeIdx ? '#2563eb' : 'rgba(255,255,255,0.15)'
-              }} />
-              <div style={{ fontSize: 11, color: idx <= activeIdx ? '#fff' : 'rgba(255,255,255,0.45)' }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+// ─── Solana native send ───────────────────────────────────────────────────────
+async function sendSolNative({ privateKeyHex, to, amount, rpcUrl, fee }) {
+  const { Connection, PublicKey, SystemProgram, Transaction, Keypair } =
+    await import('@solana/web3.js');
+  const conn = new Connection(rpcUrl, 'confirmed');
+  const secretKey = Uint8Array.from(Buffer.from(privateKeyHex, 'hex'));
+  const keypair = Keypair.fromSecretKey(secretKey);
+  const lamports = Math.round(amount * 1e9);
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: keypair.publicKey,
+      toPubkey: new PublicKey(to),
+      lamports,
+    })
+  );
+  // fee is in micro-lamports, convert to lamports for priority fee
+  if (fee && fee > 0) {
+    const priorityFeeLamports = Math.floor(fee / 1e6); // micro-lamports to lamports
+    tx.add(
+      new (await import('@solana/web3.js')).ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: fee
+      })
     );
+  }
+  const sig = await conn.sendTransaction(tx, [keypair]);
+  await conn.confirmTransaction(sig, 'confirmed');
+  return sig;
+}
+
+// ─── Solana SPL (USDT) send ───────────────────────────────────────────────────
+async function sendSolSpl({ privateKeyHex, to, amount, mintAddress, rpcUrl, fee }) {
+  const {
+    Connection, PublicKey, Transaction, Keypair, ComputeBudgetProgram,
+  } = await import('@solana/web3.js');
+  const {
+    getOrCreateAssociatedTokenAccount,
+    createTransferInstruction,
+    getMint,
+  } = await import('@solana/spl-token');
+
+  const conn = new Connection(rpcUrl, 'confirmed');
+  const secretKey = Uint8Array.from(Buffer.from(privateKeyHex, 'hex'));
+  const payer = Keypair.fromSecretKey(secretKey);
+  const mint = new PublicKey(mintAddress);
+  const toPublicKey = new PublicKey(to);
+
+  const mintInfo = await getMint(conn, mint);
+  const amountRaw = BigInt(Math.round(amount * 10 ** mintInfo.decimals));
+
+  const fromAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, payer.publicKey);
+  const toAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, toPublicKey);
+
+  const tx = new Transaction();
+  
+  // Add priority fee if provided (fee is in micro-lamports)
+  if (fee && fee > 0) {
+    tx.add(
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: fee
+      })
+    );
+  }
+  
+  tx.add(createTransferInstruction(fromAta.address, toAta.address, payer.publicKey, amountRaw));
+  const sig = await conn.sendTransaction(tx, [payer]);
+  await conn.confirmTransaction(sig, 'confirmed');
+  return sig;
+}
+
+// ─── TON native send ──────────────────────────────────────────────────────────
+async function sendTonNative({ privateKeyHex, to, amount, apiBase, fee }) {
+  const { TonClient, WalletContractV4, internal, toNano } = await import('@ton/ton');
+  const { mnemonicToPrivateKey } = await import('@ton/crypto');
+
+  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TON_API_KEY) || '';
+  const client = new TonClient({
+    endpoint: `${apiBase}/jsonRPC`,
+    apiKey: apiKey || undefined,
+  });
+
+  // Reconstruct keypair from stored hex secret key
+  const secretKey = Buffer.from(privateKeyHex, 'hex');
+  const publicKey = secretKey.slice(32); // TON stores [privateKey(32) + publicKey(32)]
+  const keyPair = { secretKey, publicKey };
+
+  const wallet = WalletContractV4.create({ workchain: 0, publicKey });
+  const contract = client.open(wallet);
+  const seqno = await contract.getSeqno();
+
+  // Calculate value with custom fee if provided (fee is in nanoton)
+  let tonValue = String(amount);
+  if (fee && fee > 0) {
+    // Add fee to amount (fee in nanoton, convert to TON and add)
+    tonValue = (parseFloat(amount) + (fee / 1e9)).toFixed(9);
+  }
+
+  await contract.sendTransfer({
+    secretKey,
+    seqno,
+    messages: [
+      internal({
+        to,
+        value: toNano(tonValue),
+        bounce: false,
+      }),
+    ],
+  });
+
+  return `ton-tx-${Date.now()}`;
+}
+
+// ─── TON Jetton (USDT) send ───────────────────────────────────────────────────
+async function sendTonJetton({ privateKeyHex, to, amount, jettonMasterAddress, apiBase, fee }) {
+  const { TonClient, WalletContractV4, internal, toNano, Address, beginCell } =
+    await import('@ton/ton');
+
+  const apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TON_API_KEY) || '';
+  const client = new TonClient({
+    endpoint: `${apiBase}/jsonRPC`,
+    apiKey: apiKey || undefined,
+  });
+
+  const secretKey = Buffer.from(privateKeyHex, 'hex');
+  const publicKey = secretKey.slice(32);
+
+  const wallet = WalletContractV4.create({ workchain: 0, publicKey });
+  const contract = client.open(wallet);
+  const seqno = await contract.getSeqno();
+
+  // Build jetton transfer payload
+  const amountNano = BigInt(Math.round(amount * 1e6)); // USDT 6 decimals
+  const forwardPayload = beginCell().endCell();
+  const body = beginCell()
+    .storeUint(0xf8a7ea5, 32) // jetton transfer op
+    .storeUint(0, 64)         // query id
+    .storeCoins(amountNano)
+    .storeAddress(Address.parse(to))
+    .storeAddress(Address.parse(wallet.address.toString()))
+    .storeBit(false)
+    .storeCoins(toNano('0.01'))
+    .storeBit(false)
+    .storeRef(forwardPayload)
+    .endCell();
+
+  // Get jetton wallet address for sender
+  const jettonMaster = Address.parse(jettonMasterAddress);
+  const result = await client.runMethod(jettonMaster, 'get_wallet_address', [
+    { type: 'slice', cell: beginCell().storeAddress(wallet.address).endCell() },
+  ]);
+  const jettonWalletAddr = result.stack.readAddress();
+
+  // Calculate TON value with custom fee if provided (fee is in nanoton)
+  let tonValue = '0.05'; // default
+  if (fee && fee > 0) {
+    // Convert nanoton to TON string
+    tonValue = (fee / 1e9).toFixed(9);
+  }
+
+  await contract.sendTransfer({
+    secretKey,
+    seqno,
+    messages: [
+      internal({
+        to: jettonWalletAddr,
+        value: toNano(tonValue),
+        bounce: true,
+        body,
+      }),
+    ],
+  });
+
+  return `ton-jetton-tx-${Date.now()}`;
+}
+
+// ─── LTC send via BlockCypher ─────────────────────────────────────────────────
+async function sendLtc({ privateKeyHex, fromAddress, to, amount, fee }) {
+  const token = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BLOCKCYPHER_TOKEN) || '';
+  const tokenParam = token ? `?token=${token}` : '';
+  const satoshis = Math.round(amount * 1e8);
+  // fee is in satoshis - will be used if > 0, otherwise auto-calculated by BlockCypher
+
+  // 1. Create unsigned transaction skeleton
+  const newTxBody = {
+    inputs: [{ addresses: [fromAddress] }],
+    outputs: [{ addresses: [to], value: satoshis }],
   };
+  if (fee && fee > 0) newTxBody.fees = Math.round(fee);
 
-  // Step 1: Address
-  const renderAddressStep = () => (
-    <>
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/wallet')}> Назад</button>
-        <h2>Шаг 1 из 4: Адрес</h2>
-        <div />
-      </div>
-      {renderStepper()}
+  const newTxRes = await fetch(`https://api.blockcypher.com/v1/ltc/main/txs/new${tokenParam}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newTxBody),
+  });
+  const newTx = await newTxRes.json();
+  if (newTx.errors) throw new Error(newTx.errors[0].error);
 
-      <div className="net-selector-scroll" style={{ marginBottom: 20 }}>
-        {NETWORK_LIST.map(n => (
-          <button
-            key={n.id}
-            className={`net-chip ${activeNetwork === n.id ? 'active' : ''}`}
-            onClick={() => { setActiveNetwork(n.id); setError(''); }}
-            style={{ '--nc': n.color }}
-          >
-            {n.symbol}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ padding: '0 16px' }}>
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Адрес получателя</label>
-          <input
-            type="text"
-            placeholder={activeNetwork === 'solana' ? 'Base58 адрес...' : activeNetwork === 'ton' ? 'UQ... или EQ...' : '0x...'}
-            value={to}
-            onChange={e => setTo(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        {!isSupported && (
-          <div className="warn-msg" style={{ marginBottom: 16 }}> Отправка для этой сети пока не поддерживается</div>
-        )}
-
-        {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
-
-        <button className="btn-primary" onClick={handleAddressNext} disabled={!isSupported} style={{ width: '100%' }}>
-          Далее 
-        </button>
-      </div>
-    </>
+  // 2. Sign each input hash with secp256k1 via ethers SigningKey
+  const sk = new ethers.SigningKey(
+    privateKeyHex.startsWith('0x') ? privateKeyHex : '0x' + privateKeyHex
   );
+  const signatures = newTx.tosign.map((hashHex) => {
+    const sig = sk.sign('0x' + hashHex);
+    // Manually DER-encode the signature for BlockCypher
+    // ethers sig.r and sig.s are hex strings with 0x prefix
+    const r = sig.r.slice(2).padStart(64, '0');
+    const s = sig.s.slice(2).padStart(64, '0');
+    // Prepend 0x00 if high bit set (to avoid negative interpretation)
+    const rPad = parseInt(r.slice(0, 2), 16) >= 0x80 ? '00' + r : r;
+    const sPad = parseInt(s.slice(0, 2), 16) >= 0x80 ? '00' + s : s;
+    const rLen = (rPad.length / 2).toString(16).padStart(2, '0');
+    const sLen = (sPad.length / 2).toString(16).padStart(2, '0');
+    const inner = `02${rLen}${rPad}02${sLen}${sPad}`;
+    const totalLen = (inner.length / 2).toString(16).padStart(2, '0');
+    return `30${totalLen}${inner}`;
+  });
 
-  // Step 2: Amount
-  const renderAmountStep = () => (
-    <>
-      <div className="page-header">
-        <button className="back-btn" onClick={() => setStep('address')}> Назад</button>
-        <h2>Шаг 2 из 4: Сумма</h2>
-        <div />
-      </div>
-      {renderStepper()}
+  // Compressed public key (remove 0x prefix)
+  const pubKeyHex = sk.compressedPublicKey.slice(2);
 
-      <div style={{ padding: '0 16px' }}>
-        <div style={{ 
-          background: '#111', 
-          borderRadius: 16, 
-          padding: '20px', 
-          marginBottom: 20,
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Доступно</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}>
-            {parseFloat(displayBalance).toFixed(6)} {displaySym}
-          </div>
-        </div>
+  // 3. Send signed transaction
+  const sendRes = await fetch(`https://api.blockcypher.com/v1/ltc/main/txs/send${tokenParam}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...newTx,
+      signatures,
+      pubkeys: newTx.tosign.map(() => pubKeyHex),
+    }),
+  });
+  const sent = await sendRes.json();
+  if (sent.errors) throw new Error(sent.errors[0].error);
+  return sent.tx?.hash || `ltc-tx-${Date.now()}`;
+}
 
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Сумма к отправке</label>
-          <div style={{ position: 'relative' }}>
-            <input
-              type="number"
-              placeholder="0.0"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              step="any"
-              min="0"
-              style={{ ...inputStyle, paddingRight: '70px' }}
-            />
-            <span style={{ 
-              position: 'absolute', 
-              right: '16px', 
-              top: '50%', 
-              transform: 'translateY(-50%)',
-              color: 'rgba(255,255,255,0.5)',
-              fontSize: 14
-            }}>
-              {displaySym}
-            </span>
-          </div>
-        </div>
+function hexToBytes(hex) {
+  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const b = new Uint8Array(h.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+  return b;
+}
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {['0.25', '0.5', '0.75', '1'].map(percent => (
-            <button
-              key={percent}
-              onClick={() => setAmount(String(parseFloat(displayBalance) * parseFloat(percent)))}
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: 10,
-                border: '1px solid #333',
-                background: '#1a1a1a',
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: 12,
-                cursor: 'pointer'
-              }}
-            >
-              {parseInt(parseFloat(percent) * 100)}%
-            </button>
-          ))}
-          <button
-            onClick={() => setAmount(String(displayBalance))}
-            style={{
-              flex: 1,
-              padding: '10px',
-              borderRadius: 10,
-              border: '1px solid #333',
-              background: '#1a1a1a',
-              color: '#2563eb',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            MAX
-          </button>
-        </div>
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-        {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
+/**
+ * Send a transaction on any supported chain.
+ *
+ * @param {Object} params
+ * @param {string} params.sym        Asset symbol: 'ETH','BNB','ARB','SOL','TON','LTC','USDT'
+ * @param {string} params.networkId  For USDT: 'eth','bnb','arb','sol','ton'
+ * @param {string} params.from       Sender address
+ * @param {string} params.to         Recipient address
+ * @param {number} params.amount     Amount in human units (e.g. 0.5 ETH)
+ * @param {string} params.privateKey Private key hex (EVM/LTC) or 64-byte hex (SOL/TON)
+ * @param {number} params.fee        Fee in small units (gwei for EVM, micro-lamports for SOL, nanoton for TON, sat for LTC)
+ * @returns {Promise<string>} Transaction hash / signature
+ */
+export async function sendTransaction({ sym, networkId, from, to, amount, privateKey, fee }) {
+  if (!privateKey) throw new Error('Private key not available — re-derive wallet first');
 
-        <button className="btn-primary" onClick={handleAmountNext} style={{ width: '100%' }}>
-          Далее 
-        </button>
-      </div>
-    </>
-  );
+  // ── USDT routing ────────────────────────────────────────────────────────────
+  if (sym === 'USDT') {
+    const net = networkId || 'eth';
+    if (net === 'eth') return sendErc20({ privateKey, contractAddress: USDT_CONTRACTS.eth, to, amount, rpcUrl: CHAIN_RPC.eth(), fee });
+    if (net === 'bnb') return sendErc20({ privateKey, contractAddress: USDT_CONTRACTS.bnb, to, amount, rpcUrl: CHAIN_RPC.bnb(), fee });
+    if (net === 'arb') return sendErc20({ privateKey, contractAddress: USDT_CONTRACTS.arb, to, amount, rpcUrl: CHAIN_RPC.arb(), fee });
+    if (net === 'sol') return sendSolSpl({ privateKeyHex: privateKey, to, amount, mintAddress: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', rpcUrl: CHAIN_RPC.sol(), fee });
+    if (net === 'ton') return sendTonJetton({ privateKeyHex: privateKey, to, amount, jettonMasterAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', apiBase: CHAIN_RPC.ton(), fee });
+    throw new Error(`Unknown USDT network: ${net}`);
+  }
 
-  // Step 3: Fee
-  const renderFeeStep = () => (
-    <>
-      <div className="page-header">
-        <button className="back-btn" onClick={() => setStep('amount')}> Назад</button>
-        <h2>Шаг 3 из 4: Комиссия</h2>
-        <div />
-      </div>
-      {renderStepper()}
+  // ── Native asset routing ─────────────────────────────────────────────────────
+  if (sym === 'ETH') return sendEvmNative({ privateKey, to, amount, chainId: 1, rpcUrl: CHAIN_RPC.eth(), fee });
+  if (sym === 'BNB') return sendEvmNative({ privateKey, to, amount, chainId: 56, rpcUrl: CHAIN_RPC.bnb(), fee });
+  if (sym === 'ARB') return sendEvmNative({ privateKey, to, amount, chainId: 42161, rpcUrl: CHAIN_RPC.arb(), fee });
+  if (sym === 'SOL') return sendSolNative({ privateKeyHex: privateKey, to, amount, rpcUrl: CHAIN_RPC.sol(), fee });
+  if (sym === 'TON') return sendTonNative({ privateKeyHex: privateKey, to, amount, apiBase: CHAIN_RPC.ton(), fee });
+  if (sym === 'LTC') return sendLtc({ privateKeyHex: privateKey, fromAddress: from, to, amount, fee });
 
-      <div style={{ padding: '0 16px' }}>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>
-          Выберите скорость для {displaySym}
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {feeOptions.map((fee) => (
-            <button
-              key={fee.name}
-              onClick={() => { setFeeMode('standard'); setSelectedFee(fee.name); }}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '16px',
-                borderRadius: 12,
-                border: feeMode === 'standard' && selectedFee === fee.name ? '2px solid #2563eb' : '1px solid rgba(255,255,255,0.1)',
-                background: feeMode === 'standard' && selectedFee === fee.name ? 'rgba(37,99,235,0.1)' : '#1a1a1a',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{fee.name}</div>
-                <div style={{ fontSize: 12, color: '#f59e0b' }}>~{fee.time}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                  {getFeePrimaryText(fee.value)}
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                  {getFeeSecondaryText(fee.value)}
-                </div>
-              </div>
-            </button>
-          ))}
-
-          <div style={{
-            borderRadius: 12,
-            border: feeMode === 'custom' ? '2px solid #2563eb' : '1px solid rgba(255,255,255,0.1)',
-            background: feeMode === 'custom' ? 'rgba(37,99,235,0.1)' : '#1a1a1a',
-            padding: 16
-          }}>
-            <button
-              onClick={() => setFeeMode('custom')}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
-                padding: 0
-              }}
-            >
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Своя</div>
-                <div style={{ fontSize: 12, color: '#f59e0b' }}>~{getTimer()}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                  {customFee ? getFeePrimaryText(customFee) : `Введите ${feeConfig?.unit || ''}`}
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                  {customFee ? getFeeSecondaryText(customFee) : ''}
-                </div>
-              </div>
-            </button>
-
-            {feeMode === 'custom' && (
-              <div style={{ marginTop: 12 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
-                  Введите комиссию в {feeConfig.unit}
-                </label>
-                <input
-                  type="number"
-                  placeholder={`Например: ${minStandardFee}`}
-                  value={customFee}
-                  onChange={(e) => setCustomFee(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: '#111',
-                    border: '1px solid #333',
-                    borderRadius: 8,
-                    color: '#fff',
-                    fontSize: 16,
-                    marginBottom: 8
-                  }}
-                />
-                {customFee && parseFloat(customFee) < minStandardFee && (
-                  <div style={{ fontSize: 11, color: '#ef4444' }}>
-                    Комиссия ниже рекомендуемой возможны задержки
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{
-          marginTop: 20,
-          padding: '14px',
-          background: 'rgba(245,158,11,0.1)',
-          border: '1px solid rgba(245,158,11,0.3)',
-          borderRadius: 12,
-          textAlign: 'center'
-        }}>
-          <span style={{ fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>
-             Время подтверждения: {getTimer()}
-          </span>
-        </div>
-
-        {error && <div className="error-msg" style={{ marginTop: 16 }}>{error}</div>}
-
-        <button className="btn-primary" onClick={handleFeeNext} style={{ marginTop: 20, width: '100%' }}>
-          Далее 
-        </button>
-      </div>
-    </>
-  );
-
-  // Step 4: Confirm
-  const renderConfirmStep = () => (
-    <>
-      <div className="page-header">
-        <button className="back-btn" onClick={() => setStep('fee')}> Назад</button>
-        <h2>Шаг 4 из 4: Подтверждение</h2>
-        <div />
-      </div>
-      {renderStepper()}
-
-      <div style={{ padding: '0 16px' }}>
-        <div className="confirm-card" style={{ marginBottom: 20 }}>
-          <div className="confirm-row" style={{ padding: '12px 0' }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)' }}>Адрес получателя</span>
-            <strong style={{ color: '#fff', fontSize: 13 }}>{to.slice(0, 6)}...{to.slice(-4)}</strong>
-          </div>
-          <div className="confirm-row" style={{ padding: '12px 0' }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)' }}>Сумма</span>
-            <strong style={{ color: '#fff' }}>{amount} {displaySym}</strong>
-          </div>
-          <div className="confirm-row" style={{ padding: '12px 0' }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)' }}>Комиссия</span>
-            <strong style={{ color: '#fff' }}>{getFeePrimaryText(getCurrentFeeValue())}</strong>
-          </div>
-          <div className="confirm-row" style={{ padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 8 }}>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Итого (оценка)</span>
-            <strong style={{ color: '#10b981', fontSize: 16 }}>
-              {(parseFloat(amount) + parseFloat(getCurrentFeeNativeEstimate())).toFixed(8)} {displaySym}
-            </strong>
-          </div>
-          <div className="confirm-row" style={{ padding: '8px 0', marginTop: 8 }}>
-            <span style={{ fontSize: 12, color: '#f59e0b' }}> Время: {getTimer()}</span>
-          </div>
-        </div>
-
-        <div style={{ 
-          background: 'rgba(239,68,68,0.1)', 
-          border: '1px solid rgba(239,68,68,0.3)', 
-          borderRadius: 12, 
-          padding: 12,
-          marginBottom: 16
-        }}>
-          <span style={{ fontSize: 12, color: '#ef4444' }}> Транзакция необратима</span>
-        </div>
-
-        {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
-
-        <button
-          className="btn-primary"
-          onClick={handleSend}
-          disabled={loading}
-          style={{ 
-            width: '100%', 
-            background: '#10b981',
-            fontSize: 16,
-            fontWeight: 600
-          }}
-        >
-          {loading ? 'Отправка...' : ` Подтвердить и отправить`}
-        </button>
-      </div>
-    </>
-  );
-
-  // Result Step
-  const renderResultStep = () => (
-    <div className="result-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-      <div style={{ 
-        width: 80, 
-        height: 80, 
-        borderRadius: '50%', 
-        background: '#10b981',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        margin: '0 auto 24px',
-        fontSize: 40
-      }}>
-        
-      </div>
-      <h3 style={{ color: '#fff', marginBottom: 16 }}>Транзакция отправлена!</h3>
-      <div style={{ 
-        background: '#1a1a1a', 
-        borderRadius: 12, 
-        padding: 16, 
-        marginBottom: 24,
-        fontSize: 13
-      }}>
-        <span style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 4 }}>TX Hash:</span>
-        <code style={{ color: '#fff', fontSize: 12 }}>
-          {txHash.length > 20 ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}` : txHash}
-        </code>
-      </div>
-      <button className="btn-primary" onClick={() => navigate('/wallet')} style={{ width: '100%' }}>
-        Назад к кошельку
-      </button>
-    </div>
-  );
-
-  return (
-    <div className="send-page">
-      {step === 'address' && renderAddressStep()}
-      {step === 'amount' && renderAmountStep()}
-      {step === 'fee' && renderFeeStep()}
-      {step === 'confirm' && renderConfirmStep()}
-      {step === 'result' && renderResultStep()}
-    </div>
-  );
+  throw new Error(`Unsupported asset: ${sym}`);
 }
