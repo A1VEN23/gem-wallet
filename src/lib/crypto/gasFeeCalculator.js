@@ -107,6 +107,85 @@ async function fetchLtcFee() {
 
 // ─── Main Fee Calculator ──────────────────────────────────────────────────
 /**
+ * Calculate real network fees with three speed levels
+ * @param {string} symbol - Asset symbol: 'ETH', 'BNB', 'ARB', 'SOL', 'TON', 'LTC', 'ADB'
+ * @returns {Promise<Array<{name: string, value: number, time: string}>>}
+ */
+export async function getNetworkFeeOptions(symbol) {
+  const tokenSymbol = symbol.toLowerCase();
+  
+  try {
+    // ──── ETHEREUM / BNB / ARBITRUM / ADB ───────────────────────────────────
+    if (['eth', 'bnb', 'arb', 'adb'].includes(tokenSymbol)) {
+      let rpcUrl = '';
+      if (tokenSymbol === 'eth') rpcUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ETH_RPC) || 'https://eth.llamarpc.com';
+      else if (tokenSymbol === 'bnb') rpcUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BNB_RPC) || 'https://bsc-dataseed.binance.org';
+      else if (tokenSymbol === 'arb') rpcUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ARB_RPC) || 'https://arb1.arbitrum.io/rpc';
+      else if (tokenSymbol === 'adb') rpcUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADB_RPC) || 'https://eth.llamarpc.com'; // Fallback to ETH for ADB
+
+      const baseGasPriceGwei = await fetchEvmGasPrice(rpcUrl) || 20;
+      
+      return [
+        { name: 'Медленно', value: Math.round(baseGasPriceGwei * 0.8), time: '1-2 мин' },
+        { name: 'Стандартно', value: Math.round(baseGasPriceGwei * 1.0), time: '1-2 мин' },
+        { name: 'Быстро', value: Math.round(baseGasPriceGwei * 1.5), time: '1-2 мин' },
+      ];
+    }
+
+    // ──── SOLANA ──────────────────────────────────────────────────────────
+    if (tokenSymbol === 'sol') {
+      const rpcUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SOL_RPC) || 'https://api.mainnet-beta.solana.com';
+      const medianFee = await fetchSolPriorityFee(rpcUrl);
+      
+      return [
+        { name: 'Медленно', value: Math.round(medianFee * 0.5), time: '1-2 мин' },
+        { name: 'Стандартно', value: Math.round(medianFee), time: '1-2 мин' },
+        { name: 'Быстро', value: Math.round(medianFee * 2), time: '1-2 мин' },
+      ];
+    }
+
+    // ──── TON ─────────────────────────────────────────────────────────────
+    if (tokenSymbol === 'ton') {
+      // TON fees are usually fixed per operation type
+      return [
+        { name: 'Медленно', value: 2000000, time: '1-2 мин' }, // 0.002 TON
+        { name: 'Стандартно', value: 5000000, time: '1-2 мин' }, // 0.005 TON
+        { name: 'Быстро', value: 10000000, time: '1-2 мин' }, // 0.01 TON
+      ];
+    }
+
+    // ──── LITECOIN ────────────────────────────────────────────────────────
+    if (tokenSymbol === 'ltc') {
+      // Fetch current fee from BlockCypher
+      try {
+        const res = await fetch('https://api.blockcypher.com/v1/ltc/main');
+        const data = await res.json();
+        const low = Math.round(data.low_fee_per_kb / 1024) || 1;
+        const med = Math.round(data.medium_fee_per_kb / 1024) || 10;
+        const high = Math.round(data.high_fee_per_kb / 1024) || 50;
+
+        return [
+          { name: 'Медленно', value: low, time: '1-2 мин' },
+          { name: 'Стандартно', value: med, time: '1-2 мин' },
+          { name: 'Быстро', value: high, time: '1-2 мин' },
+        ];
+      } catch (e) {
+        return [
+          { name: 'Медленно', value: 1, time: '1-2 мин' },
+          { name: 'Стандартно', value: 10, time: '1-2 мин' },
+          { name: 'Быстро', value: 50, time: '1-2 мин' },
+        ];
+      }
+    }
+
+    throw new Error(`Unsupported symbol: ${symbol}`);
+  } catch (e) {
+    console.error('Error getting fee options:', e);
+    return [];
+  }
+}
+
+/**
  * Calculate real network fees
  * @param {string} symbol - Asset symbol: 'ETH', 'BNB', 'ARB', 'SOL', 'TON', 'LTC', 'USDT'
  * @param {string} network - For USDT: 'eth', 'bnb', 'arb', 'sol', 'ton'
