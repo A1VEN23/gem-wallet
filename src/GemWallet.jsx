@@ -1971,14 +1971,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   );
 }
 
-    </Sheet>
-
-  );
-
-}
-
-
-
 // Maps USDT network id → wallet address key
 
 const USDT_NET_ADDR = { eth:"ETH", ton:"TON", bnb:"BNB", arb:"ARB", sol:"SOL" };
