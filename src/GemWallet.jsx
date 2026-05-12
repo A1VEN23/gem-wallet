@@ -1490,33 +1490,19 @@ function PinLock({ savedPin, onUnlock, onSetPin, onResetWallet }) {
 // ─── NETWORK DATA ─────────────────────────────────────────────────────────────
 
 const ASSET_NETWORKS = {
-
-  ETH:  [{ id:"eth",  label:"Ethereum",  short:"ETH",    color:"#8B9CF7", placeholder:"0x… (42 chars)" }],
-
-  TON:  [{ id:"ton",  label:"TON",       short:"TON",    color:"#0098EA", placeholder:"EQ… (48 chars)" }],
-
-  BNB:  [{ id:"bnb",  label:"BNB Chain", short:"BNB",    color:"#F3BA2F", placeholder:"0x… (42 chars)" }],
-
-  LTC:  [{ id:"ltc",  label:"Litecoin",  short:"LTC",    color:"#BFBBBB", placeholder:"L… (34 chars)"  }],
-
-  ARB:  [{ id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)" }],
-
-  SOL:  [{ id:"sol",  label:"Solana",    short:"SOL",    color:"#B57BFF", placeholder:"…  (44 chars)"  }],
-
+  ETH:  [{ id:"eth",  label:"Ethereum",  short:"ETH",    color:"#8B9CF7", placeholder:"0x… (42 chars)", native: "ETH" }],
+  TON:  [{ id:"ton",  label:"TON",       short:"TON",    color:"#0098EA", placeholder:"EQ… (48 chars)", native: "TON" }],
+  BNB:  [{ id:"bnb",  label:"BNB Chain", short:"BNB",    color:"#F3BA2F", placeholder:"0x… (42 chars)", native: "BNB" }],
+  LTC:  [{ id:"ltc",  label:"Litecoin",  short:"LTC",    color:"#BFBBBB", placeholder:"L… (34 chars)",  native: "LTC" }],
+  ARB:  [{ id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)", native: "ARB" }],
+  SOL:  [{ id:"sol",  label:"Solana",    short:"SOL",    color:"#B57BFF", placeholder:"…  (44 chars)", native: "SOL" }],
   USDT: [
-
-    { id:"eth",  label:"Ethereum",  short:"ERC-20", color:"#8B9CF7", placeholder:"0x… (42 chars)" },
-
-    { id:"ton",  label:"TON",       short:"TRC-20", color:"#0098EA", placeholder:"EQ… (48 chars)" },
-
-    { id:"bnb",  label:"BNB Chain", short:"BEP-20", color:"#F3BA2F", placeholder:"0x… (42 chars)" },
-
-    { id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)" },
-
-    { id:"sol",  label:"Solana",    short:"SPL",    color:"#B57BFF", placeholder:"…  (44 chars)"  },
-
+    { id:"eth",  label:"Ethereum",  short:"ERC-20", color:"#8B9CF7", placeholder:"0x… (42 chars)", native: "ETH" },
+    { id:"ton",  label:"TON",       short:"TRC-20", color:"#0098EA", placeholder:"EQ… (48 chars)", native: "TON" },
+    { id:"bnb",  label:"BNB Chain", short:"BEP-20", color:"#F3BA2F", placeholder:"0x… (42 chars)", native: "BNB" },
+    { id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)", native: "ARB" },
+    { id:"sol",  label:"Solana",    short:"SPL",    color:"#B57BFF", placeholder:"…  (44 chars)", native: "SOL" },
   ],
-
 };
 
 
@@ -1659,12 +1645,9 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   };
 
   const getFeeInNativeToken = () => {
-    if (currentSym === 'USDT' && curNet) {
-      const nativePrice = prices[curNet.native] || prices.ETH || 0;
-      return nativePrice > 0 ? feeUsd / nativePrice : 0;
-    }
-    const tokenPrice = prices[currentSym] || 0;
-    return tokenPrice > 0 ? feeUsd / tokenPrice : 0;
+    const nativeSym = curNet?.native || currentSym;
+    const nativePrice = prices[nativeSym] || 0;
+    return nativePrice > 0 ? feeUsd / nativePrice : 0;
   };
 
   // Auto-detect network by address
@@ -1717,12 +1700,27 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     }
     else if(step===4) {
       const num=parseFloat(amt);
+      const nativeSym = curNet?.native || currentSym;
+      const nativeAsset = assets.find(a => a.sym === nativeSym);
       const feeInNative = getFeeInNativeToken();
-      const totalNeeded = num + feeInNative;
       
-      if(totalNeeded > assetObj.balance){
-        alert(`Недостаточно средств. Нужно ${fmt(totalNeeded, 6)} ${sel.sym} (включая комиссию ~${feeInNative.toFixed(6)} ${sel.sym} ≈ $${fee})`);
-        return;
+      // Check for enough funds
+      if (currentSym === nativeSym) {
+        // Native token send
+        if (num + feeInNative > assetObj.balance) {
+          alert(`Недостаточно средств. Нужно ${fmt(num + feeInNative, 6)} ${sel.sym} (включая комиссию ~${feeInNative.toFixed(6)} ${sel.sym})`);
+          return;
+        }
+      } else {
+        // Token send (like USDT)
+        if (num > assetObj.balance) {
+          alert(`Недостаточно ${currentSym}. Баланс: ${fmt(assetObj.balance, 6)}`);
+          return;
+        }
+        if (feeInNative > (nativeAsset?.balance || 0)) {
+          alert(`Недостаточно ${nativeSym} для оплаты комиссии. Нужно ~${feeInNative.toFixed(6)} ${nativeSym}`);
+          return;
+        }
       }
 
       setSending(true);
@@ -1731,7 +1729,11 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           try{
             await new Promise(r=>setTimeout(r,1200));
             const fakeHash = genTxHash();
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash:fakeHash, isTest:true });
+            onSend({ 
+              sym:sel.sym, amount:num, to, usd:num*price, 
+              hash:fakeHash, isTest:true, 
+              fee: feeInNative, feeSym: nativeSym 
+            });
             setDone(true);
             setTimeout(onClose,2500);
           }catch(e){ alert("Ошибка теста: "+(e?.message||"Unknown")); }
@@ -1749,7 +1751,10 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
             fee: fee // Pass custom fee if needed
           });
           if(hash){
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
+            onSend({ 
+              sym:sel.sym, amount:num, to, usd:num*price, 
+              hash, fee: feeInNative, feeSym: nativeSym 
+            });
             setDone(true);
             setTimeout(onClose,2500);
           }
@@ -8353,28 +8358,24 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  function handleSend({sym,amount,to,usd,isTest}) {
-
+  function handleSend({sym,amount,to,usd,isTest,fee,feeSym}) {
     try {
-
       // Validate inputs
-
       if (!sym || typeof amount !== 'number' || isNaN(amount)) {
-
         console.error("[handleSend] Invalid arguments:", {sym, amount, to, usd});
-
         return null;
-
       }
-
       
-
       setBalances(b=>{
-
         if (!b || typeof b !== 'object') return b;
-
-        return {...b,[sym]:Math.max(0,(b[sym]||0)-amount)};
-
+        const newB = {...b};
+        // Deduct amount
+        newB[sym] = Math.max(0, (newB[sym]||0) - amount);
+        // Deduct fee if provided
+        if (fee && feeSym) {
+          newB[feeSym] = Math.max(0, (newB[feeSym]||0) - fee);
+        }
+        return newB;
       });
 
       
