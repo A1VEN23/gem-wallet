@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { QRCodeSVG } from "qrcode.react";
 
 import QRScanner from "./components/QRScanner.jsx";
+import TestTxForm from "./components/TestTxForm.jsx";
 
 import {
 
@@ -5234,6 +5235,8 @@ function ActivityTab({ txHistory, onCancelTx }) {
 
   const [filter,setFilter]=useState("all");
 
+  const [showAddTx,setShowAddTx]=useState(false);
+
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
 
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
@@ -5270,6 +5273,14 @@ function ActivityTab({ txHistory, onCancelTx }) {
 
         <span style={{fontSize:17,fontWeight:700,color:"#fff",flex:1}}>Activity</span>
 
+        <button onClick={()=>setShowAddTx(!showAddTx)} style={{width:36,height:36,borderRadius:"50%",background:"#10b981",
+
+          border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+
+          <Plus size={24} color="#fff"/>
+
+        </button>
+
         {["all","send","receive","swap","declined"].map(f=>(
 
           <button key={f} onClick={()=>setFilter(f)}
@@ -5287,6 +5298,8 @@ function ActivityTab({ txHistory, onCancelTx }) {
         ))}
 
       </div>
+
+      {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)}/>}
 
       {filtered.length===0&&(
 

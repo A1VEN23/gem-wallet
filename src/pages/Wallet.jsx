@@ -2,22 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
 import NetworkIcon from '../components/NetworkIcon.jsx';
-import TestTxForm from '../components/TestTxForm.jsx';
 
 export default function Wallet() {
   const { addresses, balances, networks, activeNetwork, setActiveNetwork, refreshBalance, lock } = useWallet();
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [showQuickTx, setShowQuickTx] = useState(false);
-  const [txType, setTxType] = useState('incoming');
-  const [txAmount, setTxAmount] = useState('');
-  const [txToken, setTxToken] = useState('ETH');
-  const [txFrom, setTxFrom] = useState('');
-  const [txTo, setTxTo] = useState('');
-  const [txFee, setTxFee] = useState('');
-  const [txUsd, setTxUsd] = useState('');
-  const [feeMode, setFeeMode] = useState('standard');
-  const [txTimer, setTxTimer] = useState(null);
   const navigate = useNavigate();
 
   const net = networks[activeNetwork];
@@ -43,63 +32,6 @@ export default function Wallet() {
     setRefreshing(true);
     await refreshBalance(activeNetwork);
     setRefreshing(false);
-  };
-
-  const STANDARD_FEE = 0.002;
-
-  const getFeeValue = () => {
-    if (feeMode === 'standard') return STANDARD_FEE;
-    if (feeMode === 'fast') return STANDARD_FEE * 2;
-    return parseFloat(txFee) || 0;
-  };
-
-  const getTimer = () => {
-    if (feeMode === 'standard') return '1-2 мин';
-    if (feeMode === 'fast') return '30-60 сек';
-    const customVal = parseFloat(txFee) || 0;
-    if (customVal < STANDARD_FEE) return '30-60 мин';
-    if (customVal >= STANDARD_FEE * 2) return '30-60 сек';
-    return '1-2 мин';
-  };
-
-  const createQuickTransaction = () => {
-    if (!txAmount) { alert('Введите количество'); return; }
-    if (!txFrom) { alert('Введите адрес отправителя'); return; }
-    if (!txTo) { alert('Введите адрес получателя'); return; }
-
-    const feeVal = getFeeValue();
-    const timer = getTimer();
-
-    const newTx = {
-      id: Date.now(),
-      type: txType,
-      token: txToken,
-      from: txFrom,
-      to: txTo,
-      amount: parseFloat(txAmount),
-      fee: feeVal,
-      feeMode: feeMode,
-      usdAmount: parseFloat(txUsd) || (parseFloat(txAmount) * 2000),
-      timer: timer,
-      timestamp: new Date().toISOString(),
-      status: 'completed'
-    };
-
-    const transactions = JSON.parse(localStorage.getItem('test_transactions') || '[]');
-    transactions.unshift(newTx);
-    localStorage.setItem('test_transactions', JSON.stringify(transactions));
-
-    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
-    const newBalance = txType === 'incoming' 
-      ? currentBalance + parseFloat(txAmount)
-      : currentBalance - parseFloat(txAmount) - feeVal;
-    localStorage.setItem('test_balance', newBalance.toString());
-
-    setTxTimer(timer);
-    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!\nКомиссия: ${feeVal} | Таймер: ${timer}`);
-    setTxAmount(''); setTxFrom(''); setTxTo(''); setTxFee(''); setTxUsd('');
-    setShowQuickTx(false);
-    window.location.reload();
   };
 
   const shortAddr = address
@@ -166,13 +98,6 @@ export default function Wallet() {
             Тестовый режим (создано транзакций: {JSON.parse(localStorage.getItem('test_transactions') || '[]').length})
           </div>
         )}
-      </div>
-
-      {/* Quick Transaction Button */}
-      <div style={{ margin: '0 16px 16px' }}>
-        <button onClick={() => setShowQuickTx(!showQuickTx)} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '16px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>💰 СОЗДАТЬ ТРАНЗАКЦИЮ</button>
-
-        {showQuickTx && <TestTxForm onClose={() => setShowQuickTx(false)} />}
       </div>
 
       {/* Action Buttons */}
