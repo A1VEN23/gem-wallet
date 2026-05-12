@@ -7657,24 +7657,33 @@ function OnboardScreen({ onCreate, onImport }) {
 
       {/* Logo */}
 
-      {/* Avatar */}
-      <div style={{marginBottom:40,animation:"fadeUp 0.6s ease both"}}>
-        <div style={{width:120,height:120,borderRadius:32,background:"linear-gradient(135deg,#667eea,#764ba2)",
-          display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 40px rgba(102,126,234,0.4)"}}>
-          <CrystalIcon size={64}/>
+      {/* Avatar - Crystal on Graphite */}
+      <div style={{marginBottom:48,animation:"fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) both"}}>
+        <div style={{width:120,height:120,borderRadius:28,background:"linear-gradient(135deg,#1e293b,#0f172a)",
+          border:"1px solid rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow:"0 0 60px rgba(37,99,235,0.3), inset 0 1px 0 rgba(255,255,255,0.05)"}}>
+          <CrystalIcon size={56}/>
         </div>
       </div>
 
-      {/* Buttons */}
-      <div style={{width:"100%",maxWidth:280,display:"flex",flexDirection:"column",gap:12,
-        animation:"fadeUp 0.6s 0.1s ease both",opacity:0,animationFillMode:"forwards"}}>
-        <button onClick={()=>onCreate()} style={{width:"100%",padding:"16px",borderRadius:12,border:"none",
-          background:"#10b981",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
-          Создать кошелёк
+      {/* Buttons - Wallet Style */}
+      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:14,
+        animation:"fadeUp 0.8s 0.15s cubic-bezier(0.16,1,0.3,1) both",opacity:0,animationFillMode:"forwards"}}>
+        <button onClick={()=>onCreate()} style={{width:"100%",padding:"18px 24px",borderRadius:16,border:"none",
+          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,
+          cursor:"pointer",boxShadow:"0 8px 32px rgba(37,99,235,0.4)",letterSpacing:"0.01em",
+          transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",transform:"translateY(0)"}}
+          onMouseEnter={(e)=>{e.target.style.transform="translateY(-2px)";e.target.style.boxShadow="0 12px 40px rgba(37,99,235,0.5)";}}
+          onMouseLeave={(e)=>{e.target.style.transform="translateY(0)";e.target.style.boxShadow="0 8px 32px rgba(37,99,235,0.4)";}}>
+          💎 Создать новый кошелёк
         </button>
-        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"16px",borderRadius:12,
-          border:"2px solid rgba(255,255,255,0.3)",background:"transparent",color:"#fff",fontSize:16,fontWeight:600,cursor:"pointer"}}>
-          Импортировать
+        <button onClick={()=>setImporting(true)} style={{width:"100%",padding:"18px 24px",borderRadius:16,
+          border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",
+          color:"rgba(255,255,255,0.85)",fontSize:15,fontWeight:500,cursor:"pointer",
+          transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={(e)=>{e.target.style.background="rgba(255,255,255,0.08)";e.target.style.borderColor="rgba(255,255,255,0.2)";}}
+          onMouseLeave={(e)=>{e.target.style.background="rgba(255,255,255,0.04)";e.target.style.borderColor="rgba(255,255,255,0.12)";}}>
+          📥 Импортировать кошелёк
         </button>
       </div>
 
