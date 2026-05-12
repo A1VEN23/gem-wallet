@@ -1604,22 +1604,24 @@ function NetworkPicker({ sym, selected, onSelect }) {
 
 function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network, testMode }) {
   const [step,setStep]=useState(1);
-  const [sel,setSel]=useState(assets[0]);
+  const [sel,setSel]=useState(assets?.[0] || {sym: "ETH", id: "eth"});
   const [to,setTo]=useState("");
   const [amt,setAmt]=useState("");
   const [done,setDone]=useState(false);
   const [sending,setSending]=useState(false);
   const [txHash,setTxHash]=useState("");
-  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
+  const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets?.[0]?.sym]?.[0]||null);
   const [addrError,setAddrError]=useState("");
   const [showScanner,setShowScanner]=useState(false);
   const [customFee, setCustomFee] = useState("");
   const [feeMode, setFeeMode] = useState("standard"); // "standard" | "custom"
-
-  const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
-  const price = prices[sel.sym]||0;
   const [feeSpeed,setFeeSpeed]=useState("medium");
-  const nets = ASSET_NETWORKS[sel.sym]||[];
+
+  // Derive values safely
+  const currentSym = sel?.sym || "ETH";
+  const assetObj = assets.find(a=>a.sym===currentSym)||assets[0]||{balance:0};
+  const price = prices[currentSym]||0;
+  const nets = ASSET_NETWORKS[currentSym]||[];
   const curNet = selectedNet || nets[0] || null;
 
   // Real units mapping for Russian UI
@@ -1633,19 +1635,19 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     USDT: { unit: "gwei", kind: "evm", limit: 65000 }
   };
 
-  const feeConfig = FEE_UNITS[sel.sym] || { unit: "gwei", kind: "evm", limit: 21000 };
+  const feeConfig = FEE_UNITS[currentSym] || { unit: "gwei", kind: "evm", limit: 21000 };
   const unit = feeConfig.unit;
 
   const getNetworkFee = () => {
     if (feeMode === "custom") return parseFloat(customFee) || 0;
     
-    if (sel.sym === 'USDT' && curNet) {
+    if (currentSym === 'USDT' && curNet) {
       const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
       const feeSymbol = networkMap[curNet.id] || 'ETH';
       const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
       return fees[feeSpeed] || fees.medium;
     }
-    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+    const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
     return fees[feeSpeed] || fees.medium;
   };
 
@@ -1670,11 +1672,11 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   };
 
   const getFeeInNativeToken = () => {
-    if (sel.sym === 'USDT' && curNet) {
+    if (currentSym === 'USDT' && curNet) {
       const nativePrice = prices[curNet.native] || prices.ETH || 0;
       return nativePrice > 0 ? feeUsd / nativePrice : 0;
     }
-    const tokenPrice = prices[sel.sym] || 0;
+    const tokenPrice = prices[currentSym] || 0;
     return tokenPrice > 0 ? feeUsd / tokenPrice : 0;
   };
 
@@ -1689,7 +1691,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
         if (solAsset) setSel(solAsset);
       } else if (/^0x[a-fA-F0-9]{40}$/.test(to)) {
         // Keep current asset if it's already EVM, otherwise default to ETH
-        if (!['ETH', 'BNB', 'ARB', 'USDT'].includes(sel.sym)) {
+        if (!['ETH', 'BNB', 'ARB', 'USDT'].includes(currentSym)) {
           const ethAsset = assets.find(a => a.sym === 'ETH');
           if (ethAsset) setSel(ethAsset);
         }
@@ -1705,8 +1707,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
   function handleToChange(val) {
     setTo(val);
-    if (val && !isValidAddress(val, sel.sym)) {
-      setAddrError(`Неверный формат адреса ${sel.sym}`);
+    if (val && !isValidAddress(val, currentSym)) {
+      setAddrError(`Неверный формат адреса ${currentSym}`);
     } else {
       setAddrError("");
     }
