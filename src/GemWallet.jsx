@@ -122,23 +122,14 @@ const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT:
 
 
 // ─── REAL NETWORK FEES (updated for current market) ─────────────────────────────
-
 const NETWORK_FEES = {
-
-  ETH: { low: 1.5, medium: 4.0, high: 12 },      // Ethereum (Sepolia testnet)
-
-  BNB: { low: 0.02, medium: 0.05, high: 0.15 },  // BSC Testnet
-
-  ARB: { low: 0.05, medium: 0.15, high: 0.3 },   // Arbitrum Sepolia
-
-  SOL: { low: 0.00025, medium: 0.001, high: 0.005 }, // Solana Devnet
-
-  TON: { low: 0.005, medium: 0.02, high: 0.05 },  // TON
-
-  LTC: { low: 0.001, medium: 0.003, high: 0.01 }, // Litecoin
-
-  USDT: { low: 0.5, medium: 1.5, high: 4 }        // Token transfer fees
-
+  ETH: { low: 10, medium: 20, high: 40 },      // Gwei
+  BNB: { low: 1, medium: 3, high: 5 },         // Gwei
+  ARB: { low: 0.01, medium: 0.1, high: 0.5 },  // Gwei
+  SOL: { low: 1000, medium: 5000, high: 10000 }, // micro-lamports
+  TON: { low: 2000000, medium: 5000000, high: 10000000 }, // nanoton
+  LTC: { low: 10, medium: 25, high: 50 },      // sat/byte
+  USDT: { low: 10, medium: 25, high: 50 }       // Depends on network, but using Gwei as base
 };
 
 
@@ -1633,11 +1624,46 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
   // Real units mapping for Russian UI
   const FEE_UNITS = {
-    TON: "nanoton", ETH: "gwei", BNB: "gwei", SOL: "micro-lamports", 
-    ARB: "gwei", LTC: "sat/byte", USDT: "gwei"
+    TON: { unit: "nanoton", kind: "ton" },
+    ETH: { unit: "gwei", kind: "evm", limit: 21000 },
+    BNB: { unit: "gwei", kind: "evm", limit: 21000 },
+    SOL: { unit: "micro-lamports", kind: "sol" },
+    ARB: { unit: "gwei", kind: "evm", limit: 21000 },
+    LTC: { unit: "sat/byte", kind: "ltc", bytes: 250 },
+    USDT: { unit: "gwei", kind: "evm", limit: 65000 }
   };
 
-  const unit = FEE_UNITS[sel.sym] || "gwei";
+  const feeConfig = FEE_UNITS[sel.sym] || { unit: "gwei", kind: "evm", limit: 21000 };
+  const unit = feeConfig.unit;
+
+  const getFeeUsd = (val) => {
+    if (!feeConfig) return 0;
+    const v = parseFloat(val) || 0;
+    if (feeConfig.kind === "evm") return (v * feeConfig.limit * price) / 1e9;
+    if (feeConfig.kind === "ltc") return (v * feeConfig.bytes * price) / 1e8;
+    if (feeConfig.kind === "ton") return (v * price) / 1e9;
+    if (feeConfig.kind === "sol") return (v * price) / 1e9; // Simplified
+    return v * price;
+  };
+
+  const fee = getNetworkFee();
+  const feeUsd = getFeeUsd(fee);
+
+  const getTimer = () => {
+    if (feeMode === "custom") {
+      return (parseFloat(customFee) || 0) < 5 ? "30-120 мин" : "1-2 мин";
+    }
+    return "1-2 мин";
+  };
+
+  const getFeeInNativeToken = () => {
+    if (sel.sym === 'USDT' && curNet) {
+      const nativePrice = prices[curNet.native] || prices.ETH || 0;
+      return nativePrice > 0 ? feeUsd / nativePrice : 0;
+    }
+    const tokenPrice = prices[sel.sym] || 0;
+    return tokenPrice > 0 ? feeUsd / tokenPrice : 0;
+  };
 
   // Auto-detect network by address
   useEffect(() => {
@@ -1684,26 +1710,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     }
     const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
     return fees[feeSpeed] || fees.medium;
-  };
-
-  const fee = getNetworkFee();
-
-  const getTimer = () => {
-    if (feeMode === "custom") {
-      const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
-      const minStandard = fees.low;
-      return parseFloat(customFee) < minStandard ? "30-120 мин" : "1-2 мин";
-    }
-    return "1-2 мин";
-  };
-
-  const getFeeInNativeToken = () => {
-    if (sel.sym === 'USDT' && curNet) {
-      const nativePrice = prices[curNet.native] || prices.ETH || 0;
-      return nativePrice > 0 ? fee / nativePrice : 0;
-    }
-    const tokenPrice = prices[sel.sym] || 0;
-    return tokenPrice > 0 ? fee / tokenPrice : 0;
   };
 
   function next() {
@@ -1879,8 +1885,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                         <div style={{fontSize:12,color:"#f59e0b"}}>~1-2 мин</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>${feeValue}</div>
-                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{unit}</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{feeValue} {unit}</div>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(feeValue))}</div>
                       </div>
                     </button>
                   );
@@ -1895,7 +1901,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                       <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `$${customFee}` : "Введите сумму"}</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${customFee} ${unit}` : "Введите сумму"}</div>
+                      {customFee && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(customFee))}</div>}
                     </div>
                   </button>
                   {feeMode==="custom"&&(
@@ -1909,7 +1916,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
               <div style={{padding:"14px",background:"rgba(245,158,11,0.1)",borderRadius:12,textAlign:"center",border:"1px solid rgba(245,158,11,0.2)"}}>
                 <span style={{fontSize:13,color:"#f59e0b",fontWeight:600}}>
-                   Ожидаемое время: {getTimer()}
+                   Итого к оплате: {fee} {unit} (≈ {fmtUSD(feeUsd)})
                 </span>
               </div>
             </div>
@@ -1936,14 +1943,14 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
                   <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Комиссия</span>
                   <div style={{textAlign:"right"}}>
-                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>${fee}</span>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{fee} {unit}</span>
                     <button onClick={()=>setStep(3)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:"0 0 0 8px",cursor:"pointer"}}>Изменить</button>
                   </div>
                 </div>
                 <div style={{height:1,background:"rgba(255,255,255,0.06)",margin:"8px 0"}}/>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:14,color:"#fff",fontWeight:600}}>Итого</span>
-                  <span style={{fontSize:16,color:"#10b981",fontWeight:700}}>{fmtUSD(parseFloat(amt||0)*price+fee)}</span>
+                  <span style={{fontSize:14,color:"#fff",fontWeight:600}}>Итого (в USD)</span>
+                  <span style={{fontSize:16,color:"#10b981",fontWeight:700}}>{fmtUSD(parseFloat(amt||0)*price+feeUsd)}</span>
                 </div>
               </div>
               <div style={{padding:12,background:"rgba(239,68,68,0.1)",borderRadius:10,border:"1px solid rgba(239,68,68,0.2)"}}>
