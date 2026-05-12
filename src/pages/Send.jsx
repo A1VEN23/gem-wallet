@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
 import { sendTransaction } from '../lib/crypto/transactionSender.js';
@@ -11,44 +11,44 @@ const NET_TO_SYM = {
 const SUPPORTED_NETS = new Set(['ethereum', 'bsc', 'arbitrum', 'solana', 'ton', 'litecoin']);
 
 const FEE_UNITS = {
-  ethereum: { unit: 'gwei', decimals: 9, symbol: 'ETH' },
-  bsc: { unit: 'gwei', decimals: 9, symbol: 'BNB' },
-  arbitrum: { unit: 'gwei', decimals: 9, symbol: 'ARB' },
-  solana: { unit: 'micro-lamports', decimals: 15, symbol: 'SOL' },
-  ton: { unit: 'nanoton', decimals: 9, symbol: 'TON' },
-  litecoin: { unit: 'sat', decimals: 8, symbol: 'LTC' },
+  ethereum: { unit: 'gwei', symbol: 'ETH', kind: 'evm', evmGasLimit: 21000 },
+  bsc: { unit: 'gwei', symbol: 'BNB', kind: 'evm', evmGasLimit: 21000 },
+  arbitrum: { unit: 'gwei', symbol: 'ARB', kind: 'evm', evmGasLimit: 21000 },
+  solana: { unit: 'micro-lamports', symbol: 'SOL', kind: 'sol' },
+  ton: { unit: 'nanoton', symbol: 'TON', kind: 'ton', decimals: 9 },
+  litecoin: { unit: 'sat/byte', symbol: 'LTC', kind: 'ltc', decimals: 8, estimateBytes: 250 },
 };
 
 const STANDARD_FEES = {
   ethereum: [
-    { name: 'Эконом', value: 20000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 40000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 80000, time: '1-2 мин' },
+    { name: 'Эконом', value: 10, time: '1-2 мин' },
+    { name: 'Стандарт', value: 20, time: '1-2 мин' },
+    { name: 'Быстрая', value: 40, time: '1-2 мин' },
   ],
   bsc: [
-    { name: 'Эконом', value: 5000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 10000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 20000, time: '1-2 мин' },
+    { name: 'Эконом', value: 1, time: '1-2 мин' },
+    { name: 'Стандарт', value: 2, time: '1-2 мин' },
+    { name: 'Быстрая', value: 3, time: '1-2 мин' },
   ],
   arbitrum: [
-    { name: 'Эконом', value: 100, time: '1-2 мин' },
-    { name: 'Стандарт', value: 200, time: '1-2 мин' },
-    { name: 'Быстрая', value: 500, time: '1-2 мин' },
+    { name: 'Эконом', value: 0.05, time: '1-2 мин' },
+    { name: 'Стандарт', value: 0.1, time: '1-2 мин' },
+    { name: 'Быстрая', value: 0.2, time: '1-2 мин' },
   ],
   solana: [
-    { name: 'Эконом', value: 5000000000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 10000000000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 20000000000, time: '1-2 мин' },
+    { name: 'Эконом', value: 1000, time: '1-2 мин' },
+    { name: 'Стандарт', value: 5000, time: '1-2 мин' },
+    { name: 'Быстрая', value: 10000, time: '1-2 мин' },
   ],
   ton: [
-    { name: 'Эконом', value: 1000000, time: '1-2 мин' },
+    { name: 'Эконом', value: 2000000, time: '1-2 мин' },
     { name: 'Стандарт', value: 5000000, time: '1-2 мин' },
     { name: 'Быстрая', value: 10000000, time: '1-2 мин' },
   ],
   litecoin: [
-    { name: 'Эконом', value: 1000, time: '1-2 мин' },
-    { name: 'Стандарт', value: 5000, time: '1-2 мин' },
-    { name: 'Быстрая', value: 10000, time: '1-2 мин' },
+    { name: 'Эконом', value: 10, time: '1-2 мин' },
+    { name: 'Стандарт', value: 25, time: '1-2 мин' },
+    { name: 'Быстрая', value: 50, time: '1-2 мин' },
   ],
 };
 
@@ -69,19 +69,42 @@ export default function Send() {
   const sym = NET_TO_SYM[activeNetwork] || activeNetwork.toUpperCase();
   const feeConfig = FEE_UNITS[activeNetwork];
   const feeOptions = STANDARD_FEES[activeNetwork] || [];
-  const minStandardFee = Math.min(...feeOptions.map(f => f.value));
+  const minStandardFee = feeOptions.length ? Math.min(...feeOptions.map(f => f.value)) : 0;
 
   const nativeBalance = balances[activeNetwork] || '0';
   const displayBalance = nativeBalance;
   const displaySym = sym;
 
-  const formatFee = (valueInSmallUnits) => {
-    if (!valueInSmallUnits || valueInSmallUnits === '0') return '0 ' + feeConfig.unit;
-    return `${valueInSmallUnits} ${feeConfig.unit}`;
+  const getFeeTotalSmallUnits = (value) => {
+    if (!feeConfig) return 0;
+    if (feeConfig.kind === 'ltc') return Math.round((parseFloat(value) || 0) * feeConfig.estimateBytes);
+    return parseFloat(value) || 0;
   };
 
-  const toNativeUnit = (smallUnits) => {
-    return (smallUnits / Math.pow(10, feeConfig.decimals)).toFixed(8);
+  const getFeePrimaryText = (value) => {
+    if (!feeConfig) return '';
+    const v = value === null || value === undefined || value === '' ? 0 : value;
+    return `${v} ${feeConfig.unit}`;
+  };
+
+  const getFeeSecondaryText = (value) => {
+    if (!feeConfig) return '';
+    const v = parseFloat(value) || 0;
+
+    if (feeConfig.kind === 'evm') {
+      const gasLimit = feeConfig.evmGasLimit || 21000;
+      const estimatedNative = (v * gasLimit) / 1e9;
+      return `≈${estimatedNative.toFixed(8)} ${feeConfig.symbol}`;
+    }
+
+    if (feeConfig.kind === 'sol') {
+      const lamports = Math.floor(v / 1e6);
+      return `≈${lamports} lamports`;
+    }
+
+    const total = getFeeTotalSmallUnits(v);
+    const native = feeConfig.decimals ? (total / Math.pow(10, feeConfig.decimals)) : 0;
+    return `≈${native.toFixed(8)} ${feeConfig.symbol}`;
   };
 
   const getTimer = () => {
@@ -102,6 +125,30 @@ export default function Send() {
     return selected ? selected.value : feeOptions[1]?.value || 0;
   };
 
+  const getCurrentFeeForSend = () => {
+    const current = getCurrentFeeValue();
+    if (!feeConfig) return current;
+    if (feeConfig.kind === 'ltc') return getFeeTotalSmallUnits(current);
+    return current;
+  };
+
+  const getCurrentFeeNativeEstimate = () => {
+    if (!feeConfig) return 0;
+    const current = getCurrentFeeValue();
+
+    if (feeConfig.kind === 'evm') {
+      const gasLimit = feeConfig.evmGasLimit || 21000;
+      return (parseFloat(current) * gasLimit) / 1e9;
+    }
+
+    if (feeConfig.kind === 'sol') {
+      return 0;
+    }
+
+    const total = getFeeTotalSmallUnits(current);
+    return feeConfig.decimals ? total / Math.pow(10, feeConfig.decimals) : 0;
+  };
+
   // Step 1: Address
   const handleAddressNext = () => {
     setError('');
@@ -117,6 +164,7 @@ export default function Send() {
     if (parseFloat(amount) > parseFloat(displayBalance)) { setError('Недостаточно средств'); return; }
     // Set default fee
     setSelectedFee(feeOptions[1]?.name || feeOptions[0]?.name);
+    setFeeMode('standard');
     setStep('fee');
   };
 
@@ -143,7 +191,7 @@ export default function Send() {
       }
 
       const fromAddress = addresses[activeNetwork];
-      const feeValue = getCurrentFeeValue();
+      const feeValue = getCurrentFeeForSend();
 
       const hash = await sendTransaction({
         sym,
@@ -191,6 +239,36 @@ export default function Send() {
     fontWeight: 500
   };
 
+  const renderStepper = () => {
+    const steps = [
+      { key: 'address', label: 'Адрес' },
+      { key: 'amount', label: 'Сумма' },
+      { key: 'fee', label: 'Комиссия' },
+      { key: 'confirm', label: 'Подтверждение' },
+    ];
+    const activeIdx = steps.findIndex(s => s.key === step);
+    return (
+      <div style={{ padding: '0 16px', marginTop: 12, marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          {steps.map((s, idx) => (
+            <div key={s.key} style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                margin: '0 auto 6px',
+                background: idx <= activeIdx ? '#2563eb' : 'rgba(255,255,255,0.15)'
+              }} />
+              <div style={{ fontSize: 11, color: idx <= activeIdx ? '#fff' : 'rgba(255,255,255,0.45)' }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Step 1: Address
   const renderAddressStep = () => (
     <>
@@ -199,6 +277,7 @@ export default function Send() {
         <h2>Шаг 1 из 4: Адрес</h2>
         <div />
       </div>
+      {renderStepper()}
 
       <div className="net-selector-scroll" style={{ marginBottom: 20 }}>
         {NETWORK_LIST.map(n => (
@@ -246,6 +325,7 @@ export default function Send() {
         <h2>Шаг 2 из 4: Сумма</h2>
         <div />
       </div>
+      {renderStepper()}
 
       <div style={{ padding: '0 16px' }}>
         <div style={{ 
@@ -340,107 +420,108 @@ export default function Send() {
         <h2>Шаг 3 из 4: Комиссия</h2>
         <div />
       </div>
+      {renderStepper()}
 
       <div style={{ padding: '0 16px' }}>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>
           Выберите скорость для {displaySym}
         </p>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          <button
-            onClick={() => setFeeMode('standard')}
-            style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: 12,
-              border: 'none',
-              background: feeMode === 'standard' ? '#2563eb' : '#1a1a1a',
-              color: feeMode === 'standard' ? '#fff' : 'rgba(255,255,255,0.5)',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            Стандартные
-          </button>
-          <button
-            onClick={() => setFeeMode('custom')}
-            style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: 12,
-              border: 'none',
-              background: feeMode === 'custom' ? '#2563eb' : '#1a1a1a',
-              color: feeMode === 'custom' ? '#fff' : 'rgba(255,255,255,0.5)',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            Своя
-          </button>
-        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {feeOptions.map((fee) => (
+            <button
+              key={fee.name}
+              onClick={() => { setFeeMode('standard'); setSelectedFee(fee.name); }}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px',
+                borderRadius: 12,
+                border: feeMode === 'standard' && selectedFee === fee.name ? '2px solid #2563eb' : '1px solid rgba(255,255,255,0.1)',
+                background: feeMode === 'standard' && selectedFee === fee.name ? 'rgba(37,99,235,0.1)' : '#1a1a1a',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{fee.name}</div>
+                <div style={{ fontSize: 12, color: '#f59e0b' }}>~{fee.time}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                  {getFeePrimaryText(fee.value)}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                  {getFeeSecondaryText(fee.value)}
+                </div>
+              </div>
+            </button>
+          ))}
 
-        {feeMode === 'standard' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {feeOptions.map((fee) => (
-              <button
-                key={fee.name}
-                onClick={() => setSelectedFee(fee.name)}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '16px',
-                  borderRadius: 12,
-                  border: selectedFee === fee.name ? '2px solid #2563eb' : '1px solid rgba(255,255,255,0.1)',
-                  background: selectedFee === fee.name ? 'rgba(37,99,235,0.1)' : '#1a1a1a',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{fee.name}</div>
-                  <div style={{ fontSize: 12, color: '#f59e0b' }}>~{fee.time}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                    {formatFee(fee.value)}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                    {toNativeUnit(fee.value)} {feeConfig.symbol}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ background: '#1a1a1a', borderRadius: 12, padding: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
-              Введите комиссию в {feeConfig.unit}
-            </label>
-            <input
-              type="number"
-              placeholder={`Например: ${minStandardFee}`}
-              value={customFee}
-              onChange={(e) => setCustomFee(e.target.value)}
+          <div style={{
+            borderRadius: 12,
+            border: feeMode === 'custom' ? '2px solid #2563eb' : '1px solid rgba(255,255,255,0.1)',
+            background: feeMode === 'custom' ? 'rgba(37,99,235,0.1)' : '#1a1a1a',
+            padding: 16
+          }}>
+            <button
+              onClick={() => setFeeMode('custom')}
               style={{
                 width: '100%',
-                padding: '12px',
-                background: '#111',
-                border: '1px solid #333',
-                borderRadius: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'transparent',
+                border: 'none',
                 color: '#fff',
-                fontSize: 16,
-                marginBottom: 8
+                cursor: 'pointer',
+                padding: 0
               }}
-            />
-            {customFee && (
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                 {toNativeUnit(parseFloat(customFee))} {feeConfig.symbol}
+            >
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Своя</div>
+                <div style={{ fontSize: 12, color: '#f59e0b' }}>~{getTimer()}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                  {customFee ? getFeePrimaryText(customFee) : `Введите ${feeConfig?.unit || ''}`}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                  {customFee ? getFeeSecondaryText(customFee) : ''}
+                </div>
+              </div>
+            </button>
+
+            {feeMode === 'custom' && (
+              <div style={{ marginTop: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                  Введите комиссию в {feeConfig.unit}
+                </label>
+                <input
+                  type="number"
+                  placeholder={`Например: ${minStandardFee}`}
+                  value={customFee}
+                  onChange={(e) => setCustomFee(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    background: '#111',
+                    border: '1px solid #333',
+                    borderRadius: 8,
+                    color: '#fff',
+                    fontSize: 16,
+                    marginBottom: 8
+                  }}
+                />
+                {customFee && parseFloat(customFee) < minStandardFee && (
+                  <div style={{ fontSize: 11, color: '#ef4444' }}>
+                    Комиссия ниже рекомендуемой возможны задержки
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
 
         <div style={{
           marginTop: 20,
@@ -453,11 +534,6 @@ export default function Send() {
           <span style={{ fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>
              Время подтверждения: {getTimer()}
           </span>
-          {feeMode === 'custom' && parseFloat(customFee) < minStandardFee && customFee && (
-            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6 }}>
-               Комиссия ниже рекомендуемой  возможны задержки
-            </div>
-          )}
         </div>
 
         {error && <div className="error-msg" style={{ marginTop: 16 }}>{error}</div>}
@@ -477,13 +553,10 @@ export default function Send() {
         <h2>Шаг 4 из 4: Подтверждение</h2>
         <div />
       </div>
+      {renderStepper()}
 
       <div style={{ padding: '0 16px' }}>
         <div className="confirm-card" style={{ marginBottom: 20 }}>
-          <div className="confirm-row" style={{ padding: '12px 0' }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)' }}>Сеть</span>
-            <strong style={{ color: '#fff' }}>{NETWORK_LIST.find(n => n.id === activeNetwork)?.name || activeNetwork}</strong>
-          </div>
           <div className="confirm-row" style={{ padding: '12px 0' }}>
             <span style={{ color: 'rgba(255,255,255,0.5)' }}>Адрес получателя</span>
             <strong style={{ color: '#fff', fontSize: 13 }}>{to.slice(0, 6)}...{to.slice(-4)}</strong>
@@ -494,12 +567,12 @@ export default function Send() {
           </div>
           <div className="confirm-row" style={{ padding: '12px 0' }}>
             <span style={{ color: 'rgba(255,255,255,0.5)' }}>Комиссия</span>
-            <strong style={{ color: '#fff' }}>{formatFee(getCurrentFeeValue())}</strong>
+            <strong style={{ color: '#fff' }}>{getFeePrimaryText(getCurrentFeeValue())}</strong>
           </div>
           <div className="confirm-row" style={{ padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 8 }}>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Итого к списанию</span>
+            <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Итого (оценка)</span>
             <strong style={{ color: '#10b981', fontSize: 16 }}>
-              {(parseFloat(amount) + parseFloat(toNativeUnit(getCurrentFeeValue()))).toFixed(8)} {displaySym}
+              {(parseFloat(amount) + parseFloat(getCurrentFeeNativeEstimate())).toFixed(8)} {displaySym}
             </strong>
           </div>
           <div className="confirm-row" style={{ padding: '8px 0', marginTop: 8 }}>
