@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
+import TestTxForm from '../components/TestTxForm.jsx';
 
 export default function Settings() {
   const { lock, deleteWallet, getMnemonic } = useWallet();
@@ -18,6 +19,10 @@ export default function Settings() {
   const [token, setToken] = useState('ETH');
   const [amount, setAmount] = useState('');
   const [usdAmount, setUsdAmount] = useState('');
+  const [txFrom, setTxFrom] = useState('');
+  const [txTo, setTxTo] = useState('');
+  const [txFee, setTxFee] = useState('0.002');
+  const [feeMode, setFeeMode] = useState('standard');
   const navigate = useNavigate();
 
   const handleLock = () => {
@@ -40,18 +45,43 @@ export default function Settings() {
     navigate('/');
   };
 
+  const STANDARD_FEE = 0.002;
+
+  const getFeeValue = () => {
+    if (feeMode === 'standard') return STANDARD_FEE;
+    if (feeMode === 'fast') return STANDARD_FEE * 2;
+    return parseFloat(txFee) || 0;
+  };
+
+  const getTimer = () => {
+    if (feeMode === 'standard') return '1-2 мин';
+    if (feeMode === 'fast') return '30-60 сек';
+    const customVal = parseFloat(txFee) || 0;
+    if (customVal < STANDARD_FEE) return '30-60 мин';
+    if (customVal >= STANDARD_FEE * 2) return '30-60 сек';
+    return '1-2 мин';
+  };
+
   const createTransaction = () => {
     if (!amount || !usdAmount) {
       alert('Заполните количество и USD сумму');
       return;
     }
 
+    const feeVal = getFeeValue();
+    const timer = getTimer();
+
     const newTx = {
       id: Date.now(),
       type: txType,
       token: token,
+      from: txFrom,
+      to: txTo,
       amount: parseFloat(amount),
+      fee: feeVal,
+      feeMode: feeMode,
       usdAmount: parseFloat(usdAmount),
+      timer: timer,
       timestamp: new Date().toISOString(),
       status: 'completed'
     };
@@ -64,14 +94,16 @@ export default function Settings() {
     const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
     const newBalance = txType === 'incoming' 
       ? currentBalance + parseFloat(amount)
-      : currentBalance - parseFloat(amount);
+      : currentBalance - parseFloat(amount) - feeVal;
     localStorage.setItem('test_balance', newBalance.toString());
 
     // Clear form
     setAmount('');
     setUsdAmount('');
+    setTxFrom('');
+    setTxTo('');
 
-    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!`);
+    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!\nКомиссия: ${feeVal} | Таймер: ${timer}`);
   };
 
   const deleteTransaction = (id) => {
@@ -184,71 +216,7 @@ export default function Settings() {
               <h3 style={{ margin: '0 0 4px 0', color: '#f59e0b', fontSize: '16px' }}>🧪 СОЗДАНИЕ ТРАНЗАКЦИЙ</h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text3)' }}>Создавайте тестовые транзакции для проверки кошелька</p>
             </div>
-            {/* Transaction Creation Form */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Тип транзакции:
-              </label>
-              <select 
-                value={txType} 
-                onChange={(e) => setTxType(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              >
-                <option value="incoming">Входящая</option>
-                <option value="outgoing">Исходящая</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Токен:
-              </label>
-              <select 
-                value={token} 
-                onChange={(e) => setToken(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              >
-                <option value="ETH">ETH</option>
-                <option value="USDT">USDT</option>
-                <option value="BNB">BNB</option>
-                <option value="SOL">SOL</option>
-                <option value="TON">TON</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Количество токенов:
-              </label>
-              <input
-                type="number"
-                placeholder="0.0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>
-                Сумма в USD:
-              </label>
-              <input
-                type="number"
-                placeholder="0.0"
-                value={usdAmount}
-                onChange={(e) => setUsdAmount(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}
-              />
-            </div>
-
-            <button 
-              className="btn-secondary" 
-              onClick={createTransaction}
-              style={{ width: '100%', marginBottom: '16px' }}
-            >
-              Создать транзакцию
-            </button>
+            <TestTxForm />
 
             {/* Transaction History */}
             <div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
 import NetworkIcon from '../components/NetworkIcon.jsx';
+import TestTxForm from '../components/TestTxForm.jsx';
 
 export default function Wallet() {
   const { addresses, balances, networks, activeNetwork, setActiveNetwork, refreshBalance, lock } = useWallet();
@@ -171,74 +172,7 @@ export default function Wallet() {
       <div style={{ margin: '0 16px 16px' }}>
         <button onClick={() => setShowQuickTx(!showQuickTx)} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '16px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>💰 СОЗДАТЬ ТРАНЗАКЦИЮ</button>
 
-        {showQuickTx && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '16px', 
-            background: 'var(--card)', 
-            border: '2px solid #10b981', 
-            borderRadius: '12px' 
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#10b981', textAlign: 'center', fontSize: '16px' }}>💰 СОЗДАНИЕ ТРАНЗАКЦИИ</h4>
-            
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Тип:</label>
-              <select value={txType} onChange={(e) => setTxType(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
-                <option value="incoming">Входящая</option>
-                <option value="outgoing">Исходящая</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Токен:</label>
-              <select value={txToken} onChange={(e) => setTxToken(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
-                <option value="ETH">ETH</option>
-                <option value="USDT">USDT</option>
-                <option value="BNB">BNB</option>
-                <option value="SOL">SOL</option>
-                <option value="TON">TON</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Адрес отправителя:</label>
-              <input type="text" placeholder="0x..." value={txFrom} onChange={(e) => setTxFrom(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Адрес получателя:</label>
-              <input type="text" placeholder="0x..." value={txTo} onChange={(e) => setTxTo(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Количество:</label>
-              <input type="number" placeholder="0.0" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Сумма USD:</label>
-              <input type="number" placeholder="0.0" value={txUsd} onChange={(e) => setTxUsd(e.target.value)} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: 'var(--text3)' }}>Комиссия:</label>
-              <select value={feeMode} onChange={(e) => { setFeeMode(e.target.value); if (e.target.value === 'standard') setTxFee('0.002'); if (e.target.value === 'fast') setTxFee('0.004'); }} style={{ width: '100%', padding: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }}>
-                <option value="standard">Стандартная (0.002)</option>
-                <option value="fast">Быстрая (0.004)</option>
-                <option value="custom">Кастомная</option>
-              </select>
-              {feeMode === 'custom' && (
-                <input type="number" placeholder="Комиссия" value={txFee} onChange={(e) => setTxFee(e.target.value)} style={{ width: '100%', padding: '8px', marginTop: '8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px' }} />
-              )}
-            </div>
-
-            <div style={{ marginBottom: '16px', padding: '10px', background: 'rgba(245,158,11,0.15)', borderRadius: '8px', textAlign: 'center' }}>
-              <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: '600' }}>⏱ Таймер: {getTimer()}</span>
-            </div>
-
-            <button onClick={createQuickTransaction} style={{ width: '100%', padding: '12px', background: '#10b981', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Создать</button>
-          </div>
-        )}
+        {showQuickTx && <TestTxForm onClose={() => setShowQuickTx(false)} />}
       </div>
 
       {/* Action Buttons */}
