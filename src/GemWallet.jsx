@@ -1612,554 +1612,364 @@ function NetworkPicker({ sym, selected, onSelect }) {
 // ─── SEND MODAL ───────────────────────────────────────────────────────────────
 
 function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, network, testMode }) {
-
   const [step,setStep]=useState(1);
-
   const [sel,setSel]=useState(assets[0]);
-
   const [to,setTo]=useState("");
-
   const [amt,setAmt]=useState("");
-
   const [done,setDone]=useState(false);
-
   const [sending,setSending]=useState(false);
-
   const [txHash,setTxHash]=useState("");
-
   const [selectedNet,setSelectedNet]=useState(()=>ASSET_NETWORKS[assets[0]?.sym]?.[0]||null);
-
   const [addrError,setAddrError]=useState("");
-
   const [showScanner,setShowScanner]=useState(false);
-
-
+  const [customFee, setCustomFee] = useState("");
+  const [feeMode, setFeeMode] = useState("standard"); // "standard" | "custom"
 
   const assetObj = assets.find(a=>a.sym===sel.sym)||assets[0];
-
   const price = prices[sel.sym]||0;
-
   const [feeSpeed,setFeeSpeed]=useState("medium");
-
   const nets = ASSET_NETWORKS[sel.sym]||[];
-
   const curNet = selectedNet || nets[0] || null;
 
-
-
-  function handleSelAsset(a) {
-
-    setSel(a);
-
-    setTo("");
-
-    setSelectedNet(ASSET_NETWORKS[a.sym]?.[0]||null);
-
-  }
-
-
-
-  function handleToChange(val) {
-
-    setTo(val);
-
-    if (val && !isValidAddress(val, sel.sym)) {
-
-      setAddrError(`Invalid ${sel.sym} address format`);
-
-    } else {
-
-      setAddrError("");
-
-    }
-
-  }
-
-
-
-  // Get real network fee based on selected speed and network
-
-  const getNetworkFee = () => {
-
-    // For USDT, use the current network's fees
-
-    if (sel.sym === 'USDT' && curNet) {
-
-      const networkMap = {
-
-        'ethereum': 'ETH',
-
-        'bsc': 'BNB',
-
-        'arbitrum': 'ARB',
-
-        'solana': 'SOL',
-
-        'ton': 'TON'
-
-      };
-
-      const feeSymbol = networkMap[curNet.id] || 'ETH';
-
-      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
-
-      return fees[feeSpeed] || fees.medium;
-
-    }
-
-    // For native tokens, use their own fees
-
-    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
-
-    return fees[feeSpeed] || fees.medium;
-
+  // Real units mapping for Russian UI
+  const FEE_UNITS = {
+    TON: "nanoton", ETH: "gwei", BNB: "gwei", SOL: "micro-lamports", 
+    ARB: "gwei", LTC: "sat/byte", USDT: "gwei"
   };
 
+  const unit = FEE_UNITS[sel.sym] || "gwei";
 
+  // Auto-detect network by address
+  useEffect(() => {
+    if (to.length >= 10) {
+      if (/^(EQ|UQ)[a-zA-Z0-9_-]{43,46}$/.test(to)) {
+        const tonAsset = assets.find(a => a.sym === 'TON');
+        if (tonAsset) setSel(tonAsset);
+      } else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(to)) {
+        const solAsset = assets.find(a => a.sym === 'SOL');
+        if (solAsset) setSel(solAsset);
+      } else if (/^0x[a-fA-F0-9]{40}$/.test(to)) {
+        // Keep current asset if it's already EVM, otherwise default to ETH
+        if (!['ETH', 'BNB', 'ARB', 'USDT'].includes(sel.sym)) {
+          const ethAsset = assets.find(a => a.sym === 'ETH');
+          if (ethAsset) setSel(ethAsset);
+        }
+      }
+    }
+  }, [to]);
+
+  function handleSelAsset(a) {
+    setSel(a);
+    setTo("");
+    setSelectedNet(ASSET_NETWORKS[a.sym]?.[0]||null);
+  }
+
+  function handleToChange(val) {
+    setTo(val);
+    if (val && !isValidAddress(val, sel.sym)) {
+      setAddrError(`Неверный формат адреса ${sel.sym}`);
+    } else {
+      setAddrError("");
+    }
+  }
+
+  const getNetworkFee = () => {
+    if (feeMode === "custom") return parseFloat(customFee) || 0;
+    
+    if (sel.sym === 'USDT' && curNet) {
+      const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
+      const feeSymbol = networkMap[curNet.id] || 'ETH';
+      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
+      return fees[feeSpeed] || fees.medium;
+    }
+    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+    return fees[feeSpeed] || fees.medium;
+  };
 
   const fee = getNetworkFee();
 
-  // Calculate actual fee in native token for balance check
+  const getTimer = () => {
+    if (feeMode === "custom") {
+      const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+      const minStandard = fees.low;
+      return parseFloat(customFee) < minStandard ? "30-120 мин" : "1-2 мин";
+    }
+    return "1-2 мин";
+  };
+
   const getFeeInNativeToken = () => {
     if (sel.sym === 'USDT' && curNet) {
-      // For USDT, fee is in USD, convert to equivalent native token
-      const nativePrice = prices[curNet.native] || 0;
+      const nativePrice = prices[curNet.native] || prices.ETH || 0;
       return nativePrice > 0 ? fee / nativePrice : 0;
     }
-    // For native tokens, fee is already in USD, convert to token amount
     const tokenPrice = prices[sel.sym] || 0;
     return tokenPrice > 0 ? fee / tokenPrice : 0;
   };
 
-
-
   function next() {
-
     if(step===1){
-
-      if(!to){ setAddrError("Enter recipient address"); return; }
-
-      if(!isValidAddress(to, sel.sym)){ setAddrError(`Invalid ${sel.sym} address format`); return; }
-
+      if(!to){ setAddrError("Введите адрес получателя"); return; }
+      if(!isValidAddress(to, sel.sym)){ setAddrError(`Неверный формат адреса ${sel.sym}`); return; }
       setAddrError("");
-
       setStep(2);
-
     }
-
-    else if(step===2&&amt) setStep(3);
-
-    else if(step===3) {
-
+    else if(step===2){
+      if(!amt || parseFloat(amt) <= 0){ alert("Введите корректную сумму"); return; }
+      setStep(3);
+    }
+    else if(step===3){
+      setStep(4);
+    }
+    else if(step===4) {
       const num=parseFloat(amt);
-
       const feeInNative = getFeeInNativeToken();
-
       const totalNeeded = num + feeInNative;
-
-      if(totalNeeded>assetObj.balance){alert(`Insufficient balance. Need ${fmt(totalNeeded)} ${sel.sym} (includes ~${feeInNative.toFixed(6)} ${sel.sym} ≈ $${fee} fee)`);return;}
-
-      setSending(true);
-
-      async function doSend(){
-
-        if(!to||!amt||parseFloat(amt)<=0){alert("Invalid amount");return;}
-
-        
-
-        // ─── TEST MODE: simulate transaction without real blockchain ───
-
-        if(testMode){
-
-          try{
-
-            await new Promise(r=>setTimeout(r,1200)); // simulate network delay
-
-            const fakeHash = genTxHash();
-
-            const sentAmount = parseFloat(amt);
-
-            onSend({ sym:sel.sym, amount:sentAmount, to, usd:sentAmount*price, hash:fakeHash, isTest:true });
-
-            setDone(true);
-
-            setTimeout(onClose,2500);
-
-          }catch(e){
-
-            console.error("[Test Send Error]", e);
-
-            alert("Test send error: "+(e?.message||"Unknown"));
-
-          }finally{
-
-            setSending(false);
-
-          }
-
-          return;
-
-        }
-
-        
-
-        // ─── REAL MODE: send via blockchain ───
-
-        if(!mnemonic || !Array.isArray(mnemonic) || mnemonic.length === 0){
-
-          alert("Wallet not initialized");
-
-          setSending(false);
-
-          return;
-
-        }
-
-        try{
-
-          // Get asset metadata safely
-
-          const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
-
-          if(!assetMeta){throw new Error("Asset not found: "+sel.sym);}
-
-          
-
-          // Get private key
-
-          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
-
-          if(!privateKey){throw new Error("Failed to derive private key");}
-
-          
-
-          // Get from address safely
-
-          const fromAddr = addresses?.[assetMeta.id];
-
-          if(!fromAddr){throw new Error(`No address found for ${sel.sym} (${assetMeta.id})`);}
-
-          
-
-          // Send transaction
-
-          const hash = await chainSendTransaction({ sym: sel.sym, from: fromAddr, to, amount: parseFloat(amt), privateKey, networkId: assetMeta.id });
-
-          if(hash){
-
-            alert(`Sent! Hash: ${hash.slice(0,20)}...`);
-
-            const sentAmount = parseFloat(amt);
-
-          onSend({ sym:sel.sym, amount:sentAmount, to, usd:sentAmount*price, hash });
-
-            setDone(true);
-
-            setTimeout(onClose,2500);
-
-          }else{throw new Error("Transaction failed - no hash returned");}
-
-        }catch(e){
-
-          console.error("[Send Error]", e);
-
-          alert("Error sending: "+(e?.message||"Unknown error"));
-
-        }finally{
-
-          setSending(false);
-
-        }
-
+      
+      if(totalNeeded > assetObj.balance){
+        alert(`Недостаточно средств. Нужно ${fmt(totalNeeded, 6)} ${sel.sym} (включая комиссию ~${feeInNative.toFixed(6)} ${sel.sym} ≈ $${fee})`);
+        return;
       }
 
+      setSending(true);
+      async function doSend(){
+        if(testMode){
+          try{
+            await new Promise(r=>setTimeout(r,1200));
+            const fakeHash = genTxHash();
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash:fakeHash, isTest:true });
+            setDone(true);
+            setTimeout(onClose,2500);
+          }catch(e){ alert("Ошибка теста: "+(e?.message||"Unknown")); }
+          finally{ setSending(false); }
+          return;
+        }
+        
+        try{
+          const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
+          const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
+          const fromAddr = addresses?.[assetMeta.id];
+          const hash = await chainSendTransaction({ 
+            sym: sel.sym, from: fromAddr, to, 
+            amount: num, privateKey, networkId: assetMeta.id,
+            fee: fee // Pass custom fee if needed
+          });
+          if(hash){
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
+            setDone(true);
+            setTimeout(onClose,2500);
+          }
+        }catch(e){ alert("Ошибка отправки: "+(e?.message||"Неизвестная ошибка")); }
+        finally{ setSending(false); }
+      }
       doSend();
-
     }
-
   }
 
-
-
   return (
-
-    <Sheet onClose={onClose} title={done?"Sent!":"Send"}>
-
+    <Sheet onClose={onClose} title={done?"Отправлено!":"Отправить"}>
       {showScanner&&(
-
         <QRScanner onScan={(data)=>{handleToChange(data);setShowScanner(false);}} onClose={()=>setShowScanner(false)}/>
-
       )}
-
       {done?(
-
         <div style={{padding:"48px 24px",textAlign:"center"}}>
-
           <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Check size={40} color="#fff"/></div>
-
-          <p style={{color:"#22C55E",fontSize:20,fontWeight:700,margin:0}}>Transaction Sent!</p>
-
-          <p style={{color:"rgba(255,255,255,0.4)",fontSize:13,marginTop:8}}>Broadcasting to network…</p>
-
+          <p style={{color:"#22C55E",fontSize:20,fontWeight:700,margin:0}}>Транзакция отправлена!</p>
+          <p style={{color:"rgba(255,255,255,0.4)",fontSize:13,marginTop:8}}>Трансляция в сеть...</p>
         </div>
-
       ):(
-
         <div style={{padding:"20px 24px"}}>
-
           <div style={{display:"flex",gap:8,marginBottom:24}}>
-
-            {[1,2,3].map(s=>(
-
+            {[1,2,3,4].map(s=>(
               <div key={s} style={{flex:1,height:3,borderRadius:2,
-
                 background:s<=step?"#2563eb":"rgba(255,255,255,0.1)",transition:"background 0.3s"}}/>
-
             ))}
-
           </div>
 
           {step===1&&(
-
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-              <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Select asset & recipient</p>
-
+              <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Выберите актив и получателя</p>
               <div style={{background:"#1a1a1a",borderRadius:14,padding:"6px",display:"flex",gap:4,flexWrap:"wrap"}}>
-
                 {assets.map(a=>(
-
                   <button key={a.id} onClick={()=>handleSelAsset(a)} style={{padding:"8px 12px",borderRadius:10,border:"none",
-
                     background:sel.id===a.id?"#2563eb":"transparent",
-
                     color:sel.id===a.id?"#fff":"rgba(255,255,255,0.5)",
-
                     fontSize:12,fontWeight:600,cursor:"pointer"}}>{a.sym}</button>
-
                 ))}
-
               </div>
-
               {nets.length>1&&(
-
                 <div style={{background:"#1a1a1a",borderRadius:14,padding:"14px 16px",
-
                   border:"1px solid rgba(255,255,255,0.06)"}}>
-
                   <NetworkPicker sym={sel.sym} selected={curNet} onSelect={setSelectedNet}/>
-
                 </div>
-
               )}
-
               <div style={{position:"relative"}}>
-
                 <input value={to} onChange={e=>handleToChange(e.target.value)}
-
-                  placeholder={curNet?.placeholder||"Recipient address"}
-
+                  placeholder={curNet?.placeholder||"Адрес получателя"}
                   style={{width:"100%",padding:"16px 48px 16px 16px",borderRadius:14,
-
                     border:`1px solid ${addrError?"#ef4444":curNet?curNet.color+"33":"rgba(255,255,255,0.1)"}`,
-
                     background:"#1a1a1a",color:"#fff",fontSize:14,outline:"none",
-
                     fontFamily:"monospace",boxSizing:"border-box",transition:"border-color 0.2s"}}/>
-
                 <button onClick={()=>setShowScanner(true)}
-
                   style={{position:"absolute",top:8,right:8,padding:8,borderRadius:10,
-
                     background:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",
-
                     display:"flex",alignItems:"center",justifyContent:"center"}}>
-
                   <Scan size={18} color="#2563eb"/>
-
                 </button>
-
                 {addrError&&<p style={{color:"#ef4444",fontSize:12,margin:"6px 0 0"}}>{addrError}</p>}
-
                 {curNet&&(
-
                   <div style={{position:"absolute",top:10,right:48,
-
                     display:"flex",alignItems:"center",gap:4,
-
                     background:`${curNet.color}18`,borderRadius:8,padding:"3px 8px",
-
                     border:`1px solid ${curNet.color}33`}}>
-
                     <div style={{width:5,height:5,borderRadius:"50%",background:curNet.color}}/>
-
                     <span style={{fontSize:10,color:curNet.color,fontWeight:600}}>{curNet.short}</span>
-
                   </div>
-
                 )}
-
               </div>
-
               <div style={{background:"#1a1a1a",borderRadius:12,padding:"12px 14px",border:"1px solid rgba(255,255,255,0.06)"}}>
-
-                <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>Available</p>
-
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>Доступно</p>
                 <p style={{fontSize:15,fontWeight:600,color:"#fff",margin:0}}>{fmt(assetObj.balance,6)} {sel.sym} <span style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>≈ {fmtUSD(assetObj.balance*price)}</span></p>
-
               </div>
-
             </div>
-
           )}
 
           {step===2&&(
-
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-              {/* Fee Speed Selection */}
-
-              <div style={{background:"#111",borderRadius:12,padding:12,border:"1px solid rgba(255,255,255,0.1)"}}>
-
-                <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:"0 0 8px"}}>Transaction Speed</p>
-
-                <div style={{display:"flex",gap:8}}>
-
-                  {["low","medium","high"].map((speed)=>{
-
-                    const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
-
-                    const feeValue = fees[speed];
-
-                    const isSelected = feeSpeed === speed;
-
-                    return (
-
-                      <button key={speed} onClick={()=>setFeeSpeed(speed)}
-
-                        style={{flex:1,padding:"10px 8px",borderRadius:10,border:"none",
-
-                          background:isSelected?"linear-gradient(135deg,#2563eb,#7c3aed)":"rgba(255,255,255,0.08)",
-
-                          color:"#fff",fontSize:12,cursor:"pointer",textTransform:"capitalize",
-
-                          fontWeight:isSelected?600:400}}>
-
-                        <div>{speed}</div>
-
-                        <div style={{fontSize:10,color:isSelected?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.5)",marginTop:2}}>
-
-                          ${feeValue}
-
-                        </div>
-
-                      </button>
-
-                    );
-
-                  })}
-
-                </div>
-
-              </div>
-
-
-
               <div style={{display:"flex",justifyContent:"space-between"}}>
-
-                <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Amount</p>
-
-                <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Bal: {fmt(assetObj.balance,6)} {sel.sym}</span>
-
+                <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Сумма</p>
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Баланс: {fmt(assetObj.balance,6)} {sel.sym}</span>
               </div>
-
               <div style={{background:"#1a1a1a",borderRadius:16,padding:"20px",border:"1px solid rgba(255,255,255,0.08)"}}>
-
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
-
                   <CoinIcon asset={sel} size={36}/>
-
                   <input value={amt} onChange={e=>setAmt(e.target.value)} placeholder="0.00" type="number" min="0"
-
                     style={{flex:1,background:"none",border:"none",outline:"none",color:"#fff",fontSize:28,fontWeight:700}}/>
-
                   <span style={{fontSize:16,fontWeight:600,color:"rgba(255,255,255,0.4)"}}>{sel.sym}</span>
-
                 </div>
-
                 {amt&&<p style={{fontSize:13,color:"rgba(255,255,255,0.35)",margin:"8px 0 0"}}>≈ {fmtUSD(parseFloat(amt||0)*price)}</p>}
-
               </div>
-
               <div style={{display:"flex",gap:8}}>
-
                 {["25%","50%","75%","MAX"].map(p=>(
-
                   <button key={p} onClick={()=>setAmt(fmtCrypto(assetObj.balance*(p==="MAX"?1:parseInt(p)/100)))}
-
                     style={{flex:1,padding:"8px",borderRadius:10,border:"1px solid rgba(255,255,255,0.1)",
-
                       background:"#1a1a1a",color:"rgba(255,255,255,0.6)",fontSize:12,fontWeight:600,cursor:"pointer"}}>{p}</button>
-
                 ))}
-
               </div>
-
             </div>
-
           )}
 
           {step===3&&(
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Выберите комиссию</p>
+              
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {["low","medium","high"].map((speed)=>{
+                  const fees = NETWORK_FEES[sel.sym] || NETWORK_FEES.ETH;
+                  const feeValue = fees[speed];
+                  const isSelected = feeMode === "standard" && feeSpeed === speed;
+                  const labels = { low: "Медленно", medium: "Стандартно", high: "Быстро" };
+                  
+                  return (
+                    <button key={speed} onClick={()=>{setFeeMode("standard"); setFeeSpeed(speed);}}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px",
+                        borderRadius:14,border:isSelected?`2px solid #2563eb`:"1px solid rgba(255,255,255,0.1)",
+                        background:isSelected?"rgba(37,99,235,0.1)":"#1a1a1a",cursor:"pointer"}}>
+                      <div style={{textAlign:"left"}}>
+                        <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{labels[speed]}</div>
+                        <div style={{fontSize:12,color:"#f59e0b"}}>~1-2 мин</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>${feeValue}</div>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{unit}</div>
+                      </div>
+                    </button>
+                  );
+                })}
 
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-
-              {/* Test mode indicator removed */}
-
-              <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Review</p>
-
-              {[["Asset",`${sel.name} (${sel.sym})`],
-
-                ["Network",curNet?`${curNet.label} · ${curNet.short}`:"—"],
-
-                ["Amount",`${amt} ${sel.sym}`],
-
-                ["Value",fmtUSD(parseFloat(amt||0)*price)],["To",shortAddr(to)],
-
-                ["Network Fee",`~${fmtUSD(fee)}`],["Total",fmtUSD(parseFloat(amt||0)*price+fee)]].map(([k,v])=>(
-
-                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 16px",
-
-                  background:"#1a1a1a",borderRadius:12}}>
-
-                  <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>{k}</span>
-
-                  <span style={{fontSize:13,color:k==="Network"&&curNet?curNet.color:"#fff",fontWeight:500}}>{v}</span>
-
+                <div style={{borderRadius:14,padding:16,background:feeMode==="custom"?"rgba(37,99,235,0.1)":"#1a1a1a",
+                  border:feeMode==="custom"?"2px solid #2563eb":"1px solid rgba(255,255,255,0.1)"}}>
+                  <button onClick={()=>setFeeMode("custom")} style={{width:"100%",background:"none",border:"none",
+                    display:"flex",justifyContent:"space-between",alignItems:"center",padding:0,cursor:"pointer"}}>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>Кастомная комиссия</div>
+                      <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `$${customFee}` : "Введите сумму"}</div>
+                    </div>
+                  </button>
+                  {feeMode==="custom"&&(
+                    <input value={customFee} onChange={e=>setCustomFee(e.target.value)} 
+                      placeholder={`В ${unit}`} type="number"
+                      style={{width:"100%",marginTop:12,padding:"12px",borderRadius:10,background:"#000",
+                        border:"1px solid #333",color:"#fff",outline:"none"}}/>
+                  )}
                 </div>
+              </div>
 
-              ))}
-
+              <div style={{padding:"14px",background:"rgba(245,158,11,0.1)",borderRadius:12,textAlign:"center",border:"1px solid rgba(245,158,11,0.2)"}}>
+                <span style={{fontSize:13,color:"#f59e0b",fontWeight:600}}>
+                   Ожидаемое время: {getTimer()}
+                </span>
+              </div>
             </div>
-
           )}
 
-          <button onClick={next} disabled={(step===1&&(!to||addrError))||(step===2&&!amt)||sending}
+          {step===4&&(
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{fontSize:13,color:"rgba(255,255,255,0.45)",margin:0}}>Проверьте детали</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8,background:"#1a1a1a",borderRadius:16,padding:16,border:"1px solid rgba(255,255,255,0.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Получатель</span>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:500,display:"block"}}>{shortAddr(to)}</span>
+                    <button onClick={()=>setStep(1)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:0,cursor:"pointer"}}>Изменить</button>
+                  </div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+                  <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Сумма перевода</span>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{amt} {sel.sym}</span>
+                    <button onClick={()=>setStep(2)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:"0 0 0 8px",cursor:"pointer"}}>Изменить</button>
+                  </div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+                  <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Комиссия</span>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>${fee}</span>
+                    <button onClick={()=>setStep(3)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:"0 0 0 8px",cursor:"pointer"}}>Изменить</button>
+                  </div>
+                </div>
+                <div style={{height:1,background:"rgba(255,255,255,0.06)",margin:"8px 0"}}/>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:14,color:"#fff",fontWeight:600}}>Итого</span>
+                  <span style={{fontSize:16,color:"#10b981",fontWeight:700}}>{fmtUSD(parseFloat(amt||0)*price+fee)}</span>
+                </div>
+              </div>
+              <div style={{padding:12,background:"rgba(239,68,68,0.1)",borderRadius:10,border:"1px solid rgba(239,68,68,0.2)"}}>
+                <p style={{fontSize:11,color:"#ef4444",margin:0,textAlign:"center"}}>Транзакция необратима. Проверьте адрес перед отправкой.</p>
+              </div>
+            </div>
+          )}
 
-            style={{width:"100%",padding:"17px",borderRadius:16,border:"none",marginTop:24,
-
-              background:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#2563eb,#7c3aed)",
-
-              color:"#fff",fontSize:15,fontWeight:600,cursor:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"not-allowed":"pointer",
-
-              opacity:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?0.5:1}}>
-
-            {step===3?(sending?"Sending...":"Confirm Send"):"Continue"}
-
-          </button>
-
+          <div style={{display:"flex",gap:12,marginTop:24}}>
+            {step > 1 && (
+              <button onClick={()=>setStep(s=>s-1)} 
+                style={{flex:1,padding:"17px",borderRadius:16,background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer"}}>Назад</button>
+            )}
+            <button onClick={next} disabled={(step===1&&(!to||addrError))||(step===2&&!amt)||sending}
+              style={{flex:2,padding:"17px",borderRadius:16,border:"none",
+                background:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#2563eb,#7c3aed)",
+                color:"#fff",fontSize:15,fontWeight:600,cursor:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?"not-allowed":"pointer",
+                opacity:(step===1&&(!to||addrError))||(step===2&&!amt)||sending?0.5:1}}>
+              {step===4?(sending?"Отправка...":"Подтвердить"): (step===1 && to && !addrError) ? "Далее" : step === 2 ? "Далее" : step === 3 ? "К подтверждению" : "Продолжить"}
+            </button>
+          </div>
         </div>
-
       )}
+    </Sheet>
+  );
+}
 
     </Sheet>
 
