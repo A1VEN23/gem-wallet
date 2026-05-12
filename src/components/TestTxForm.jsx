@@ -51,10 +51,6 @@ export default function TestTxForm({ onClose }) {
       setError('Введите адрес отправителя'); 
       return; 
     }
-    if (!isValidAddress(txFrom)) {
-      setError('Неверный формат адреса отправителя');
-      return;
-    }
 
     const addresses = getAddresses();
     const network = tokenToNetwork[txToken] || 'ethereum';
@@ -143,14 +139,14 @@ export default function TestTxForm({ onClose }) {
         <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Адрес отправителя</label>
         <input
           type="text"
-          placeholder="0x... или Solana/TON адрес"
+          placeholder="Любой адрес отправителя"
           value={txFrom}
           onChange={(e) => setTxFrom(e.target.value)}
           style={{
             width: '100%',
             padding: '12px',
             background: '#1a1a1a',
-            border: `1px solid ${txFrom && !isValidAddress(txFrom) ? '#ef4444' : '#333'}`,
+            border: '1px solid #333',
             borderRadius: 12,
             color: '#fff',
             fontSize: 14,
