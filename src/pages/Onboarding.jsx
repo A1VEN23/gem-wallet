@@ -95,69 +95,17 @@ export default function Onboarding() {
           <h2>Сохраните seed-фразу</h2>
           <p className="hint warn">⚠️ Запишите эти 12 слов. Они дают полный доступ к кошельку. Никому не показывайте!</p>
           <div className="mnemonic-grid">
-            {mnemonic.split(' ').map((word, i) => (
+            {(mnemonic || '').split(' ').filter(Boolean).map((word, i) => (
               <div key={i} className="mnemonic-word">
                 <span className="word-num">{i + 1}</span>
                 <span className="word-text">{word}</span>
               </div>
             ))}
+            {(!mnemonic || mnemonic.split(' ').filter(Boolean).length === 0) && (
+              <div style={{gridColumn: '1/-1', textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.5)'}}>
+                Генерация фразы...
+              </div>
+            )}
           </div>
           <label className="checkbox-label">
             <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={e => setConfirmed(e.target.checked)}
-            />
-            Я записал(а) seed-фразу в безопасном месте
-          </label>
-          <button
-            className="btn-primary"
-            disabled={!confirmed}
-            onClick={() => navigate('/wallet')}
-          >
-            Готово
-          </button>
-        </div>
-      )}
-
-      {step === 'import' && (
-        <div className="onboard-form">
-          <button className="back-btn" onClick={() => { setStep('welcome'); setError(''); }}>← Назад</button>
-          <h2>Импорт кошелька</h2>
-          <p className="hint">Введите 12 или 24 слова seed-фразы</p>
-          <div className="form-group">
-            <label>Seed-фраза</label>
-            <textarea
-              placeholder="слово1 слово2 слово3..."
-              value={importPhrase}
-              onChange={e => setImportPhrase(e.target.value)}
-              rows={4}
-            />
-          </div>
-          <div className="form-group">
-            <label>Пароль</label>
-            <input
-              type="password"
-              placeholder="Минимум 6 символов"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Повторите пароль</label>
-            <input
-              type="password"
-              placeholder="Повторите пароль"
-              value={password2}
-              onChange={e => setPassword2(e.target.value)}
-            />
-          </div>
-          {error && <div className="error-msg">{error}</div>}
-          <button className="btn-primary" onClick={handleImport} disabled={loading}>
-            {loading ? 'Импорт...' : 'Импортировать'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
