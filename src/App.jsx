@@ -1,5 +1,5 @@
-import GemWalletApp from './GemWallet.jsx';
+import GemWallet from './GemWallet.jsx';
 
 export default function App() {
-  return <GemWalletApp />;
+  return <GemWallet />;
 }
