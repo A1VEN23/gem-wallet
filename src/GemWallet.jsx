@@ -7781,18 +7781,6 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
           I Wrote It Down →
 
         </button>
-
-      )}
-
-      {!rev&&(
-
-        <button onClick={onDone} style={{width:"100%",padding:"14px",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)",
-
-          background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer"}}>
-
-          Skip (not recommended)
-
-        </button>
       )}
       </div>
     </div>
