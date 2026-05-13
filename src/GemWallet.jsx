@@ -257,6 +257,28 @@ export default function GemWallet() {
       if (userId || attempts >= 10) {
         clearInterval(poll);
         RESOLVED_USER_ID = userId;
+
+        // --- GLOBAL RESET LOGIC ---
+        // Increment this version number to force all users to start from scratch
+        const RESET_VERSION = "2"; 
+        const currentVersion = localStorage.getItem(storageKey("gem_reset_version"));
+        
+        if (currentVersion !== RESET_VERSION) {
+          // Clear all user data for the current user ID
+          const keysToRemove = [
+            "gem_has_wallet", "gem_mnemonic", "gem_addresses", 
+            "gem_pin", "gem_balances", "gem_tx_history", 
+            "test_transactions", "gem_pending_notify"
+          ];
+          keysToRemove.forEach(k => localStorage.removeItem(storageKey(k)));
+          localStorage.setItem(storageKey("gem_reset_version"), RESET_VERSION);
+          
+          // Force reload state
+          setScreen("onboard");
+          return;
+        }
+        // --------------------------
+
         const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
         const storedPin = localStorage.getItem(storageKey("gem_pin"));
         const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
