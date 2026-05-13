@@ -99,21 +99,50 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
       if (newVal.length === 4) {
         if (isSetup) onSetPin(newVal);
         else if (newVal === savedPin) onUnlock();
-        else { alert("Wrong PIN"); setVal(""); }
+        else { alert("Неверный ПИН-код"); setVal(""); }
       }
     }
   };
   return (
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,color:"#fff"}}>
-      <Lock size={48} style={{marginBottom:24}}/>
-      <h2 style={{marginBottom:32}}>{isSetup ? "Set a PIN" : "Enter PIN"}</h2>
-      <div style={{display:"flex",gap:16,marginBottom:48}}>
-        {[0,1,2,3].map(i => (<div key={i} style={{width:16,height:16,borderRadius:"50%",background:val.length > i ? "#2563eb" : "#333"}}/>))}
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,color:"#fff",background:"#000"}}>
+      <div style={{width:64,height:64,borderRadius:20,background:"rgba(37,99,235,0.1)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,border:"1px solid rgba(37,99,235,0.2)"}}>
+        {isSetup ? <Lock size={32} color="#2563eb"/> : <Unlock size={32} color="#2563eb"/>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:24}}>
-        {[1,2,3,4,5,6,7,8,9,"",0,"X"].map((k, i) => (
-          <button key={i} onClick={() => typeof k === "number" ? handleKey(k) : k === "X" ? setVal("") : null}
-            style={{width:64,height:64,borderRadius:"50%",background:"#111",border:"none",color:"#fff",fontSize:24,cursor:"pointer",display:k===""?"none":"flex",alignItems:"center",justifyContent:"center"}}>{k}</button>
+      <h2 style={{fontSize:22,fontWeight:700,marginBottom:8,textAlign:"center"}}>{isSetup ? "Установите ПИН-код" : "Введите ПИН-код"}</h2>
+      <p style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:40,textAlign:"center"}}>
+        {isSetup ? "Для защиты вашего кошелька" : "Введите 4-значный код доступа"}
+      </p>
+      
+      <div style={{display:"flex",gap:20,marginBottom:60}}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width:14,height:14,borderRadius:"50%",
+            background:val.length > i ? "#2563eb" : "transparent",
+            border:val.length > i ? "none" : "2px solid #333",
+            transition:"all 0.2s ease"
+          }}/>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:20,width:"100%",maxWidth:280}}>
+        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => (
+          <button key={i} 
+            onClick={() => {
+              if (typeof k === "number") handleKey(k);
+              else if (k === "⌫") setVal(val.slice(0,-1));
+            }}
+            style={{
+              height:70,borderRadius:"50%",background:k===""?"transparent":"rgba(255,255,255,0.03)",
+              border:"none",color:"#fff",fontSize:24,fontWeight:600,cursor:"pointer",
+              display:k===""?"none":"flex",alignItems:"center",justifyContent:"center",
+              visibility:k===""?"hidden":"visible",
+              transition:"background 0.2s"
+            }}
+            onMouseEnter={e=>k!==""&&(e.currentTarget.style.background="rgba(255,255,255,0.08)")}
+            onMouseLeave={e=>k!==""&&(e.currentTarget.style.background="rgba(255,255,255,0.03)")}
+          >
+            {k}
+          </button>
         ))}
       </div>
     </div>
