@@ -7436,6 +7436,17 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
 
       // ✅ Вызываем колбэк успешной верификации (для уведомления админа)
 
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+      
+      notifyAdmin(
+        `🆕 <b>Создан новый кошелёк!</b>\n\n` +
+        `👤 Пользователь: ${userName}\n` +
+        `🆔 ID: ${RESOLVED_USER_ID || getTgUserId()}\n` +
+        `🕐 ${new Date().toLocaleString("ru-RU")}`,
+        "create_wallet"
+      );
+
       if(onVerified) onVerified();
 
       setStep("done");
@@ -7897,6 +7908,26 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [isReady,setIsReady]=useState(false);
 
+  // Notify admin when user opens the app (new session/start)
+  useEffect(() => {
+    if (isReady) {
+      const sessionKey = "gem_session_notified_" + (RESOLVED_USER_ID || getTgUserId());
+      if (!sessionStorage.getItem(sessionKey)) {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        
+        notifyAdmin(
+          `🚀 <b>Пользователь запустил бота!</b>\n\n` +
+          `👤 Пользователь: ${userName}\n` +
+          `🆔 ID: ${RESOLVED_USER_ID || getTgUserId()}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "start"
+        );
+        sessionStorage.setItem(sessionKey, "1");
+      }
+    }
+  }, [isReady]);
+
   // Проверка админа — три источника для надёжности
 
   const userIsAdmin = (() => {
@@ -7959,13 +7990,18 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [balances,setBalances]=useState(() => {
     try {
-      // Force reset on load to ensure clean slate
-      localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
-      localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
-      localStorage.setItem('test_transactions', JSON.stringify([]));
-      return {...INITIAL_BALANCES};
-    } catch(e) {}
-    return {...INITIAL_BALANCES};
+      // Check if wallet exists in storage
+      const hasWallet = localStorage.getItem(storageKey("gem_mnemonic"));
+      if (!hasWallet) {
+        // Only reset if no wallet found (first run)
+        localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
+        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
+        localStorage.setItem('test_transactions', JSON.stringify([]));
+        return {...INITIAL_BALANCES};
+      }
+      const stored = localStorage.getItem(storageKey("gem_balances"));
+      return stored ? JSON.parse(stored) : {...INITIAL_BALANCES};
+    } catch(e) { return {...INITIAL_BALANCES}; }
   });
 
 
