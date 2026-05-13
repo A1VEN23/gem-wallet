@@ -63,13 +63,6 @@ const fmtUSD = n => "$"+fmt(n);
 
 const fmtCrypto = (n, d=6) => parseFloat(n.toFixed(d));
 
-const fmtK = (n) => {
-  const val = parseFloat(n) || 0;
-  if (val >= 1000000) return (val / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (val >= 1000) return (val / 1000).toFixed(1).replace(/\.0$/, "") + "k";
-  return val.toString();
-};
-
 
 
 // ─── STORAGE HELPERS (Telegram-linked localStorage) ─────────────────────────
@@ -142,9 +135,29 @@ const NETWORK_FEES = {
 
 
 // ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
+
 const getTestBalances = () => {
-  // Reset all balances to 0 for everyone by default
-  return { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
+
+  const totalUSD = Math.floor(Math.random() * 5000) + 15000;
+
+  const prices = { ETH: 3200, TON: 6.5, BNB: 580, LTC: 72, ARB: 0.85, SOL: 145, USDT: 1 };
+
+  const weights = { ETH: 0.25, TON: 0.15, BNB: 0.15, LTC: 0.1, ARB: 0.1, SOL: 0.15, USDT: 0.1 };
+
+  
+
+  const balances = {};
+
+  for (const [sym, weight] of Object.entries(weights)) {
+
+    const usdAmount = totalUSD * weight;
+
+    balances[sym] = Math.floor(usdAmount / prices[sym]);
+
+  }
+
+  return balances;
+
 };
 
 
@@ -1490,19 +1503,33 @@ function PinLock({ savedPin, onUnlock, onSetPin, onResetWallet }) {
 // ─── NETWORK DATA ─────────────────────────────────────────────────────────────
 
 const ASSET_NETWORKS = {
-  ETH:  [{ id:"eth",  label:"Ethereum",  short:"ETH",    color:"#8B9CF7", placeholder:"0x… (42 chars)", native: "ETH" }],
-  TON:  [{ id:"ton",  label:"TON",       short:"TON",    color:"#0098EA", placeholder:"EQ… (48 chars)", native: "TON" }],
-  BNB:  [{ id:"bnb",  label:"BNB Chain", short:"BNB",    color:"#F3BA2F", placeholder:"0x… (42 chars)", native: "BNB" }],
-  LTC:  [{ id:"ltc",  label:"Litecoin",  short:"LTC",    color:"#BFBBBB", placeholder:"L… (34 chars)",  native: "LTC" }],
-  ARB:  [{ id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)", native: "ARB" }],
-  SOL:  [{ id:"sol",  label:"Solana",    short:"SOL",    color:"#B57BFF", placeholder:"…  (44 chars)", native: "SOL" }],
+
+  ETH:  [{ id:"eth",  label:"Ethereum",  short:"ETH",    color:"#8B9CF7", placeholder:"0x… (42 chars)" }],
+
+  TON:  [{ id:"ton",  label:"TON",       short:"TON",    color:"#0098EA", placeholder:"EQ… (48 chars)" }],
+
+  BNB:  [{ id:"bnb",  label:"BNB Chain", short:"BNB",    color:"#F3BA2F", placeholder:"0x… (42 chars)" }],
+
+  LTC:  [{ id:"ltc",  label:"Litecoin",  short:"LTC",    color:"#BFBBBB", placeholder:"L… (34 chars)"  }],
+
+  ARB:  [{ id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)" }],
+
+  SOL:  [{ id:"sol",  label:"Solana",    short:"SOL",    color:"#B57BFF", placeholder:"…  (44 chars)"  }],
+
   USDT: [
-    { id:"eth",  label:"Ethereum",  short:"ERC-20", color:"#8B9CF7", placeholder:"0x… (42 chars)", native: "ETH" },
-    { id:"ton",  label:"TON",       short:"TRC-20", color:"#0098EA", placeholder:"EQ… (48 chars)", native: "TON" },
-    { id:"bnb",  label:"BNB Chain", short:"BEP-20", color:"#F3BA2F", placeholder:"0x… (42 chars)", native: "BNB" },
-    { id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)", native: "ARB" },
-    { id:"sol",  label:"Solana",    short:"SPL",    color:"#B57BFF", placeholder:"…  (44 chars)", native: "SOL" },
+
+    { id:"eth",  label:"Ethereum",  short:"ERC-20", color:"#8B9CF7", placeholder:"0x… (42 chars)" },
+
+    { id:"ton",  label:"TON",       short:"TRC-20", color:"#0098EA", placeholder:"EQ… (48 chars)" },
+
+    { id:"bnb",  label:"BNB Chain", short:"BEP-20", color:"#F3BA2F", placeholder:"0x… (42 chars)" },
+
+    { id:"arb",  label:"Arbitrum",  short:"ARB",    color:"#28A0F0", placeholder:"0x… (42 chars)" },
+
+    { id:"sol",  label:"Solana",    short:"SPL",    color:"#B57BFF", placeholder:"…  (44 chars)"  },
+
   ],
+
 };
 
 
@@ -1608,41 +1635,30 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     USDT: { unit: "gwei", kind: "evm", limit: 65000 }
   };
 
-  const getActiveFeeConfig = () => {
-    if (currentSym === 'USDT' && curNet) {
-      const netId = curNet.id.toUpperCase();
-      return FEE_UNITS[netId] || FEE_UNITS.ETH;
-    }
-    return FEE_UNITS[currentSym] || FEE_UNITS.ETH;
-  };
-
-  const activeFeeConfig = getActiveFeeConfig();
-  const unit = activeFeeConfig.unit;
+  const feeConfig = FEE_UNITS[currentSym] || { unit: "gwei", kind: "evm", limit: 21000 };
+  const unit = feeConfig.unit;
 
   const getNetworkFee = () => {
     if (feeMode === "custom") return parseFloat(customFee) || 0;
     
-    // Determine which network's fee to use
-    let feeSymbol = currentSym;
     if (currentSym === 'USDT' && curNet) {
       const networkMap = { 'ethereum': 'ETH', 'bsc': 'BNB', 'arbitrum': 'ARB', 'solana': 'SOL', 'ton': 'TON' };
-      feeSymbol = networkMap[curNet.id] || 'ETH';
+      const feeSymbol = networkMap[curNet.id] || 'ETH';
+      const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
+      return fees[feeSpeed] || fees.medium;
     }
-    
-    const fees = NETWORK_FEES[feeSymbol] || NETWORK_FEES.ETH;
+    const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
     return fees[feeSpeed] || fees.medium;
   };
 
   const getFeeUsd = (val) => {
+    if (!feeConfig) return 0;
     const v = parseFloat(val) || 0;
-    const nativeSym = curNet?.native || currentSym;
-    const nativePrice = prices[nativeSym] || prices.ETH || 1;
-
-    if (activeFeeConfig.kind === "evm") return (v * activeFeeConfig.limit * nativePrice) / 1e9;
-    if (activeFeeConfig.kind === "ltc") return (v * activeFeeConfig.bytes * nativePrice) / 1e8;
-    if (activeFeeConfig.kind === "ton") return (v * nativePrice) / 1e9;
-    if (activeFeeConfig.kind === "sol") return (v * nativePrice) / 1e9;
-    return v * nativePrice;
+    if (feeConfig.kind === "evm") return (v * feeConfig.limit * price) / 1e9;
+    if (feeConfig.kind === "ltc") return (v * feeConfig.bytes * price) / 1e8;
+    if (feeConfig.kind === "ton") return (v * price) / 1e9;
+    if (feeConfig.kind === "sol") return (v * price) / 1e9; // Simplified
+    return v * price;
   };
 
   const fee = getNetworkFee();
@@ -1656,9 +1672,12 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   };
 
   const getFeeInNativeToken = () => {
-    const nativeSym = curNet?.native || currentSym;
-    const nativePrice = prices[nativeSym] || 0;
-    return nativePrice > 0 ? feeUsd / nativePrice : 0;
+    if (currentSym === 'USDT' && curNet) {
+      const nativePrice = prices[curNet.native] || prices.ETH || 0;
+      return nativePrice > 0 ? feeUsd / nativePrice : 0;
+    }
+    const tokenPrice = prices[currentSym] || 0;
+    return tokenPrice > 0 ? feeUsd / tokenPrice : 0;
   };
 
   // Auto-detect network by address
@@ -1711,27 +1730,12 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     }
     else if(step===4) {
       const num=parseFloat(amt);
-      const nativeSym = curNet?.native || currentSym;
-      const nativeAsset = assets.find(a => a.sym === nativeSym);
       const feeInNative = getFeeInNativeToken();
+      const totalNeeded = num + feeInNative;
       
-      // Check for enough funds
-      if (currentSym === nativeSym) {
-        // Native token send
-        if (num + feeInNative > assetObj.balance) {
-          alert(`Недостаточно средств. Нужно ${fmt(num + feeInNative, 6)} ${sel.sym} (включая комиссию ~${feeInNative.toFixed(6)} ${sel.sym})`);
-          return;
-        }
-      } else {
-        // Token send (like USDT)
-        if (num > assetObj.balance) {
-          alert(`Недостаточно ${currentSym}. Баланс: ${fmt(assetObj.balance, 6)}`);
-          return;
-        }
-        if (feeInNative > (nativeAsset?.balance || 0)) {
-          alert(`Недостаточно ${nativeSym} для оплаты комиссии. Нужно ~${feeInNative.toFixed(6)} ${nativeSym}`);
-          return;
-        }
+      if(totalNeeded > assetObj.balance){
+        alert(`Недостаточно средств. Нужно ${fmt(totalNeeded, 6)} ${sel.sym} (включая комиссию ~${feeInNative.toFixed(6)} ${sel.sym} ≈ $${fee})`);
+        return;
       }
 
       setSending(true);
@@ -1740,11 +1744,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
           try{
             await new Promise(r=>setTimeout(r,1200));
             const fakeHash = genTxHash();
-            onSend({ 
-              sym:sel.sym, amount:num, to, usd:num*price, 
-              hash:fakeHash, isTest:true, 
-              fee: feeInNative, feeSym: nativeSym 
-            });
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash:fakeHash, isTest:true });
             setDone(true);
             setTimeout(onClose,2500);
           }catch(e){ alert("Ошибка теста: "+(e?.message||"Unknown")); }
@@ -1762,10 +1762,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
             fee: fee // Pass custom fee if needed
           });
           if(hash){
-            onSend({ 
-              sym:sel.sym, amount:num, to, usd:num*price, 
-              hash, fee: feeInNative, feeSym: nativeSym 
-            });
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
             setDone(true);
             setTimeout(onClose,2500);
           }
@@ -1890,7 +1887,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                         <div style={{fontSize:12,color:"#f59e0b"}}>~1-2 мин</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{fmtK(feeValue)} {unit}</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{feeValue} {unit}</div>
                         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(feeValue))}</div>
                       </div>
                     </button>
@@ -1906,7 +1903,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                       <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${fmtK(customFee)} ${unit}` : "Введите сумму"}</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${customFee} ${unit}` : "Введите сумму"}</div>
                       {customFee && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(customFee))}</div>}
                     </div>
                   </button>
@@ -1921,7 +1918,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
               <div style={{padding:"14px",background:"rgba(245,158,11,0.1)",borderRadius:12,textAlign:"center",border:"1px solid rgba(245,158,11,0.2)"}}>
                 <span style={{fontSize:13,color:"#f59e0b",fontWeight:600}}>
-                   Итого к оплате: {fmtK(fee)} {unit} (≈ {fmtUSD(feeUsd)})
+                   Итого к оплате: {fee} {unit} (≈ {fmtUSD(feeUsd)})
                 </span>
               </div>
             </div>
@@ -1948,7 +1945,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
                   <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>Комиссия</span>
                   <div style={{textAlign:"right"}}>
-                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{fmtK(fee)} {unit}</span>
+                    <span style={{fontSize:13,color:"#fff",fontWeight:600}}>{fee} {unit}</span>
                     <button onClick={()=>setStep(3)} style={{fontSize:11,color:"#2563eb",background:"none",border:"none",padding:"0 0 0 8px",cursor:"pointer"}}>Изменить</button>
                   </div>
                 </div>
@@ -4262,133 +4259,173 @@ function TxDeclinedSuccessModal({ onClose }) {
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
 
 function TxDetail({ tx, onClose, onCancel }) {
+
   const [copied,setCopied]=useState(false);
-  const [showHash, setShowHash] = useState(true);
+
   const [showCancelConfirm,setShowCancelConfirm]=useState(false);
+
   const [showDeclinedSuccess,setShowDeclinedSuccess]=useState(false);
+
   const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
-  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight,incoming:ArrowDownLeft,outgoing:ArrowUpRight};
+
+  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
+
   const Icon=icons[tx.type]||ArrowUpRight;
-  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+
+  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+
   const status = tx.status||"confirmed";
+
   
+
   function handleCancel() {
+
     onCancel(tx.id);
+
     setShowDeclinedSuccess(true);
+
   }
 
+
+
   useEffect(()=>{
+
     if(tx.status!=="pending"||!tx.cancelTime)return;
+
     const interval=setInterval(()=>{
+
       const left=Math.max(0,tx.cancelTime-Date.now());
+
       setTimeLeft(left);
+
       if(left===0)clearInterval(interval);
+
     },1000);
+
     return()=>clearInterval(interval);
+
   },[tx.status,tx.cancelTime]);
 
-  const getRealisticFee = () => {
-    if (tx.fee) return tx.fee;
-    const baseFees = {
-      ETH: 0.0005, BNB: 0.0002, SOL: 0.000005, TON: 0.005, LTC: 0.00001, ARB: 0.0001, USDT: 0.85
-    };
-    const sym = tx.sym || tx.token || "ETH";
-    const fee = baseFees[sym] || 0.50;
-    return typeof fee === 'number' && sym !== 'USDT' ? `~${fee.toFixed(6)} ${sym}` : `~$${fee}`;
-  };
-
-  const displayTime = tx.time || (tx.timestamp ? new Date(tx.timestamp).toLocaleString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-  }) : new Date().toLocaleString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-  }));
-
-  const displayAddr = tx.addr || tx.from || tx.to || "0x" + Math.random().toString(16).slice(2, 42);
-
   return (
+
     <Sheet onClose={onClose} title="Transaction Details">
+
       <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:10}}>
+
         <div style={{textAlign:"center",padding:"12px 0 20px"}}>
-          <div style={{width:64,height:64,borderRadius:"50%",
-            background:tx.type==="send"||tx.type==="outgoing"?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)",
-            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",
-            border:`2px solid ${statusColors[status]}44`}}>
-            <Icon size={28} color={statusColors[status]}/>
+
+          <div style={{width:56,height:56,borderRadius:"50%",
+
+            background:tx.type==="send"?"#2d0c0c":tx.type==="receive"?"#052e16":"#0d1033",
+
+            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",
+
+            border:`1px solid ${tx.color}44`}}>
+
+            <Icon size={24} color={tx.color}/>
+
           </div>
-          <p style={{fontSize:28,fontWeight:800,color:"#fff",margin:0}}>{tx.usd || "$0.00"}</p>
-          <p style={{fontSize:14,color:"rgba(255,255,255,0.45)",margin:"6px 0 0",fontWeight:500}}>
-            {tx.type === 'incoming' || tx.type === 'receive' ? 'Получено' : 'Отправлено'} · {tx.label || tx.sym || tx.token || 'Token'}
-          </p>
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:statusColors[status]+"15",
-            borderRadius:20,padding:"6px 14px",marginTop:12,border:`1px solid ${statusColors[status]}30`}}>
-            {status === 'confirmed' || status === 'completed' ? <CheckCircle size={14} color="#22C55E"/> : 
-             status === 'pending' ? <Clock size={14} color="#F59E0B"/> : <AlertCircle size={14} color="#EF4444"/>}
-            <span style={{fontSize:13,color:statusColors[status],fontWeight:700,textTransform:"capitalize"}}>
-              {status === 'confirmed' || status === 'completed' ? 'Выполнено' : status}
-            </span>
+
+          <p style={{fontSize:24,fontWeight:700,color:tx.type==="send"?"#EF4444":"#22C55E",margin:0}}>{tx.usd}</p>
+
+          <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:"4px 0 0",textTransform:"capitalize"}}>{tx.type} · {tx.label}</p>
+
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:statusColors[status]+"22",
+
+            borderRadius:20,padding:"4px 12px",marginTop:10,border:`1px solid ${statusColors[status]}44`}}>
+
+            <div style={{width:6,height:6,borderRadius:"50%",background:statusColors[status]}}/>
+
+            <span style={{fontSize:12,color:statusColors[status],fontWeight:600,textTransform:"capitalize"}}>{status}</span>
+
           </div>
+
         </div>
 
-        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:20,padding:"8px",border:"1px solid rgba(255,255,255,0.05)"}}>
-          {[
-            ["Status", status === 'confirmed' || status === 'completed' ? <span style={{color:"#22C55E"}}>✅ Completed</span> : <span style={{color:"#EF4444"}}>❌ Failed</span>],
-            ["Time", displayTime],
-            ["Address", displayAddr.slice(0,12)+"..."+displayAddr.slice(-10)],
-            ["Fee", getRealisticFee()],
-            ["Block", tx.block || "#"+Math.floor(19000000+Math.random()*500000).toLocaleString()],
-          ].map(([k,v])=>(
-            <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:k==="Block"?"none":"1px solid rgba(255,255,255,0.02)"}}>
-              <span style={{fontSize:14,color:"rgba(255,255,255,0.4)"}}>{k}</span>
-              <span style={{fontSize:14,color:"#fff",fontWeight:500}}>{v}</span>
-            </div>
-          ))}
-        </div>
+        {[status==="declined"?["Status","❌ Declined"]:["Status",status==="confirmed"?"✅ Confirmed":status==="pending"?"⏳ Pending":"❌ Failed"],
 
-        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:20,padding:"16px",border:"1px solid rgba(255,255,255,0.05)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>TX Hash</p>
-            <button 
-              onClick={() => setShowHash(!showHash)}
-              style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}
-            >
-              {showHash ? <EyeOff size={16}/> : <Eye size={16}/>}
-            </button>
+          ["Time",tx.time],["Address",tx.addr],["Fee","~$0.84"],
+
+          tx.status==="pending"&&timeLeft>0?["Cancel in",`${Math.floor(timeLeft/60000)}m ${Math.floor((timeLeft%60000)/1000)}s`]:null,
+
+          ["Block",tx.block||"#"+Math.floor(19000000+Math.random()*500000).toLocaleString()]].filter(Boolean).map(([k,v])=>(
+
+          <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"12px 16px",background:"#1a1a1a",borderRadius:12}}>
+
+            <span style={{fontSize:13,color:"rgba(255,255,255,0.45)"}}>{k}</span>
+
+            <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{v}</span>
+
           </div>
-          <p style={{fontSize:13,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.4}}>
-            {showHash ? (tx.hash || genTxHash()) : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
-          </p>
+
+        ))}
+
+        <div style={{background:"#1a1a1a",borderRadius:12,padding:"12px 16px"}}>
+
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>TX Hash</p>
+
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{tx.hash||genTxHash()}</p>
+
         </div>
 
         {showCancelConfirm&&(
+
           <CancelConfirmModal 
+
             tx={tx} 
+
             onConfirm={handleCancel} 
+
             onClose={()=>setShowCancelConfirm(false)}/>
+
         )}
+
         {showDeclinedSuccess&&(
+
           <TxDeclinedSuccessModal onClose={()=>{setShowDeclinedSuccess(false);onClose();}}/>
+
         )}
+
         {status==="pending"&&onCancel&&(
+
           <button onClick={()=>setShowCancelConfirm(true)}
+
             style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid #EF444444",
+
               background:"#EF444422",color:"#EF4444",
+
               fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+
             <X size={15}/> Cancel Transaction
+
           </button>
+
         )}
+
         <button onClick={()=>{
-            const hashToCopy = tx.hash || "0x...";
-            if(navigator.clipboard)navigator.clipboard.writeText(hashToCopy);
+
+            if(tx.hash&&navigator.clipboard)navigator.clipboard.writeText(tx.hash);
+
             setCopied(true);setTimeout(()=>setCopied(false),2000);
+
           }}
+
           style={{width:"100%",padding:"14px",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
+
             background:"rgba(255,255,255,0.04)",color:copied?"#22C55E":"rgba(255,255,255,0.6)",
+
             fontSize:14,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+
           {copied?<><Check size={15}/>Copied!</>:<><Copy size={15}/>Copy TX Hash</>}
+
         </button>
+
       </div>
+
     </Sheet>
+
   );
+
 }
 
 
@@ -4440,8 +4477,12 @@ function RecoveryModal({ onClose, mnemonic }) {
           )}
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,filter:rev?"none":"blur(8px)"}}>
-
-            {mnemonic.map((w,i)=>(
+          {mnemonic.length === 0 && (
+            <div style={{gridColumn: "1/-1", textAlign: "center", padding: "20px", color: "rgba(255,255,255,0.4)"}}>
+              Генерация фразы...
+            </div>
+          )}
+          {mnemonic.map((w,i)=>(
 
               <div key={i} style={{background:"#161616",borderRadius:8,padding:"7px 10px",
 
@@ -5004,138 +5045,221 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
 
 function ActivityTab({ txHistory, onCancelTx }) {
+
   const [sel,setSel]=useState(null);
+
   const [filter,setFilter]=useState("all");
+
   const [showAddTx,setShowAddTx]=useState(false);
-  
-  const icons = {
-    receive: ArrowDownLeft,
-    incoming: ArrowDownLeft,
-    send: ArrowUpRight,
-    outgoing: ArrowUpRight,
-    swap: ArrowLeftRight
-  };
 
-  const bg = {
-    receive: "rgba(34,197,94,0.1)",
-    incoming: "rgba(34,197,94,0.1)",
-    send: "rgba(239,68,68,0.1)",
-    outgoing: "rgba(239,68,68,0.1)",
-    swap: "rgba(59,130,246,0.1)"
-  };
+  const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
 
-  const colors = {
-    receive: "#22C55E",
-    incoming: "#22C55E",
-    send: "#EF4444",
-    outgoing: "#EF4444",
-    swap: "#3B82F6"
-  };
+  const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
 
-  const statusColors={confirmed:"#22C55E",completed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#F59E0B"};
-  
+  const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
+
+  // Safe filter with null check
+
   const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
-  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined" || t?.status==="failed"):safeTxHistory.filter(t=>t?.type===filter);
+
+  const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
+
   
+
   const getStatusIcon = (status) => {
-    if(status==="confirmed" || status==="completed")return <CheckCircle size={12} color="#22C55E"/>;
-    if(status==="pending" || status==="declined")return <Clock size={12} color="#F59E0B"/>;
+
+    if(status==="confirmed")return <CheckCircle size={12} color="#22C55E"/>;
+
+    if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
+
     return <AlertCircle size={12} color="#EF4444"/>;
+
   };
+
+
 
   return (
+
     <div style={{padding:"0 16px 100px"}}>
+
       {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
+
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"0 4px",flexWrap:"wrap"}}>
+
         <span style={{fontSize:17,fontWeight:700,color:"#fff",flex:1}}>Activity</span>
+
         <button onClick={()=>setShowAddTx(!showAddTx)} style={{width:36,height:36,borderRadius:"50%",background:"#10b981",
+
           border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+
           <Plus size={24} color="#fff"/>
+
         </button>
+
         {["all","send","receive","swap","declined"].map(f=>(
+
           <button key={f} onClick={()=>setFilter(f)}
+
             style={{padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
+
               background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)",
+
               transition:"all 0.2s",boxShadow:filter===f?"0 4px 14px rgba(37,99,235,0.3)":"none"}}>
+
             {f==="declined"?"Declined":f.charAt(0).toUpperCase()+f.slice(1)}
+
           </button>
+
         ))}
+
       </div>
+
       {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)}/>}
+
       {filtered.length===0&&(
+
         <div style={{textAlign:"center",padding:"60px 24px"}}>
+
           <div style={{margin:"0 0 20px",display:"flex",justifyContent:"center"}}>
+
             <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#1a1a1a,#252525)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.05)"}}>
+
               <EmptyMailboxIcon size={40}/>
+
             </div>
+
           </div>
+
           <p style={{color:"rgba(255,255,255,0.5)",fontSize:15,fontWeight:500}}>No transactions yet</p>
+
           <p style={{color:"rgba(255,255,255,0.3)",fontSize:13,marginTop:6}}>Your transaction history will appear here</p>
+
         </div>
+
       )}
+
       {filtered.map((tx,i)=>{
+
         if (!tx || typeof tx !== 'object') return null;
-        const type = tx.type || "send";
-        const Icon = icons[type] || ArrowUpRight;
-        const txColor = colors[type] || "#fff";
-        const txBg = bg[type] || "rgba(255,255,255,0.05)";
-        const isIncoming = type === "receive" || type === "incoming";
-        const isDeclined = tx.status === "declined" || tx.status === "failed";
-        
-        // Clean USD display: remove extra + or - from string if already present
-        let cleanUsd = (tx.usd || "$0.00").toString().replace(/^[+-]+/, "");
-        
+
+        const Icon=icons[tx?.type]||ArrowUpRight;
+
+        const isNegative = tx?.type==="send"||tx?.status==="declined";
+
         return (
+
           <div key={tx?.id||i} onClick={()=>tx&&setSel(tx)}
+
             style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:18,
+
               cursor:"pointer",transition:"all 0.2s ease",
-              background:"rgba(255,255,255,0.03)",
+
+              background:"linear-gradient(145deg,#1a1a1a,#161616)",
+
               border:"1px solid rgba(255,255,255,0.04)",
+
+              boxShadow:"0 2px 8px rgba(0,0,0,0.2)",
+
               marginBottom:10,
+
               animation:`fadeUp 0.4s ${0.06*i}s ease both`,opacity:0,animationFillMode:"forwards"}}
+
             onMouseEnter={e=>{
-              e.currentTarget.style.background="rgba(255,255,255,0.06)";
-              e.currentTarget.style.transform="translateY(-1px)";
+
+              e.currentTarget.style.background="linear-gradient(145deg,#1f1f1f,#1a1a1a)";
+
+              e.currentTarget.style.transform="translateY(-2px)";
+
+              e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.3)";
+
             }}
+
             onMouseLeave={e=>{
-              e.currentTarget.style.background="rgba(255,255,255,0.03)";
+
+              e.currentTarget.style.background="linear-gradient(145deg,#1a1a1a,#161616)";
+
               e.currentTarget.style.transform="translateY(0)";
+
+              e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.2)";
+
             }}>
-            <div style={{width:44,height:44,borderRadius:12,background:txBg,
-              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${txColor}20`,flexShrink:0}}>
-              <Icon size={20} color={txColor}/>
+
+            <div style={{width:48,height:48,borderRadius:14,background:bg[tx?.type]||"#1a1a1a",
+
+              display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${tx?.color||"#fff"}30`,flexShrink:0,
+
+              boxShadow:`0 4px 12px ${tx?.color||"#fff"}20`}}>
+
+              <Icon size={22} color={tx?.color||"#fff"}/>
+
             </div>
+
             <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
+
                   <span style={{fontSize:15,fontWeight:600,color:"#fff",textTransform:"capitalize"}}>
-                    {type === 'incoming' ? 'Receive' : type === 'outgoing' ? 'Send' : type}
+
+                    {tx?.type}
+
                   </span>
-                  {tx?.status&&tx?.status!=="confirmed"&&tx?.status!=="completed"&&(
+
+                  {tx?.status&&tx?.status!=="confirmed"&&(
+
                     <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColors[tx?.status],
-                      background:statusColors[tx?.status]+"15",padding:"2px 6px",borderRadius:6,textTransform:"capitalize",
-                      fontWeight:600}}>
+
+                      background:statusColors[tx?.status]+"15",padding:"3px 8px",borderRadius:6,textTransform:"capitalize",
+
+                      fontWeight:600,border:`1px solid ${statusColors[tx?.status]}30`}}>
+
                       {getStatusIcon(tx?.status)}
+
                       {tx?.status}
+
                     </span>
+
                   )}
+
                 </div>
-        <span style={{fontSize:15,fontWeight:700,color:isIncoming ? "#22C55E" : (isDeclined && tx.status !== 'declined' ? "#EF4444" : (tx.status === 'declined' ? "#F59E0B" : "#EF4444"))}}>
-          {isIncoming ? "+" : "-"}{cleanUsd}
-        </span>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>
-                  {tx?.label || tx?.sym || "Token"}
+
+                <span style={{fontSize:15,fontWeight:700,color:isNegative?"#EF4444":tx?.status==="pending"?"#F59E0B":"#22C55E"}}>
+
+                  {isNegative?"-":"+"}{tx?.usd||""}
+
                 </span>
-                <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{tx?.time||""}</span>
+
               </div>
+
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.4)",fontFamily:"monospace",letterSpacing:"-0.3px"}}>
+
+                  {tx?.addr?.slice(0,8)}...{tx?.addr?.slice(-6)}
+
+                </span>
+
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>{tx?.time||""}</span>
+
+              </div>
+
+              <span style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:2,display:"block"}}>{tx?.label||""}</span>
+
             </div>
+
+            <ChevronRight size={16} color="rgba(255,255,255,0.15)"/>
+
           </div>
+
         );
+
       })}
+
     </div>
+
   );
+
 }
 
 
@@ -7359,7 +7483,7 @@ function OnboardScreen({ onCreate, onImport }) {
 
       {/* Buttons - Wallet Style */}
       <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:14,
-        animation:"fadeUp 0.8s 0.15s cubic-bezier(0.16,1,0.3,1) both",opacity:0,animationFillMode:"forwards"}}>
+        animation:"fadeUp 0.8s 0.15s cubic-bezier(0.16,1,0.3,1) both"}}>
         <button onClick={()=>onCreate()} style={{width:"100%",padding:"18px 24px",borderRadius:16,border:"none",
           background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:16,fontWeight:600,
           cursor:"pointer",boxShadow:"0 8px 32px rgba(37,99,235,0.4)",letterSpacing:"0.01em",
@@ -7485,10 +7609,15 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
   // ─── STEP 2: VERIFY ─────────────────────────────────────────────────────────
 
   if(step==="verify") return (
+    <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px", position: "relative", overflow: "hidden"}}>
+      {/* Background glows */}
+      <div style={{position:"absolute",top:-100,left:-100,width:350,height:350,borderRadius:"50%",
+        background:"radial-gradient(circle,#1e3a8a33 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-80,right:-80,width:280,height:280,borderRadius:"50%",
+        background:"radial-gradient(circle,#7c3aed22 0%,transparent 70%)",pointerEvents:"none"}}/>
 
-    <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px"}}>
-
-      <div style={{textAlign:"center",marginBottom:32}}>
+      <div style={{position: "relative", zIndex: 1}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
 
         <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
 
@@ -7567,22 +7696,24 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
         background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer"}}>
 
         ← Back to Phrase
-
       </button>
-
+      </div>
     </div>
-
   );
 
 
 
-  // ─── STEP 1: SHOW ───────────────────────────────────────────────────────────
-
+  // ─── STEP 1: SHOW PHRASE ────────────────────────────────────────────────────
   return (
+    <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px", position: "relative", overflow: "hidden"}}>
+      {/* Background glows */}
+      <div style={{position:"absolute",top:-100,left:-100,width:350,height:350,borderRadius:"50%",
+        background:"radial-gradient(circle,#1e3a8a33 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-80,right:-80,width:280,height:280,borderRadius:"50%",
+        background:"radial-gradient(circle,#7c3aed22 0%,transparent 70%)",pointerEvents:"none"}}/>
 
-    <div style={{minHeight:"100vh",background:"#000",padding:"48px 24px 32px"}}>
-
-      <div style={{textAlign:"center",marginBottom:32}}>
+      <div style={{position: "relative", zIndex: 1}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
 
         <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
 
@@ -7639,11 +7770,13 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
         )}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,filter:rev?"none":"blur(8px)"}}>
-
+          {mnemonic.length === 0 && (
+            <div style={{gridColumn: "1/-1", textAlign: "center", padding: "20px", color: "rgba(255,255,255,0.4)"}}>
+              Генерация фразы...
+            </div>
+          )}
           {mnemonic.map((w,i)=>(
-
             <div key={i} style={{background:"#161616",borderRadius:8,padding:"7px 10px",
-
               display:"flex",alignItems:"center",gap:6,border:"1px solid rgba(255,255,255,0.06)"}}>
 
               <span style={{fontSize:10,color:"rgba(255,255,255,0.25)",minWidth:14}}>{i+1}</span>
@@ -7672,11 +7805,16 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
 
       {!rev&&(
 
-        {/* Skip button removed by request */}
+        <button onClick={onDone} style={{width:"100%",padding:"14px",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)",
+
+          background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer"}}>
+
+          Skip (not recommended)
+
+        </button>
       )}
-
+      </div>
     </div>
-
   );
 
 }
@@ -7958,55 +8096,47 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   });
 
   const [balances,setBalances]=useState(() => {
-    try {
-      // Force reset on load to ensure clean slate
-      localStorage.setItem(storageKey("gem_balances"), JSON.stringify(INITIAL_BALANCES));
-      localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify([]));
-      localStorage.setItem('test_transactions', JSON.stringify([]));
-      return {...INITIAL_BALANCES};
-    } catch(e) {}
-    return {...INITIAL_BALANCES};
+
+    const mode = localStorage.getItem('gem_wallet_mode');
+
+    return mode === 'real' ? {...INITIAL_BALANCES} : {...getTestBalances()};
+
   });
 
 
+
+  // Transaction history — persisted to localStorage per user (CLEARED)
 
   const [txHistory,setTxHistory]=useState(()=>{
+
     try {
-      const stored = localStorage.getItem(storageKey("gem_tx_history"));
-      return stored ? JSON.parse(stored) : [];
+
+      // Clear transaction history
+      localStorage.removeItem(storageKey("gem_tx_history"));
+      
+      return [];
+
     } catch { return []; }
+
   });
 
-  // Listen for storage events to update balances and history from other components (like TestTxForm)
-  useEffect(() => {
-    const handleStorage = () => {
-      try {
-        const storedHist = localStorage.getItem(storageKey("gem_tx_history"));
-        if (storedHist) setTxHistory(JSON.parse(storedHist));
-        
-        const storedBals = localStorage.getItem(storageKey("gem_balances"));
-        if (storedBals) setBalances(prev => ({ ...prev, ...JSON.parse(storedBals) }));
-      } catch (e) { console.error("Sync error:", e); }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+
 
   // Auto-save txHistory to localStorage whenever it changes
-  useEffect(()=>{
-    try {
-      if (Array.isArray(txHistory)) {
-        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(txHistory));
-      }
-    } catch(e) { console.error("[txHistory save]", e); }
-  }, [txHistory]);
 
-  // Auto-save balances to localStorage whenever they change (in test mode/via TestTxForm)
   useEffect(()=>{
+
     try {
-      localStorage.setItem(storageKey("gem_balances"), JSON.stringify(balances));
-    } catch(e) { console.error("[balances save]", e); }
-  }, [balances]);
+
+      if (Array.isArray(txHistory)) {
+
+        localStorage.setItem(storageKey("gem_tx_history"), JSON.stringify(txHistory));
+
+      }
+
+    } catch(e) { console.error("[txHistory save]", e); }
+
+  }, [txHistory]);
 
 
 
@@ -8280,24 +8410,28 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  function handleSend({sym,amount,to,usd,isTest,fee,feeSym}) {
+  function handleSend({sym,amount,to,usd,isTest}) {
+
     try {
+
       // Validate inputs
+
       if (!sym || typeof amount !== 'number' || isNaN(amount)) {
+
         console.error("[handleSend] Invalid arguments:", {sym, amount, to, usd});
+
         return null;
+
       }
+
       
+
       setBalances(b=>{
+
         if (!b || typeof b !== 'object') return b;
-        const newB = {...b};
-        // Deduct amount
-        newB[sym] = Math.max(0, (newB[sym]||0) - amount);
-        // Deduct fee if provided
-        if (fee && feeSym) {
-          newB[feeSym] = Math.max(0, (newB[feeSym]||0) - fee);
-        }
-        return newB;
+
+        return {...b,[sym]:Math.max(0,(b[sym]||0)-amount)};
+
       });
 
       
@@ -9094,13 +9228,10 @@ export default function GemWalletApp() {
 
         {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
 
-        {screen==="onboard"&&<OnboardScreen onCreate={handleCreate} onImport={handleCreate}/>}
-
-        {screen==="backup"&&<BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/>}
-
-        {screen==="pin_set"&&<PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/>}
-
-        {screen==="pin_lock"&&<PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/>}
+        {screen==="onboard"&&<ErrorBoundary><OnboardScreen onCreate={handleCreate} onImport={handleCreate}/></ErrorBoundary>}
+        {screen==="backup"&&<ErrorBoundary><BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/></ErrorBoundary>}
+        {screen==="pin_set"&&<ErrorBoundary><PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/></ErrorBoundary>}
+        {screen==="pin_lock"&&<ErrorBoundary><PinLock savedPin={pin} onUnlock={handleUnlock} onSetPin={handleSetPin}/></ErrorBoundary>}
 
         {screen==="wallet"&&(
 
@@ -9114,22 +9245,14 @@ export default function GemWalletApp() {
 
         )}
 
-        {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
-
+        {!['loading', 'onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#fff",padding:24}}>
-
             <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
-
             <h3>Unknown Screen: {screen}</h3>
-
-            <button onClick={()=>setScreen("wallet")} style={{marginTop:16,padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
-
-              Go to Wallet
-
+            <button onClick={()=>setScreen("onboard")} style={{marginTop:16,padding:"12px 24px",borderRadius:12,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>
+              Вернуться назад
             </button>
-
           </div>
-
         )}
 
       </div>
@@ -9139,3 +9262,4 @@ export default function GemWalletApp() {
   );
 
 }
+
