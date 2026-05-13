@@ -149,7 +149,7 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
   );
 }
 
-function WalletApp({ addresses }) {
+function WalletApp({ addresses, mnemonic, pin }) {
   return (
     <div style={{padding:24,color:"#fff"}}>
       <h2 style={{marginBottom:24}}>Wallet</h2>
@@ -158,11 +158,11 @@ function WalletApp({ addresses }) {
         <p style={{fontSize:36,fontWeight:800,margin:0}}>$0.00</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {Object.entries(addresses).map(([net, addr]) => (
+        {addresses && Object.entries(addresses).map(([net, addr]) => (
           <div key={net} style={{background:"#111",padding:16,borderRadius:16,border:"1px solid #222",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <p style={{margin:0,fontWeight:700}}>{net}</p>
-              <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.4)"}}>{addr.slice(0,10)}...{addr.slice(-8)}</p>
+              <p style={{margin:0,fontSize:12,color:"rgba(255,255,255,0.4)"}}>{addr?.slice(0,10)}...{addr?.slice(-8)}</p>
             </div>
             <p style={{margin:0,fontWeight:700}}>0.00</p>
           </div>
