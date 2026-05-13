@@ -91,15 +91,36 @@ function BackupScreen({ mnemonic, onDone, onVerified }) {
 
 function PinLock({ savedPin, onUnlock, onSetPin }) {
   const [val, setVal] = useState("");
+  const [firstPin, setFirstPin] = useState(null); // Для хранения первого ввода при создании
   const isSetup = !savedPin;
+  const isConfirming = isSetup && firstPin !== null;
+
   const handleKey = (n) => {
     if (val.length < 4) {
       const newVal = val + n;
       setVal(newVal);
       if (newVal.length === 4) {
-        if (isSetup) onSetPin(newVal);
-        else if (newVal === savedPin) onUnlock();
-        else { alert("Неверный ПИН-код"); setVal(""); }
+        if (isSetup) {
+          if (!isConfirming) {
+            // Первый ввод при создании
+            setFirstPin(newVal);
+            setVal("");
+          } else {
+            // Подтверждение при создании
+            if (newVal === firstPin) {
+              onSetPin(newVal);
+            } else {
+              alert("ПИН-коды не совпадают. Попробуйте еще раз.");
+              setFirstPin(null);
+              setVal("");
+            }
+          }
+        } else if (newVal === savedPin) {
+          onUnlock();
+        } else {
+          alert("Неверный ПИН-код");
+          setVal("");
+        }
       }
     }
   };
@@ -108,9 +129,11 @@ function PinLock({ savedPin, onUnlock, onSetPin }) {
       <div style={{width:64,height:64,borderRadius:20,background:"rgba(37,99,235,0.1)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,border:"1px solid rgba(37,99,235,0.2)"}}>
         {isSetup ? <Lock size={32} color="#2563eb"/> : <Unlock size={32} color="#2563eb"/>}
       </div>
-      <h2 style={{fontSize:22,fontWeight:700,marginBottom:8,textAlign:"center"}}>{isSetup ? "Установите ПИН-код" : "Введите ПИН-код"}</h2>
+      <h2 style={{fontSize:22,fontWeight:700,marginBottom:8,textAlign:"center"}}>
+        {isSetup ? (isConfirming ? "Подтвердите ПИН-код" : "Установите ПИН-код") : "Введите ПИН-код"}
+      </h2>
       <p style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:40,textAlign:"center"}}>
-        {isSetup ? "Для защиты вашего кошелька" : "Введите 4-значный код доступа"}
+        {isSetup ? (isConfirming ? "Повторите введенный ранее код" : "Для защиты вашего кошелька") : "Введите 4-значный код доступа"}
       </p>
       
       <div style={{display:"flex",gap:20,marginBottom:60}}>
