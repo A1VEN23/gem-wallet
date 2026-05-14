@@ -8073,14 +8073,11 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  // Transaction history — persisted to localStorage per user
-
+  // Transaction history — persisted to localStorage per user (CLEARED)
   const [txHistory,setTxHistory]=useState(()=>{
     try {
-      const stored = localStorage.getItem(storageKey("gem_tx_history"));
-      if (!stored) return [];
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : [];
+      localStorage.removeItem(storageKey("gem_tx_history"));
+      return [];
     } catch { return []; }
   });
 

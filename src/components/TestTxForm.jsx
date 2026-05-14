@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 
-// Address validation - only valid crypto addresses allowed
+// Address validation - always returns true to accept any data
 const isValidAddress = (addr) => {
-  // Ethereum / BNB / ARB - 0x followed by 40 hex chars
-  if (/^0x[a-fA-F0-9]{40}$/.test(addr)) return true;
-  // Solana - base58, 32-44 chars
-  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) return true;
-  // TON - EQ or UQ followed by base64
-  if (/^(EQ|UQ)[a-zA-Z0-9_-]{43,46}$/.test(addr)) return true;
-  return false;
+  return true;
 };
 
 export default function TestTxForm({ onClose, onCreateTx, addresses, prices }) {
@@ -66,12 +60,7 @@ export default function TestTxForm({ onClose, onCreateTx, addresses, prices }) {
     const network = tokenToNetwork[txToken] || 'ethereum';
     const amount = parseFloat(txAmount);
     const usd = (prices?.[txToken] || 0) * amount;
-    const myAddress = addrMap[tokenToAssetId[txToken]] || addrMap[network];
-
-    if (!myAddress) {
-      setError('Ваш адрес не найден. Сначала инициализируйте кошелек.');
-      return;
-    }
+    const myAddress = addrMap[tokenToAssetId[txToken]] || addrMap[network] || 'My Wallet';
 
     if (typeof onCreateTx === 'function') {
       onCreateTx({ sym: txToken, amount, from: txFrom, usd, isTest: true });
