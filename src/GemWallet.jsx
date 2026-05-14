@@ -138,7 +138,6 @@ const NETWORK_FEES = {
 
 const getTestBalances = () => {
   return { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
-
 };
 
 
@@ -5025,7 +5024,7 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
 
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
 
-function ActivityTab({ txHistory, onCancelTx }) {
+function ActivityTab({ txHistory, onCancelTx, onCreateTx, addresses, prices }) {
 
   const [sel,setSel]=useState(null);
 
@@ -5095,7 +5094,7 @@ function ActivityTab({ txHistory, onCancelTx }) {
 
       </div>
 
-      {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)}/>}
+      {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)} onCreateTx={onCreateTx} addresses={addresses} prices={prices}/>}
 
       {filtered.length===0&&(
 
@@ -8074,19 +8073,15 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  // Transaction history — persisted to localStorage per user (CLEARED)
+  // Transaction history — persisted to localStorage per user
 
   const [txHistory,setTxHistory]=useState(()=>{
-
     try {
-
-      // Clear transaction history
-      localStorage.removeItem(storageKey("gem_tx_history"));
-      
-      return [];
-
+      const stored = localStorage.getItem(storageKey("gem_tx_history"));
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
-
   });
 
 
@@ -8379,7 +8374,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  function handleSend({sym,amount,to,usd,isTest}) {
+  function handleSend({sym,amount,to,usd,isTest,hash}) {
 
     try {
 
@@ -8431,9 +8426,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
           addr:shortAddr(to||""),color:"#EF4444",
 
-          sym,label:`−${amount} ${sym}`,hash:genTxHash(),status:"pending",
+          sym,label:`−${amount} ${sym}`,hash:hash||genTxHash(),status:"pending",
 
-          cancelTime,isTest
 
         },...h];
 
@@ -8523,7 +8517,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  function handleSwap({fromSym,toSym,fromAmt,toAmt,usd}) {
+  function handleSwap({fromSym,toSym,fromAmt,toAmt,usd,hash}) {
 
     setBalances(b=>({...b,
 
@@ -8547,7 +8541,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       addr:"DEX Router",color:"#8B9CF7",
 
-      sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,hash:genTxHash(),status:"confirmed"
+      sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,hash:hash||genTxHash(),status:"confirmed"
 
     },...h]);
 
@@ -8558,6 +8552,41 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
   function switchTab(t){if(t!==tab){setTab(t);setAnimKey(k=>k+1);}}
+
+  function handleReceive({ sym, amount, from, usd, isTest, hash }) {
+    try {
+      const num = typeof amount === "number" ? amount : parseFloat(amount);
+      if (!sym || isNaN(num) || num <= 0) return null;
+
+      setBalances(b=>{
+        if (!b || typeof b !== 'object') return b;
+        return { ...b, [sym]:(b[sym]||0)+num };
+      });
+
+      const now=new Date();
+      const timeStr=now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+      const txId="t"+Date.now();
+      const usdVal = typeof usd === "number" ? usd : (prices?.[sym]||0)*num;
+
+      setTxHistory(h=>{
+        if (!Array.isArray(h)) h = [];
+        return [{
+          id:txId,type:"receive",
+          usd:fmtUSD(usdVal||0),time:timeStr,
+          addr:shortAddr(from||""),color:"#22C55E",
+          sym,label:`+${num} ${sym}`,hash:hash||genTxHash(),status:"confirmed",
+          isTest
+        },...h];
+      });
+
+      showToast(`Received ${num} ${sym}`,"success");
+      return txId;
+    } catch (e) {
+      console.error("[handleReceive] Error:", e);
+      showToast("Receive error: " + (e?.message||"Unknown"), "error");
+      return null;
+    }
+  }
 
   
 
@@ -8737,7 +8766,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
           onOpenAdmin={()=>setTab("admin")} testMode={testMode}/>}
 
-        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx}/>}
+        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx} onCreateTx={handleReceive} addresses={addresses} prices={prices}/>}
 
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
 

@@ -32,3 +32,5 @@ pnpm-debug.log*
 
 # Vite cache
 .vite/
+
+GemWallet_old.jsx

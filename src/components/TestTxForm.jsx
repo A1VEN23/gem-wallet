@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { useState } from 'react';
+import { X, Plus } from 'lucide-react';
 
 // Address validation - only valid crypto addresses allowed
 const isValidAddress = (addr) => {
@@ -12,19 +12,7 @@ const isValidAddress = (addr) => {
   return false;
 };
 
-// Storage helper duplicate to ensure consistency with GemWallet.jsx
-const getTgUserId = () => {
-  try {
-    return window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
-  } catch { return null; }
-};
-
-const storageKey = (base) => {
-  const uid = getTgUserId();
-  return uid ? `${base}_${uid}` : base;
-};
-
-export default function TestTxForm({ onClose }) {
+export default function TestTxForm({ onClose, onCreateTx, addresses, prices }) {
   const [txToken, setTxToken] = useState('ETH');
   const [txFrom, setTxFrom] = useState('');
   const [txAmount, setTxAmount] = useState('');
@@ -39,8 +27,9 @@ export default function TestTxForm({ onClose }) {
     'TON': 'ton'
   };
 
-  // Get addresses from localStorage
+  // Get addresses from props or localStorage
   const getAddresses = () => {
+    if (addresses && typeof addresses === 'object') return addresses;
     const stored = localStorage.getItem('wallet_addresses');
     if (stored) {
       try {
@@ -64,28 +53,31 @@ export default function TestTxForm({ onClose }) {
       return; 
     }
 
-    const addresses = getAddresses();
+    const addrMap = getAddresses();
+    const tokenToAssetId = {
+      ETH: 'eth',
+      USDT: 'eth',
+      BNB: 'bnb',
+      SOL: 'sol',
+      TON: 'ton',
+      ARB: 'arb',
+      LTC: 'ltc',
+    };
     const network = tokenToNetwork[txToken] || 'ethereum';
-    const myAddress = addresses[network] || 'My Wallet';
+    const amount = parseFloat(txAmount);
+    const usd = (prices?.[txToken] || 0) * amount;
+    const myAddress = addrMap[tokenToAssetId[txToken]] || addrMap[network];
 
-    // Get current price for realistic USD amount
-    let currentPrice = 0;
-    try {
-      const idsMap = {
-        'ETH': 'ethereum', 'USDT': 'tether', 'BNB': 'binancecoin',
-        'SOL': 'solana', 'TON': 'the-open-network'
-      };
-      const cgId = idsMap[txToken];
-      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
-      const data = await res.json();
-      currentPrice = data[cgId]?.usd || 0;
-    } catch (e) {
-      // Fallback prices
-      const fallbacks = { 'ETH': 3500, 'USDT': 1, 'BNB': 600, 'SOL': 150, 'TON': 7 };
-      currentPrice = fallbacks[txToken] || 0;
+    if (!myAddress) {
+      setError('Ваш адрес не найден. Сначала инициализируйте кошелек.');
+      return;
     }
 
-    const usdVal = (parseFloat(txAmount) * currentPrice).toFixed(2);
+    if (typeof onCreateTx === 'function') {
+      onCreateTx({ sym: txToken, amount, from: txFrom, usd, isTest: true });
+      if (onClose) onClose();
+      return;
+    }
 
     const newTx = {
       id: Date.now(),
@@ -94,50 +86,21 @@ export default function TestTxForm({ onClose }) {
       sym: txToken,
       from: txFrom,
       to: myAddress,
-      addr: txFrom,
-      amount: parseFloat(txAmount),
-      usd: `+$${usdVal}`,
-      usdAmount: parseFloat(usdVal),
-      timestamp: Date.now(),
-      time: new Date().toLocaleString('ru-RU', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      }),
-      status: 'confirmed',
-      network: network.charAt(0).toUpperCase() + network.slice(1),
-      hash: '0x' + Array.from({length:64}, () => "0123456789abcdef"[Math.floor(Math.random()*16)]).join(""),
-      block: "#" + Math.floor(19000000 + Math.random() * 500000).toLocaleString()
+      amount,
+      usdAmount: usd,
+      timestamp: new Date().toISOString(),
+      status: 'completed'
     };
 
     const transactions = JSON.parse(localStorage.getItem('test_transactions') || '[]');
     transactions.unshift(newTx);
     localStorage.setItem('test_transactions', JSON.stringify(transactions));
 
-    // Update real wallet balance with storageKey support
-    const walletBalanceKey = storageKey('gem_balances');
-    try {
-      const allBalances = JSON.parse(localStorage.getItem(walletBalanceKey) || '{}');
-      allBalances[txToken] = (parseFloat(allBalances[txToken]) || 0) + parseFloat(txAmount);
-      localStorage.setItem(walletBalanceKey, JSON.stringify(allBalances));
-      
-      // Fallback for older balance keys if any
-      localStorage.setItem('wallet_balance_' + txToken, allBalances[txToken].toString());
-    } catch(e) {
-      console.error("Balance update failed", e);
-    }
-
-    // Also update global history with storageKey
-    const globalHistoryKey = storageKey('gem_tx_history');
-    try {
-      const globalHistory = JSON.parse(localStorage.getItem(globalHistoryKey) || '[]');
-      globalHistory.unshift({
-        ...newTx,
-        id: 'test_' + Date.now(),
-        label: txToken
-      });
-      localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory.slice(0, 50)));
-    } catch(e) {
-      console.warn("Failed to update global history", e);
-    }
+    // Update real wallet balance
+    const walletBalanceKey = 'wallet_balance_' + txToken;
+    const currentWalletBal = parseFloat(localStorage.getItem(walletBalanceKey) || '0');
+    const updatedWalletBal = currentWalletBal + amount;
+    localStorage.setItem(walletBalanceKey, updatedWalletBal.toString());
 
     if (onClose) onClose();
     // Dispatch storage event so other components can update
