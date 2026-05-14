@@ -4239,11 +4239,9 @@ function TxDeclinedSuccessModal({ onClose }) {
 // ─── TX DETAIL ────────────────────────────────────────────────────────────────
 
 function TxDetail({ tx, onClose, onCancel }) {
-
   const [copied,setCopied]=useState(false);
-
+  const [showHash,setShowHash]=useState(false);
   const [showCancelConfirm,setShowCancelConfirm]=useState(false);
-
   const [showDeclinedSuccess,setShowDeclinedSuccess]=useState(false);
 
   const [timeLeft,setTimeLeft]=useState(()=>tx.cancelTime?Math.max(0,tx.cancelTime-Date.now()):0);
@@ -4341,11 +4339,15 @@ function TxDetail({ tx, onClose, onCancel }) {
         ))}
 
         <div style={{background:"#1a1a1a",borderRadius:12,padding:"12px 16px"}}>
-
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:"0 0 4px"}}>TX Hash</p>
-
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all"}}>{tx.hash||genTxHash()}</p>
-
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+            <p style={{fontSize:11,color:"rgba(255,255,255,0.35)",margin:0}}>TX Hash</p>
+            <button onClick={()=>setShowHash(!showHash)} style={{background:"none",border:"none",padding:4,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {showHash ? <EyeOff size={14} color="rgba(255,255,255,0.4)"/> : <Eye size={14} color="rgba(255,255,255,0.4)"/>}
+            </button>
+          </div>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",margin:0,fontFamily:"monospace",wordBreak:"break-all",filter:showHash?"none":"blur(4px)",transition:"filter 0.2s"}}>
+            {tx.hash||genTxHash()}
+          </p>
         </div>
 
         {showCancelConfirm&&(
