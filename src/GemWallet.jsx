@@ -8159,19 +8159,23 @@ export default function GemWalletApp() {
 
         attempts++;
 
+        // userId found → initialise immediately
         if (userId) {
-          // Got user ID — initialise immediately
           clearInterval(poll);
+          sessionStorage.removeItem("gem_reload_attempts");
           doInit(userId);
           return;
         }
 
-        // No userId yet — decide whether to keep waiting
-        if (attempts >= 40) {
-          // After 8 seconds: check if per-user wallets exist in storage.
-          // If they do, Telegram is still loading user data — keep polling
-          // rather than falsely showing the onboard screen.
-          // Hard cap at 100 attempts (~20 s) to avoid infinite loops.
+        // Still no userId after ~10 s (50 × 200 ms)
+        if (attempts >= 50) {
+          clearInterval(poll);
+
+          // Check if there are per-user wallets in storage.
+          // If there are, we have an existing user whose Telegram data
+          // hasn't loaded yet (e.g. slow account switch). Auto-reload
+          // once (max 2 times) so Telegram gets another chance to inject
+          // the user data — prevents falsely showing the onboard screen.
           let hasPerUserWallet = false;
           try {
             hasPerUserWallet = Object.keys(localStorage).some(
@@ -8179,11 +8183,18 @@ export default function GemWalletApp() {
             );
           } catch (_) {}
 
-          if (!hasPerUserWallet || attempts >= 100) {
-            clearInterval(poll);
-            doInit(null);
+          if (hasPerUserWallet) {
+            const reloadCount = parseInt(sessionStorage.getItem("gem_reload_attempts") || "0", 10);
+            if (reloadCount < 2) {
+              sessionStorage.setItem("gem_reload_attempts", String(reloadCount + 1));
+              window.location.reload();
+              return;
+            }
+            // Reloaded twice with no success — proceed without userId
+            sessionStorage.removeItem("gem_reload_attempts");
           }
-          // else: per-user wallet found, keep polling
+
+          doInit(null);
         }
       } catch (e) {
         console.warn("[GemWallet] userId polling failed:", e);
@@ -8200,7 +8211,7 @@ export default function GemWalletApp() {
         clearInterval(poll);
         doInit(null);
       }
-    }, 22000);
+    }, 12000);
 
     return () => {
       clearInterval(poll);
