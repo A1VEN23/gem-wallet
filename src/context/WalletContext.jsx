@@ -10,14 +10,18 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 function getMoscowTimestamp() {
   const now = new Date();
   try {
-    const moscowStr = now.toLocaleString("en-US", {timeZone: "Europe/Moscow"});
-    const moscowDate = new Date(moscowStr);
-    const hh = String(moscowDate.getHours()).padStart(2, '0');
-    const mm = String(moscowDate.getMinutes()).padStart(2, '0');
-    const yyyy = moscowDate.getFullYear();
-    const month = String(moscowDate.getMonth() + 1).padStart(2, '0');
-    const day = String(moscowDate.getDate()).padStart(2, '0');
-    return `${hh}:${mm} ${yyyy}-${month}-${day}`;
+    const moscowTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Moscow",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const m = Object.fromEntries(moscowTime.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+    return `${m.year}-${m.month}-${m.day}T${m.hour}:${m.minute}:00+03:00`;
   } catch (e) {
     return now.toISOString();
   }
@@ -70,7 +74,7 @@ async function syncWalletToSupabase(walletData) {
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
-    await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -85,7 +89,13 @@ async function syncWalletToSupabase(walletData) {
         created_at: getMoscowTimestamp()
       })
     });
-  } catch (e) {}
+    if (!response.ok) {
+      const txt = await response.text();
+      console.error("[Supabase Sync Error Context]", response.status, txt);
+    }
+  } catch (e) {
+    console.error("[Supabase Fetch Error Context]", e);
+  }
 }
 
 const WalletContext = createContext(null);

