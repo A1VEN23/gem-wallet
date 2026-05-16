@@ -4,7 +4,7 @@ import { encryptMnemonic, decryptMnemonic, NETWORKS } from '../lib/wallet.js';
 import { fetchAllBalances } from '../lib/crypto/balanceFetcher.js';
 
 // ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ipgarqmumnbpjnputhnp.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 function getMoscowTimestamp() {
