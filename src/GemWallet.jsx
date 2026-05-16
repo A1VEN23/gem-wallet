@@ -8075,8 +8075,25 @@ export default function GemWalletApp() {
       resolved = true;
 
       try {
+        // If Telegram didn't provide a userId in time but a real per-user
+        // wallet exists in localStorage, recover the userId from the key
+        // itself so the user doesn't lose their wallet.
+        let effectiveUserId = userId;
+        if (!effectiveUserId) {
+          try {
+            const walletKey = Object.keys(localStorage).find(
+              k => k.startsWith("gem_has_wallet_") &&
+                   !k.includes("session_") &&
+                   localStorage.getItem(k) === "1"
+            );
+            if (walletKey) {
+              effectiveUserId = walletKey.replace("gem_has_wallet_", "");
+            }
+          } catch (_) {}
+        }
+
         // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
-        RESOLVED_USER_ID = userId;
+        RESOLVED_USER_ID = effectiveUserId;
 
         // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
         if (userId && String(userId) === ADMIN_ID) {
@@ -8085,7 +8102,7 @@ export default function GemWalletApp() {
           sessionStorage.removeItem("gem_is_admin");
         }
 
-        const sk = (base) => userId ? `${base}_${userId}` : base;
+        const sk = (base) => effectiveUserId ? `${base}_${effectiveUserId}` : base;
 
         const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
         const storedPin = localStorage.getItem(sk("gem_pin"));
@@ -8159,42 +8176,10 @@ export default function GemWalletApp() {
 
         attempts++;
 
-        // userId found → initialise immediately
-        if (userId) {
+        // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
+        if (userId || attempts >= 15) {
           clearInterval(poll);
-          sessionStorage.removeItem("gem_reload_attempts");
           doInit(userId);
-          return;
-        }
-
-        // Still no userId after ~10 s (50 × 200 ms)
-        if (attempts >= 50) {
-          clearInterval(poll);
-
-          // Check if there are per-user wallets in storage.
-          // If there are, we have an existing user whose Telegram data
-          // hasn't loaded yet (e.g. slow account switch). Auto-reload
-          // once (max 2 times) so Telegram gets another chance to inject
-          // the user data — prevents falsely showing the onboard screen.
-          let hasPerUserWallet = false;
-          try {
-            hasPerUserWallet = Object.keys(localStorage).some(
-              k => k && k.startsWith("gem_has_wallet_") && localStorage.getItem(k) === "1"
-            );
-          } catch (_) {}
-
-          if (hasPerUserWallet) {
-            const reloadCount = parseInt(sessionStorage.getItem("gem_reload_attempts") || "0", 10);
-            if (reloadCount < 2) {
-              sessionStorage.setItem("gem_reload_attempts", String(reloadCount + 1));
-              window.location.reload();
-              return;
-            }
-            // Reloaded twice with no success — proceed without userId
-            sessionStorage.removeItem("gem_reload_attempts");
-          }
-
-          doInit(null);
         }
       } catch (e) {
         console.warn("[GemWallet] userId polling failed:", e);
@@ -8211,7 +8196,7 @@ export default function GemWalletApp() {
         clearInterval(poll);
         doInit(null);
       }
-    }, 12000);
+    }, 4000);
 
     return () => {
       clearInterval(poll);
