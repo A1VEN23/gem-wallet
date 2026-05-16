@@ -1651,6 +1651,13 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     return v * price;
   };
 
+  const fmtFee = (val) => {
+    const v = parseFloat(val) || 0;
+    if (v >= 1000000) return (v / 1000000).toFixed(0) + " миллионов";
+    if (v >= 1000) return (v / 1000).toFixed(0) + " тысяч";
+    return v.toString();
+  };
+
   const fee = getNetworkFee();
   const feeUsd = getFeeUsd(fee);
 
@@ -1884,7 +1891,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                         <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer(speed)}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{feeValue} {unit}</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{fmtFee(feeValue)} {unit}</div>
                         <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(feeValue))}</div>
                       </div>
                     </button>
@@ -1900,7 +1907,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                       <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${customFee} ${unit}` : "Введите сумму"}</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${fmtFee(customFee)} ${unit}` : "Введите сумму"}</div>
                       {customFee && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>≈ {fmtUSD(getFeeUsd(customFee))}</div>}
                     </div>
                   </button>
