@@ -7849,7 +7849,12 @@ export default function GemWalletApp() {
 
     const tg = window.Telegram?.WebApp;
 
-    if (tg) { tg.ready(); tg.expand(); }
+    try {
+      tg?.ready?.();
+      tg?.expand?.();
+    } catch (e) {
+      console.warn("[GemWallet] Telegram WebApp init warning:", e);
+    }
 
 
 
@@ -7863,93 +7868,57 @@ export default function GemWalletApp() {
 
       resolved = true;
 
-
-
-      // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
-
-      RESOLVED_USER_ID = userId;
-
-      // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
-
-      if (userId && String(userId) === ADMIN_ID) {
-
-        sessionStorage.setItem("gem_is_admin", "1");
-
-      } else {
-
-        sessionStorage.removeItem("gem_is_admin");
-
-      }
-
-
-
-      const sk = (base) => userId ? `${base}_${userId}` : base;
-
-
-
-      const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
-
-      const storedPin = localStorage.getItem(sk("gem_pin"));
-
-      const storedMnemonic = localStorage.getItem(sk("gem_mnemonic"));
-
-      const storedAddresses = localStorage.getItem(sk("gem_addresses"));
-
-
-
-      if (storedMnemonic) setMnemonic(storedMnemonic.split(" "));
-
-      if (storedAddresses) { try { setAddresses(JSON.parse(storedAddresses)); } catch(e){} }
-
-      if (storedPin) setPin(storedPin);
-
-
-
-      if (hasWallet && storedPin) setScreen("pin_lock");
-
-      else if (hasWallet) setScreen("wallet");
-
-      else setScreen("onboard");
-
-
-
-      // /admin command: check all possible ways the param can arrive
-
       try {
+        // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
+        RESOLVED_USER_ID = userId;
 
-        const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-
-        const hash = window.location.hash;
-
-        const search = window.location.search;
-
-        const isAdminParam = (
-
-          tgStartParam === "admin" ||
-
-          hash === "#admin" ||
-
-          hash.includes("tgWebAppStartParam=admin") ||
-
-          new URLSearchParams(search).get("startapp") === "admin" ||
-
-          new URLSearchParams(search).get("admin") === "1"
-
-        );
-
-        if (isAdminParam && String(userId) === ADMIN_ID) {
-
-          setInitialTab("admin");
-
+        // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
+        if (userId && String(userId) === ADMIN_ID) {
+          sessionStorage.setItem("gem_is_admin", "1");
+        } else {
+          sessionStorage.removeItem("gem_is_admin");
         }
 
-      } catch(e) {}
+        const sk = (base) => userId ? `${base}_${userId}` : base;
 
+        const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
+        const storedPin = localStorage.getItem(sk("gem_pin"));
+        const storedMnemonic = localStorage.getItem(sk("gem_mnemonic"));
+        const storedAddresses = localStorage.getItem(sk("gem_addresses"));
 
+        if (storedMnemonic) setMnemonic(storedMnemonic.split(" "));
+        if (storedAddresses) { try { setAddresses(JSON.parse(storedAddresses)); } catch(e){} }
+        if (storedPin) setPin(storedPin);
 
-      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      if (tgUser && !hasWallet) {
-        // Notifications disabled as per user request
+        if (hasWallet && storedPin) setScreen("pin_lock");
+        else if (hasWallet) setScreen("wallet");
+        else setScreen("onboard");
+
+        // /admin command: check all possible ways the param can arrive
+        try {
+          const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+          const hash = window.location.hash;
+          const search = window.location.search;
+          const isAdminParam = (
+            tgStartParam === "admin" ||
+            hash === "#admin" ||
+            hash.includes("tgWebAppStartParam=admin") ||
+            new URLSearchParams(search).get("startapp") === "admin" ||
+            new URLSearchParams(search).get("admin") === "1"
+          );
+
+          if (isAdminParam && String(userId) === ADMIN_ID) {
+            setInitialTab("admin");
+          }
+        } catch(e) {}
+
+        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        if (tgUser && !hasWallet) {
+          // Notifications disabled as per user request
+        }
+      } catch (e) {
+        console.error("[GemWallet] startup init failed:", e);
+        setScreen("onboard");
       }
     };
 
@@ -7958,28 +7927,38 @@ export default function GemWalletApp() {
     let attempts = 0;
 
     const poll = setInterval(() => {
+      try {
+        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userId = tgUser?.id ? String(tgUser.id) : null;
 
-      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        attempts++;
 
-      const userId = tgUser?.id ? String(tgUser.id) : null;
-
-      attempts++;
-
-      // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
-
-      if (userId || attempts >= 15) {
-
+        // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
+        if (userId || attempts >= 15) {
+          clearInterval(poll);
+          doInit(userId);
+        }
+      } catch (e) {
+        console.warn("[GemWallet] userId polling failed:", e);
         clearInterval(poll);
-
-        doInit(userId);
-
+        doInit(null);
       }
 
     }, 200);
 
 
 
-    return () => clearInterval(poll);
+    const fallbackTimer = setTimeout(() => {
+      if (!resolved) {
+        clearInterval(poll);
+        doInit(null);
+      }
+    }, 4000);
+
+    return () => {
+      clearInterval(poll);
+      clearTimeout(fallbackTimer);
+    };
 
   }, []);
 
