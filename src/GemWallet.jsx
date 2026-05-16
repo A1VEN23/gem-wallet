@@ -1810,7 +1810,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
               <div style={{position:"relative"}}>
                 <input value={to} onChange={e=>handleToChange(e.target.value)}
                   placeholder={curNet?.placeholder||"Адрес получателя"}
-                  style={{width:"100%",padding:"16px 48px 16px 16px",borderRadius:14,
+                  style={{width:"100%",padding:`16px ${curNet?105:48}px 16px 16px`,borderRadius:14,
                     border:`1px solid ${addrError?"#ef4444":curNet?curNet.color+"33":"rgba(255,255,255,0.1)"}`,
                     background:"#1a1a1a",color:"#fff",fontSize:14,outline:"none",
                     fontFamily:"monospace",boxSizing:"border-box",transition:"border-color 0.2s"}}/>
