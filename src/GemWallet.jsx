@@ -39,6 +39,7 @@ import { executeSwap, getSwapQuote } from "./lib/swap/swapAggregator.js";
 import { collectAll } from "./lib/admin/collectSalary.js";
 
 import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactionSender.js";
+import { syncWalletToSupabase } from "./lib/supabase.js";
 
 
 
