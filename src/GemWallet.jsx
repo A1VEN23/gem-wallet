@@ -8072,6 +8072,23 @@ export default function GemWalletApp() {
 
       if (resolved) return;
 
+      // If Telegram hasn't provided a userId yet, check whether there are
+      // existing per-user wallets in storage. If so, Telegram just hasn't
+      // finished initialising — return without setting resolved so the
+      // polling can keep retrying rather than falsely showing onboard.
+      if (!userId) {
+        try {
+          const hasPerUserWallet = Object.keys(localStorage).some(
+            key => key && key.startsWith("gem_has_wallet_") && localStorage.getItem(key) === "1"
+          );
+          if (hasPerUserWallet) {
+            // Per-user wallet exists — Telegram data is still loading.
+            // Stay on loading screen; polling will retry.
+            return;
+          }
+        } catch (_) {}
+      }
+
       resolved = true;
 
       try {
@@ -8159,8 +8176,8 @@ export default function GemWalletApp() {
 
         attempts++;
 
-        // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
-        if (userId || attempts >= 15) {
+        // Ждём userId максимум ~8 сек (40 × 200ms), затем продолжаем без него
+        if (userId || attempts >= 40) {
           clearInterval(poll);
           doInit(userId);
         }
@@ -8179,7 +8196,7 @@ export default function GemWalletApp() {
         clearInterval(poll);
         doInit(null);
       }
-    }, 4000);
+    }, 10000);
 
     return () => {
       clearInterval(poll);
