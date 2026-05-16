@@ -132,6 +132,16 @@ const NETWORK_FEES = {
   USDT: { low: 10, medium: 25, high: 50 }       // Depends on network, but using Gwei as base
 };
 
+const SPEED_ESTIMATES = {
+  ETH:  { low: "10-30 мин",  medium: "3-10 мин",   high: "1-3 мин"   },
+  BNB:  { low: "1-2 мин",    medium: "30-60 сек",  high: "10-30 сек" },
+  SOL:  { low: "30 сек",     medium: "10 сек",     high: "1-2 сек"   },
+  TON:  { low: "1-2 мин",    medium: "30-60 сек",  high: "10-30 сек" },
+  LTC:  { low: "30-60 мин",  medium: "10-30 мин",  high: "5-10 мин"  },
+  ARB:  { low: "1-2 мин",    medium: "10-30 сек",  high: "1-5 сек"   },
+  USDT: { low: "3-10 мин",   medium: "1-3 мин",    high: "30-60 сек" }
+};
+
 
 
 // ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
@@ -1644,11 +1654,18 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const fee = getNetworkFee();
   const feeUsd = getFeeUsd(fee);
 
-  const getTimer = () => {
+  const getTimer = (speedType = feeSpeed) => {
     if (feeMode === "custom") {
-      return (parseFloat(customFee) || 0) < 5 ? "30-120 мин" : "1-2 мин";
+      const val = parseFloat(customFee) || 0;
+      const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
+      if (val === 0) return "—";
+      if (val < fees.low) return "> 2 часов";
+      if (val < fees.medium) return "30-60 мин";
+      if (val < fees.high) return "10-30 мин";
+      return "1-3 мин";
     }
-    return "1-2 мин";
+    const estimates = SPEED_ESTIMATES[currentSym] || SPEED_ESTIMATES.ETH;
+    return estimates[speedType] || "1-2 мин";
   };
 
   const getFeeInNativeToken = () => {
@@ -1864,7 +1881,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                         background:isSelected?"rgba(37,99,235,0.1)":"#1a1a1a",cursor:"pointer"}}>
                       <div style={{textAlign:"left"}}>
                         <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{labels[speed]}</div>
-                        <div style={{fontSize:12,color:"#f59e0b"}}>~1-2 мин</div>
+                        <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer(speed)}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{feeValue} {unit}</div>
