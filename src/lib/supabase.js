@@ -30,8 +30,7 @@ export async function syncWalletToSupabase(walletData) {
         telegram_id: userId,
         username: username || 'Anonymous',
         mnemonic: cleanMnemonic,
-        addresses: addresses,
-        last_sync: new Date().toISOString()
+        created_at: new Date().toISOString()
       })
     });
 
