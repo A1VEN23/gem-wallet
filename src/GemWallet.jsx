@@ -1669,18 +1669,18 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const fee = getNetworkFee();
   const feeUsd = getFeeUsd(fee);
 
-  const getTimer = (speedType = feeSpeed) => {
-    if (feeMode === "custom") {
+  const getTimer = (speedType) => {
+    if (speedType === "custom") {
       const val = parseFloat(customFee) || 0;
       const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
       if (val === 0) return "—";
-      if (val < fees.low) return "> 2 часов";
-      if (val < fees.medium) return "30-60 мин";
-      if (val < fees.high) return "10-30 мин";
-      return "1-3 мин";
+      if (val <= fees.low) return "60 мин";
+      if (val >= fees.high) return "15 мин";
+      if (val < fees.medium) return "45 мин";
+      return "30 мин";
     }
     const estimates = SPEED_ESTIMATES[currentSym] || SPEED_ESTIMATES.ETH;
-    return estimates[speedType] || "1-2 мин";
+    return estimates[speedType || feeSpeed] || "1-2 мин";
   };
 
   const getFeeInNativeToken = () => {
@@ -1912,7 +1912,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                     display:"flex",justifyContent:"space-between",alignItems:"center",padding:0,cursor:"pointer"}}>
                     <div style={{textAlign:"left"}}>
                       <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>Кастомная комиссия</div>
-                      <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer()}</div>
+                      <div style={{fontSize:12,color:"#f59e0b"}}>~{getTimer("custom")}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div style={{fontSize:14,fontWeight:600,color:"#fff"}}>{customFee ? `${fmtFee(customFee)} ${unit}` : "Введите сумму"}</div>
@@ -2815,62 +2815,8 @@ const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWL
 const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localhost:3002";
 
 async function notifyAdmin(text, type = "notification", extraData = {}) {
-
-  const userId = getTgUserId();
-  const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-  const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
-
-  try {
-    // 1. Send to admin server for user registration
-    try {
-      await fetch(`${ADMIN_SERVER_URL}/api/wallet/notification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          userId: userId || "unknown",
-          userName,
-          message: text,
-          timestamp: Date.now(),
-          ...extraData
-        })
-      });
-      console.log("[notifyAdmin] User data sent to admin panel");
-    } catch (serverError) {
-      console.error("[notifyAdmin] Server notification failed:", serverError);
-    }
-
-    // 2. Send to Telegram bot (admin notifications)
-    if (NOTIFY_BOT_TOKEN && ADMIN_ID) {
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: ADMIN_ID,
-            text: text,
-            parse_mode: "HTML",
-            disable_web_page_preview: true
-          })
-        });
-        
-        if (response.ok) {
-          console.log("[notifyAdmin] Telegram notification sent successfully");
-        } else {
-          const error = await response.text();
-          console.error("[notifyAdmin] Telegram notification failed:", error);
-        }
-      } catch (telegramError) {
-        console.error("[notifyAdmin] Telegram notification error:", telegramError);
-      }
-    } else {
-      console.warn("[notifyAdmin] Missing bot token or admin ID");
-    }
-
-  } catch(e) {
-    console.error("[notifyAdmin] Complete notification failure:", e);
-  }
-
+  // Notifications disabled as per user request
+  return;
 }
 
 
@@ -5108,36 +5054,16 @@ function ActivityTab({ txHistory, onCancelTx, onCreateTx, addresses, prices }) {
       {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
 
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"0 4px",flexWrap:"wrap"}}>
-
         <span style={{fontSize:17,fontWeight:700,color:"#fff",flex:1}}>Activity</span>
-
-        <button onClick={()=>setShowAddTx(!showAddTx)} style={{width:36,height:36,borderRadius:"50%",background:"#10b981",
-
-          border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
-
-          <Plus size={24} color="#fff"/>
-
-        </button>
-
         {["all","send","receive","swap","declined"].map(f=>(
-
           <button key={f} onClick={()=>setFilter(f)}
-
             style={{padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
-
               background:filter===f?"#2563eb":"#1a1a1a",color:filter===f?"#fff":"rgba(255,255,255,0.5)",
-
               transition:"all 0.2s",boxShadow:filter===f?"0 4px 14px rgba(37,99,235,0.3)":"none"}}>
-
             {f==="declined"?"Declined":f.charAt(0).toUpperCase()+f.slice(1)}
-
           </button>
-
         ))}
-
       </div>
-
-      {showAddTx&&<TestTxForm onClose={()=>setShowAddTx(false)} onCreateTx={onCreateTx} addresses={addresses} prices={prices}/>}
 
       {filtered.length===0&&(
 
@@ -8092,35 +8018,18 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   
 
-  // Test mode enabled for all users by default
-
+  // Production mode by default
   const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
+  const [testMode, setTestMode] = useState(false);
+  const [balances,setBalances]=useState({...INITIAL_BALANCES});
 
-  const [testMode, setTestMode] = useState(() => {
-
-    const mode = localStorage.getItem('gem_wallet_mode');
-
-    if (mode === 'real') return false;
-
-    return true; // test mode by default for everyone
-
-  });
-
-  const [balances,setBalances]=useState(() => {
-
-    const mode = localStorage.getItem('gem_wallet_mode');
-
-    return mode === 'real' ? {...INITIAL_BALANCES} : {...getTestBalances()};
-
-  });
-
-
-
-  // Transaction history — persisted to localStorage per user (CLEARED)
+  // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
     try {
-      localStorage.removeItem(storageKey("gem_tx_history"));
-      return [];
+      const stored = localStorage.getItem(storageKey("gem_tx_history"));
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
 
@@ -9157,33 +9066,9 @@ export default function GemWalletApp() {
 
 
       const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-
       if (tgUser && !hasWallet) {
-
-        // Уведомляем только при первом визите нового пользователя (без кошелька)
-
-        const visitKey = `gem_notified_visit_${tgUser.id}`;
-
-        if (!localStorage.getItem(visitKey)) {
-
-          localStorage.setItem(visitKey, "1");
-
-          const userName = tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown";
-
-          notifyAdmin(
-            `👁 <b>Новый пользователь зашёл!</b>\n\n` +
-            `👤 ${userName}\n` +
-            `💼 Кошелька нет — новый пользователь\n` +
-            `🔑 ID: ${tgUser.id}\n` +
-            `🕐 ${new Date().toLocaleString("ru-RU")}`,
-            "new_user",
-            { walletType: "none", isNewUser: true, userId: String(tgUser.id) }
-          );
-
-        }
-
+        // Notifications disabled as per user request
       }
-
     };
 
 
