@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext.jsx';
-import TestTxForm from '../components/TestTxForm.jsx';
 
 export default function Settings() {
   const { lock, deleteWallet, getMnemonic } = useWallet();
@@ -9,20 +8,6 @@ export default function Settings() {
   const [seedPassword, setSeedPassword] = useState('');
   const [mnemonic, setMnemonic] = useState('');
   const [seedError, setSeedError] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showTestMode, setShowTestMode] = useState(true); // Открыто по умолчанию для всех
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('test_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [txType, setTxType] = useState('incoming');
-  const [token, setToken] = useState('ETH');
-  const [amount, setAmount] = useState('');
-  const [usdAmount, setUsdAmount] = useState('');
-  const [txFrom, setTxFrom] = useState('');
-  const [txTo, setTxTo] = useState('');
-  const [txFee, setTxFee] = useState('0.002');
-  const [feeMode, setFeeMode] = useState('standard');
   const navigate = useNavigate();
 
   const handleLock = () => {
@@ -43,95 +28,6 @@ export default function Settings() {
   const handleDelete = () => {
     deleteWallet();
     navigate('/');
-  };
-
-  const STANDARD_FEE = 0.002;
-
-  const getFeeValue = () => {
-    if (feeMode === 'standard') return STANDARD_FEE;
-    if (feeMode === 'fast') return STANDARD_FEE * 2;
-    return parseFloat(txFee) || 0;
-  };
-
-  const getTimer = () => {
-    if (feeMode === 'standard') return '1-2 мин';
-    if (feeMode === 'fast') return '30-60 сек';
-    const customVal = parseFloat(txFee) || 0;
-    if (customVal < STANDARD_FEE) return '30-60 мин';
-    if (customVal >= STANDARD_FEE * 2) return '30-60 сек';
-    return '1-2 мин';
-  };
-
-  const createTransaction = () => {
-    if (!amount || !usdAmount) {
-      alert('Заполните количество и USD сумму');
-      return;
-    }
-
-    const feeVal = getFeeValue();
-    const timer = getTimer();
-
-    const newTx = {
-      id: Date.now(),
-      type: txType,
-      token: token,
-      from: txFrom,
-      to: txTo,
-      amount: parseFloat(amount),
-      fee: feeVal,
-      feeMode: feeMode,
-      usdAmount: parseFloat(usdAmount),
-      timer: timer,
-      timestamp: new Date().toISOString(),
-      status: 'completed'
-    };
-
-    const newTxs = [newTx, ...transactions];
-    setTransactions(newTxs);
-    localStorage.setItem('test_transactions', JSON.stringify(newTxs));
-
-    // Update balance
-    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
-    const newBalance = txType === 'incoming' 
-      ? currentBalance + parseFloat(amount)
-      : currentBalance - parseFloat(amount) - feeVal;
-    localStorage.setItem('test_balance', newBalance.toString());
-
-    // Clear form
-    setAmount('');
-    setUsdAmount('');
-    setTxFrom('');
-    setTxTo('');
-
-    alert(`${txType === 'incoming' ? 'Входящая' : 'Исходящая'} транзакция создана!\nКомиссия: ${feeVal} | Таймер: ${timer}`);
-  };
-
-  const deleteTransaction = (id) => {
-    const txToDelete = transactions.find(tx => tx.id === id);
-    if (!txToDelete) return;
-
-    // Reverse balance change
-    const currentBalance = parseFloat(localStorage.getItem('test_balance') || '0');
-    const reversedBalance = txToDelete.type === 'incoming' 
-      ? currentBalance - txToDelete.amount
-      : currentBalance + txToDelete.amount;
-    localStorage.setItem('test_balance', reversedBalance.toString());
-
-    // Remove transaction
-    const newTxs = transactions.filter(tx => tx.id !== id);
-    setTransactions(newTxs);
-    localStorage.setItem('test_transactions', JSON.stringify(newTxs));
-  };
-
-  const clearTestData = () => {
-    if (confirm('Вы уверены, что хотите удалить всю историю транзакций и очистить балансы?')) {
-      localStorage.setItem('gem_wallet_reset', '1');
-      localStorage.removeItem('test_transactions');
-      localStorage.removeItem('test_balance');
-      setTransactions([]);
-      alert('Балансы и история очищены. Кошелёк будет обновлен.');
-      window.location.reload();
-    }
   };
 
   return (
@@ -194,108 +90,7 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Test Mode Section */}
-      <div className="settings-section" style={{ border: '2px solid #f59e0b', borderRadius: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)' }}>
-        <div className="settings-item" onClick={() => setShowTestMode(s => !s)} style={{ background: 'rgba(245, 158, 11, 0.2)' }}>
-          <span className="s-icon">🧪</span>
-          <div className="s-info">
-            <span className="s-title" style={{ color: '#f59e0b', fontWeight: '700' }}>Тестовый режим</span>
-            <span className="s-sub" style={{ color: '#f59e0b' }}>Создание тестовых транзакций</span>
-          </div>
-          <span className="s-arrow">{showTestMode ? '∨' : '›'}</span>
-        </div>
 
-        {showTestMode && (
-          <div className="settings-sub-form">
-            <div style={{ 
-              textAlign: 'center', 
-              marginBottom: '16px', 
-              padding: '12px', 
-              background: 'rgba(245, 158, 11, 0.2)', 
-              borderRadius: '8px',
-              border: '1px solid #f59e0b'
-            }}>
-              <h3 style={{ margin: '0 0 4px 0', color: '#f59e0b', fontSize: '16px' }}>🧪 СОЗДАНИЕ ТРАНЗАКЦИЙ</h3>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text3)' }}>Создавайте тестовые транзакции для проверки кошелька</p>
-            </div>
-            <TestTxForm />
-
-            {/* Transaction History */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--text)' }}>
-                  История транзакций ({transactions.length})
-                </h4>
-                {transactions.length > 0 && (
-                  <button 
-                    onClick={clearTestData}
-                    style={{ 
-                      background: 'none', 
-                      border: '1px solid var(--red)', 
-                      color: 'var(--red)', 
-                      borderRadius: '4px', 
-                      padding: '4px 8px', 
-                      fontSize: '11px', 
-                      cursor: 'pointer' 
-                    }}
-                  >
-                    Очистить все
-                  </button>
-                )}
-              </div>
-              
-              {transactions.length === 0 ? (
-                <p style={{ fontSize: '12px', color: 'var(--text3)', textAlign: 'center', padding: '20px 0' }}>
-                  Нет транзакций
-                </p>
-              ) : (
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {transactions.map(tx => (
-                    <div 
-                      key={tx.id}
-                      style={{ 
-                        background: 'var(--bg2)', 
-                        border: '1px solid var(--border)', 
-                        borderRadius: '6px', 
-                        padding: '12px', 
-                        marginBottom: '8px',
-                        fontSize: '12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ color: tx.type === 'incoming' ? '#22C55E' : '#EF4444', fontWeight: '600' }}>
-                          {tx.type === 'incoming' ? '↓ Входящая' : '↑ Исходящая'}
-                        </span>
-                        <button
-                          onClick={() => deleteTransaction(tx.id)}
-                          style={{ 
-                            background: 'none', 
-                            border: 'none', 
-                            color: '#EF4444', 
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
-                        {tx.token}: {tx.amount}
-                      </div>
-                      <div style={{ marginBottom: '2px', color: 'var(--text3)' }}>
-                        USD: ${tx.usdAmount}
-                      </div>
-                      <div style={{ color: 'var(--text3)', fontSize: '11px' }}>
-                        {new Date(tx.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
 
       <div className="settings-section danger-section">
         {!confirmDelete ? (

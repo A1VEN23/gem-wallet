@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { QRCodeSVG } from "qrcode.react";
 
 import QRScanner from "./components/QRScanner.jsx";
-import TestTxForm from "./components/TestTxForm.jsx";
 
 import {
 
@@ -144,11 +143,8 @@ const SPEED_ESTIMATES = {
 
 
 
-// ─── TEST MODE BALANCES FOR ADMIN ─────────────────────────────────────────────
-
-const getTestBalances = () => {
-  return { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT: 0 };
-};
+// ─── PRODUCTION MODE BALANCES ─────────────────────────────────────────────
+// Real balances are fetched via fetchAllBalances in WalletApp component
 
 
 
@@ -1752,18 +1748,6 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
       setSending(true);
       async function doSend(){
-        if(testMode){
-          try{
-            await new Promise(r=>setTimeout(r,1200));
-            const fakeHash = genTxHash();
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash:fakeHash, isTest:true });
-            setDone(true);
-            setTimeout(onClose,2500);
-          }catch(e){ alert("Ошибка теста: "+(e?.message||"Unknown")); }
-          finally{ setSending(false); }
-          return;
-        }
-        
         try{
           const assetMeta = ASSET_META.find(a=>a.sym===sel.sym);
           const privateKey = await getPrivateKey(mnemonic.join(" "), sel.sym, network);
@@ -2811,255 +2795,17 @@ const ADMIN_ID = "1192740493";
 
 const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWLb9LPxhCKVtkw7P00vQ2FeJWxNo";
 
-// Admin server URL for notifications
-const ADMIN_SERVER_URL = import.meta.env.VITE_ADMIN_SERVER_URL || "http://localhost:3002";
-
 async function notifyAdmin(text, type = "notification", extraData = {}) {
-  // Notifications disabled as per user request
   return;
 }
 
-
-
 function isAdmin() {
-
-  const tgUserId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-
-  return String(tgUserId) === ADMIN_ID;
-
+  return false;
 }
 
-
-
 function getAllUsersFromStorage() {
-
-  try {
-
-    const users = [];
-
-    const processedUsers = new Set(); // Track processed users to avoid duplicates
-
-    
-
-    // Check if test mode is enabled
-
-    const isTestMode = localStorage.getItem("gem_wallet_mode") === "test" || 
-
-                       localStorage.getItem("gem_admin_override") === "1";
-
-    
-
-    // Add fake users for test mode
-
-    if (isTestMode) {
-
-      const fakeUsers = [
-
-        {
-
-          id: "user_001",
-
-          telegramId: "123456789",
-
-          name: "Alex K.",
-
-          addresses: {
-
-            ETH: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-
-            BNB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-
-            TON: "EQD4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC1234567890abcdef",
-
-            ARB: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-
-          },
-
-          balances: { ETH: 5.5, BNB: 150, TON: 1000, SOL: 50, LTC: 25, ARB: 500, USDT: 5000 },
-
-          createdAt: Date.now() - 86400000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
-
-          id: "user_002",
-
-          telegramId: "987654321",
-
-          name: "Maria S.",
-
-          addresses: {
-
-            ETH: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
-
-            BNB: "0x8ba1f109551bD432803012645Hac136c82C3e0c",
-
-            TON: "EQC4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "9xKXt92CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC0987654321abcdef",
-
-            ARB: "0x8ba1f109551bD432803012645Hac136c82C3e0c"
-
-          },
-
-          balances: { ETH: 12.3, BNB: 300, TON: 2500, SOL: 120, LTC: 50, ARB: 1000, USDT: 15000 },
-
-          createdAt: Date.now() - 172800000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
-
-          id: "user_003",
-
-          telegramId: "555666777",
-
-          name: "John D.",
-
-          addresses: {
-
-            ETH: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
-
-            BNB: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC",
-
-            TON: "EQB4FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "5xKXt55CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC555666777abcdef",
-
-            ARB: "0x1aD91ee08f21bE3d1C3e933E496c7f522C8F0eC"
-
-          },
-
-          balances: { ETH: 0.8, BNB: 25, TON: 300, SOL: 15, LTC: 8, ARB: 100, USDT: 800 },
-
-          createdAt: Date.now() - 259200000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
-
-          id: "user_004",
-
-          telegramId: "111222333",
-
-          name: "Sophie M.",
-
-          addresses: {
-
-            ETH: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4",
-
-            BNB: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4",
-
-            TON: "EQA7FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "3xKXt33CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC111222333abcdef",
-
-            ARB: "0x3fC91A16820543EeBdB1f3e67f3a0Ff2a96D75c4"
-
-          },
-
-          balances: { ETH: 23.1, BNB: 890, TON: 5200, SOL: 340, LTC: 120, ARB: 2200, USDT: 42000 },
-
-          createdAt: Date.now() - 345600000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
-
-          id: "user_005",
-
-          telegramId: "444555666",
-
-          name: "Michael T.",
-
-          addresses: {
-
-            ETH: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-
-            BNB: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-
-            TON: "EQE9FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "4xKXt44CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC444555666abcdef",
-
-            ARB: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-
-          },
-
-          balances: { ETH: 0.3, BNB: 10, TON: 150, SOL: 5, LTC: 3, ARB: 50, USDT: 320 },
-
-          createdAt: Date.now() - 432000000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
-
-          id: "user_006",
-
-          telegramId: "777888999",
-
-          name: "Emma R.",
-
-          addresses: {
-
-            ETH: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-
-            BNB: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-
-            TON: "EQF1FPqshQHd5fE9THZ8f8n8g5f9f9f9f9f9f9f9f9f9f9f9",
-
-            SOL: "6xKXt66CW87d97TXJSDpbD5jBkheTqA83TZRu2os",
-
-            LTC: "LTC777888999abcdef",
-
-            ARB: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
-
-          },
-
-          balances: { ETH: 8.7, BNB: 450, TON: 3100, SOL: 200, LTC: 65, ARB: 1500, USDT: 25000 },
-
-          createdAt: Date.now() - 518400000,
-
-          hasWallet: true,
-
-          isFake: true
-
-        },
-
-        {
+  return [];
+}
 
           id: "user_007",
 
@@ -8019,7 +7765,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   
 
   // Production mode by default
-  const isAdminMode = userIsAdmin || localStorage.getItem('gem_admin_override') === '1';
+  const isAdminMode = false;
   const [testMode, setTestMode] = useState(false);
   const [balances,setBalances]=useState({...INITIAL_BALANCES});
 
@@ -8638,14 +8384,6 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       {modal==="receive"&&<ReceiveModal onClose={()=>setModal(null)} addresses={addresses}/>}
 
       {modal==="swap"&&<SwapModal onClose={()=>setModal(null)} assets={assets} prices={prices} onSwap={handleSwap} addresses={addresses} mnemonic={mnemonic} network={network}/>}
-
-      {modal==="admin"&&<AdminModal onClose={()=>setModal(null)} prices={prices} onModeChange={(isTest) => {
-
-        setTestMode(isTest);
-
-        setBalances(isTest ? {...getTestBalances()} : {...INITIAL_BALANCES});
-
-      }}/>}
 
       {modal==="buy"&&(
 

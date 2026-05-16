@@ -20,11 +20,11 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ];
 
-// ─── USDT contract addresses per chain (TESTNET) ───────────────────────────
+// ─── USDT contract addresses per chain (MAINNET) ───────────────────────────
 const USDT_CONTRACTS = {
-  ETH: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06', // Sepolia USDT
-  BNB: '0xaB1a4d4f1D656d2450692d237fdD6C7f9146e814', // BSC Testnet USDT
-  ARB: '0x5F2A69A2418e94d6d9F0F44A9d8B8b6b6b6b6b6b', // Arbitrum Sepolia USDT
+  ETH: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+  BNB: '0x55d398326f99059fF775485246999027B3197955',
+  ARB: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
 };
 
 // ─── TON USDT Jetton master address ──────────────────────────────────────────
@@ -39,10 +39,10 @@ function getRpc(envKey, fallback) {
 }
 
 const RPCS = {
-  ETH: () => getRpc('VITE_ETH_RPC', 'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
-  BNB: () => getRpc('VITE_BNB_RPC', 'https://data-seed-prebsc-1-s1.binance.org:8545'),
-  ARB: () => getRpc('VITE_ARB_RPC', 'https://sepolia-rollup.arbitrum.io/rpc'),
-  SOL: () => getRpc('VITE_SOL_RPC', 'https://api.devnet.solana.com'),
+  ETH: () => getRpc('VITE_ETH_RPC', 'https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
+  BNB: () => getRpc('VITE_BNB_RPC', 'https://bsc-dataseed.binance.org'),
+  ARB: () => getRpc('VITE_ARB_RPC', 'https://arb1.arbitrum.io/rpc'),
+  SOL: () => getRpc('VITE_SOL_RPC', 'https://api.mainnet-beta.solana.com'),
   TON: () => getRpc('VITE_TON_RPC', 'https://toncenter.com/api/v2'),
 };
 
