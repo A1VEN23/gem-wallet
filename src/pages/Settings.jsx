@@ -8,6 +8,7 @@ export default function Settings() {
   const [seedPassword, setSeedPassword] = useState('');
   const [mnemonic, setMnemonic] = useState('');
   const [seedError, setSeedError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const navigate = useNavigate();
 
   const handleLock = () => {

@@ -137,7 +137,8 @@ export function WalletProvider({ children }) {
 
   // ── deleteWallet ────────────────────────────────────────────────────────────
   const deleteWallet = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.clear();
+    sessionStorage.clear();
     privateKeysRef.current = {};
     setState({
       hasWallet: false,
@@ -148,6 +149,7 @@ export function WalletProvider({ children }) {
       loading: false,
       error: null,
     });
+    window.location.reload();
   }, []);
 
   // ── setActiveNetwork ────────────────────────────────────────────────────────

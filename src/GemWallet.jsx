@@ -4339,72 +4339,6 @@ function NotifModal({ onClose }) {
 
 
 
-function NetworkModal({ onClose, network, onSetNetwork }) {
-
-  const [sel,setSel]=useState(network);
-
-  const nets=[
-
-    {id:"mainnet",l:"Ethereum Mainnet",s:"Chain ID: 1",c:"#8B9CF7"},
-
-    {id:"arbitrum",l:"Arbitrum One",s:"Chain ID: 42161",c:"#28A0F0"},
-
-    {id:"polygon",l:"Polygon",s:"Chain ID: 137",c:"#8247E5"},
-
-    {id:"bsc",l:"BNB Smart Chain",s:"Chain ID: 56",c:"#F3BA2F"},
-
-    {id:"sol",l:"Solana Mainnet",s:"Mainnet Beta",c:"#B57BFF"},
-
-  ];
-
-  return (
-
-    <Sheet onClose={onClose} title="Network">
-
-      <div style={{padding:"12px 24px",display:"flex",flexDirection:"column",gap:6}}>
-
-        {nets.map(n=>(
-
-          <button key={n.id} onClick={()=>setSel(n.id)}
-
-            style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:14,
-
-              border:`1px solid ${sel===n.id?n.c+"44":"transparent"}`,
-
-              background:sel===n.id?`${n.c}11`:"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
-
-            <div style={{width:10,height:10,borderRadius:"50%",background:n.c,flexShrink:0,boxShadow:`0 0 8px ${n.c}`}}/>
-
-            <div style={{flex:1}}>
-
-              <p style={{fontSize:14,fontWeight:600,color:"#fff",margin:0}}>{n.l}</p>
-
-              <p style={{fontSize:12,color:"rgba(255,255,255,0.4)",margin:0}}>{n.s}</p>
-
-            </div>
-
-            {sel===n.id&&<Check size={16} color={n.c}/>}
-
-          </button>
-
-        ))}
-
-        <button onClick={()=>{onSetNetwork(sel);onClose();}} style={{width:"100%",padding:"16px",borderRadius:16,border:"none",
-
-          background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",fontSize:15,
-
-          fontWeight:600,cursor:"pointer",marginTop:8}}>Apply Network</button>
-
-      </div>
-
-    </Sheet>
-
-  );
-
-}
-
-
-
 function ChangePinModal({ onClose, onChangePin }) {
 
   const [step,setStep]=useState("old"); // old | new | confirm
@@ -5234,31 +5168,15 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     ]},
 
     {t:"Security",items:[
-
       {icon:Key,l:"Recovery Phrase",s:"Back up your wallet",a:"recovery"},
-
       {icon:Lock,l:"Change PIN",s:"Update your PIN code",a:"pin"},
-
       {icon:Shield,l:"Lock Wallet",s:"Lock now",a:"lock"},
-
       {icon:Trash2,l:"Delete Wallet",s:"Remove all wallet data",a:"delete_wallet"},
-
     ]},
-
-    {t:"Preferences",items:[
-
-      {icon:Globe,l:"Network",s:network,a:"network"},
-
-    ]},
-
     {t:"Support",items:[
-
       {icon:HelpCircle,l:"Help Center",s:"FAQs & guides",a:"help"},
-
       {icon:ExternalLink,l:"About",s:"Version 2.4.1",a:"about"},
-
     ]},
-
   ];
 
 
@@ -5270,47 +5188,14 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
     if(a==="avatar"){setAvatarModal(true);return;}
 
     if(a==="delete_wallet"){
-
       if(confirm("⚠️ WARNING: This will permanently delete your wallet!\n\nThis action cannot be undone. Make sure you have your recovery phrase backed up.\n\nAre you sure you want to delete your wallet?")){
-
-        // Clear all wallet data
-
-        localStorage.removeItem("gem_wallet_mnemonic");
-
-        localStorage.removeItem("gem_wallet_pin");
-
-        localStorage.removeItem("gem_wallet_pin_hash");
-
-        localStorage.removeItem("gem_wallet_backup_shards");
-
-        localStorage.removeItem("gem_has_wallet");
-
-        localStorage.removeItem("gem_wallet_created");
-
-        localStorage.removeItem("gem_user_id");
-
-        localStorage.removeItem("gem_avatar_emoji");
-
-        localStorage.removeItem("gem_avatar_bg");
-
-        localStorage.removeItem("gem_nfts");
-
-        localStorage.removeItem("gem_tx_history");
-
-        localStorage.removeItem("gem_balances");
-
-        // Clear session
-
+        // Clear everything
+        localStorage.clear();
         sessionStorage.clear();
-
         // Reload to reset app state
-
         window.location.reload();
-
       }
-
       return;
-
     }
 
     setModal(a);
@@ -5394,8 +5279,6 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
       {modal==="recovery"&&<RecoveryModal onClose={()=>setModal(null)} mnemonic={mnemonic}/>}
 
       {modal==="notif"&&<NotifModal onClose={()=>setModal(null)}/>}
-
-      {modal==="network"&&<NetworkModal onClose={()=>setModal(null)} network={network} onSetNetwork={onSetNetwork}/>}
 
       {modal==="pin"&&<ChangePinModal onClose={()=>setModal(null)} onChangePin={onChangePin}/>}
 
