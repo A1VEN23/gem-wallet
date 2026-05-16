@@ -1604,6 +1604,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
   const [addrError,setAddrError]=useState("");
   const [showScanner,setShowScanner]=useState(false);
   const [customFee, setCustomFee] = useState("");
+  const [feeDisplay, setFeeDisplay] = useState("");
   const [feeMode, setFeeMode] = useState("standard"); // "standard" | "custom"
   const [feeSpeed,setFeeSpeed]=useState("medium");
 
@@ -1649,6 +1650,13 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
     if (feeConfig.kind === "ton") return (v * price) / 1e9;
     if (feeConfig.kind === "sol") return (v * price) / 1e9; // Simplified
     return v * price;
+  };
+
+  const getMultiplier = () => {
+    const fees = NETWORK_FEES[currentSym] || NETWORK_FEES.ETH;
+    if (fees.medium >= 1000000) return { factor: 1000000, label: "M" };
+    if (fees.medium >= 1000) return { factor: 1000, label: "K" };
+    return { factor: 1, label: "" };
   };
 
   const fmtFee = (val) => {
@@ -1912,10 +1920,19 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
                     </div>
                   </button>
                   {feeMode==="custom"&&(
-                    <input value={customFee} onChange={e=>setCustomFee(e.target.value)} 
-                      placeholder={`В ${unit}`} type="number"
-                      style={{width:"100%",marginTop:12,padding:"12px",borderRadius:10,background:"#000",
-                        border:"1px solid #333",color:"#fff",outline:"none"}}/>
+                    <div style={{marginTop:12,position:"relative"}}>
+                      <input value={feeDisplay} onChange={e=>{
+                        const val = e.target.value;
+                        setFeeDisplay(val);
+                        const mult = getMultiplier();
+                        setCustomFee(parseFloat(val || 0) * mult.factor);
+                      }} 
+                        placeholder={`В ${getMultiplier().label || ""} ${unit}`} type="number"
+                        style={{width:"100%",padding:"12px 40px 12px 12px",borderRadius:10,background:"#000",
+                          border:"1px solid #333",color:"#fff",outline:"none",boxSizing:"border-box"}}/>
+                      <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+                        fontSize:14,color:"rgba(255,255,255,0.4)",fontWeight:600}}>{getMultiplier().label}</span>
+                    </div>
                   )}
                 </div>
               </div>
