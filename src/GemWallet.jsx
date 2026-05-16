@@ -8075,25 +8075,8 @@ export default function GemWalletApp() {
       resolved = true;
 
       try {
-        // If Telegram didn't provide a userId in time but a real per-user
-        // wallet exists in localStorage, recover the userId from the key
-        // itself so the user doesn't lose their wallet.
-        let effectiveUserId = userId;
-        if (!effectiveUserId) {
-          try {
-            const walletKey = Object.keys(localStorage).find(
-              k => k.startsWith("gem_has_wallet_") &&
-                   !k.includes("session_") &&
-                   localStorage.getItem(k) === "1"
-            );
-            if (walletKey) {
-              effectiveUserId = walletKey.replace("gem_has_wallet_", "");
-            }
-          } catch (_) {}
-        }
-
         // Фиксируем userId глобально — теперь storageKey() ВЕЗДЕ использует правильный ключ
-        RESOLVED_USER_ID = effectiveUserId;
+        RESOLVED_USER_ID = userId;
 
         // Сохраняем флаг админа в sessionStorage — читается WalletApp без timing issues
         if (userId && String(userId) === ADMIN_ID) {
@@ -8102,7 +8085,7 @@ export default function GemWalletApp() {
           sessionStorage.removeItem("gem_is_admin");
         }
 
-        const sk = (base) => effectiveUserId ? `${base}_${effectiveUserId}` : base;
+        const sk = (base) => userId ? `${base}_${userId}` : base;
 
         const hasWallet = localStorage.getItem(sk("gem_has_wallet")) === "1";
         const storedPin = localStorage.getItem(sk("gem_pin"));
