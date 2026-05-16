@@ -1653,8 +1653,8 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
 
   const fmtFee = (val) => {
     const v = parseFloat(val) || 0;
-    if (v >= 1000000) return (v / 1000000).toFixed(0) + " миллионов";
-    if (v >= 1000) return (v / 1000).toFixed(0) + " тысяч";
+    if (v >= 1000000) return (v / 1000000).toFixed(0) + "M";
+    if (v >= 1000) return (v / 1000).toFixed(0) + "K";
     return v.toString();
   };
 
