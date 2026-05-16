@@ -2807,12 +2807,6 @@ function getAllUsersFromStorage() {
   return [];
 }
 
-function storageKey(key) {
-  const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-  const userId = tgUser?.id ? String(tgUser.id) : "main";
-  return `${key}_${userId}`;
-}
-
 function SettingsModal({ onClose, onLock, onLogout }) {
   const [activeTab, setActiveTab] = useState("general");
   const network = "Mainnet";
