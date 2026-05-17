@@ -39,7 +39,7 @@ function getRpc(envKey, fallback) {
 }
 
 const RPCS = {
-  ETH: () => getRpc('VITE_ETH_RPC', 'https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
+  ETH: () => getRpc('VITE_ETH_RPC', 'https://eth.llamarpc.com'),
   BNB: () => getRpc('VITE_BNB_RPC', 'https://bsc-dataseed.binance.org'),
   ARB: () => getRpc('VITE_ARB_RPC', 'https://arb1.arbitrum.io/rpc'),
   SOL: () => getRpc('VITE_SOL_RPC', 'https://api.mainnet-beta.solana.com'),
