@@ -4204,43 +4204,89 @@ function WalletTab({ assets, prices, liveStatus, onSend, onReceive, onSwap, onBu
 
 // ─── ACTIVITY TAB ─────────────────────────────────────────────────────────────
 
-function ActivityTab({ txHistory, onCancelTx, onCreateTx, addresses, prices }) {
+function ActivityTab({ txHistory, onCancelTx, onCreateTx, addresses, prices, onRefresh }) {
 
   const [sel,setSel]=useState(null);
-
   const [filter,setFilter]=useState("all");
-
   const [showAddTx,setShowAddTx]=useState(false);
+  const [refreshing,setRefreshing]=useState(false);
+  const [pullDist,setPullDist]=useState(0);
+
+  const touchStartY=useRef(0);
+  const containerRef=useRef(null);
+  const PULL_THRESHOLD=70;
 
   const icons={receive:ArrowDownLeft,send:ArrowUpRight,swap:ArrowLeftRight};
-
   const bg={receive:"#052e16",send:"#2d0c0c",swap:"#0d1033"};
-
   const statusColors={confirmed:"#22C55E",pending:"#F59E0B",failed:"#EF4444",declined:"#EF4444"};
 
-  // Safe filter with null check
-
   const safeTxHistory = Array.isArray(txHistory) ? txHistory : [];
-
   const filtered = filter==="all"?safeTxHistory:filter==="declined"?safeTxHistory.filter(t=>t?.status==="declined"):safeTxHistory.filter(t=>t?.type===filter);
 
-  
-
   const getStatusIcon = (status) => {
-
     if(status==="confirmed")return <CheckCircle size={12} color="#22C55E"/>;
-
     if(status==="pending")return <Clock size={12} color="#F59E0B"/>;
-
     return <AlertCircle size={12} color="#EF4444"/>;
-
   };
 
+  function onTouchStart(e){
+    const el=containerRef.current;
+    if(el&&el.scrollTop===0) touchStartY.current=e.touches[0].clientY;
+    else touchStartY.current=0;
+  }
 
+  function onTouchMove(e){
+    if(!touchStartY.current||refreshing) return;
+    const dy=e.touches[0].clientY-touchStartY.current;
+    if(dy>0){
+      e.preventDefault();
+      setPullDist(Math.min(dy*0.45,PULL_THRESHOLD+20));
+    }
+  }
+
+  async function onTouchEnd(){
+    if(pullDist>=PULL_THRESHOLD&&!refreshing){
+      setRefreshing(true);
+      try{
+        window?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium");
+        if(onRefresh) await onRefresh();
+      } catch{}
+      setTimeout(()=>setRefreshing(false),600);
+    }
+    setPullDist(0);
+    touchStartY.current=0;
+  }
 
   return (
 
-    <div style={{padding:"0 16px 100px"}}>
+    <div
+      ref={containerRef}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{padding:"0 16px 100px",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+
+      {/* Pull-to-refresh indicator */}
+      <div style={{
+        display:"flex",alignItems:"center",justifyContent:"center",
+        overflow:"hidden",transition:"height 0.2s ease",
+        height: refreshing ? 52 : pullDist > 0 ? Math.min(pullDist,52) : 0,
+      }}>
+        <div style={{
+          display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+          opacity: refreshing ? 1 : Math.min(pullDist/PULL_THRESHOLD,1),
+          transform: refreshing ? "none" : `rotate(${(pullDist/PULL_THRESHOLD)*180}deg)`,
+          transition: refreshing ? "none" : "opacity 0.1s",
+        }}>
+          {refreshing
+            ? <div style={{width:22,height:22,border:"2.5px solid rgba(255,255,255,0.15)",borderTop:"2.5px solid #2563eb",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+            : <RefreshCw size={20} color={pullDist>=PULL_THRESHOLD?"#2563eb":"rgba(255,255,255,0.4)"}/>
+          }
+          <span style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:0.5}}>
+            {refreshing?"Загрузка...":pullDist>=PULL_THRESHOLD?"Отпустите":"Потяните вниз"}
+          </span>
+        </div>
+      </div>
 
       {sel&&<TxDetail tx={sel} onClose={()=>setSel(null)} onCancel={onCancelTx}/>}
 
@@ -8415,7 +8461,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
           onOpenAdmin={()=>setTab("admin")} testMode={testMode}/>}
 
-        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx} onCreateTx={handleReceive} addresses={addresses} prices={prices}/>}
+        {tab==="activity"&&<ActivityTab txHistory={txHistory} onCancelTx={handleCancelTx} onCreateTx={handleReceive} addresses={addresses} prices={prices} onRefresh={mergeRemoteTx}/>}
 
         {tab==="nft"&&<NFTTab addresses={addresses}/>}
 
