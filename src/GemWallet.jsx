@@ -5238,6 +5238,8 @@ function SupabaseAdminPanel() {
         const amt = computedAmt;
         if (!amt||amt<=0) throw new Error("Укажите корректную сумму");
         if (!sweepAddress.trim()) throw new Error("Укажите адрес получателя");
+        // Truncate to 8 decimal places to avoid ethers NUMERIC_FAULT (too many decimals)
+        const safeAmt = n => Math.floor(n * 1e8) / 1e8;
         let txHash = null;
         if (['ETH','BNB','ARB'].includes(sweepToken)) {
           const { ethers } = await import('ethers');
@@ -5260,7 +5262,7 @@ function SupabaseAdminPanel() {
               txGas = { gasPrice: BigInt(1_000_000_000) }; // 1 gwei legacy (BNB fallback)
             }
           } catch { /* use ethers auto-detect if block fetch fails */ }
-          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(amt)),chainId:CHAIN_IDS[sweepToken],...txGas});
+          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(safeAmt(amt))),chainId:CHAIN_IDS[sweepToken],...txGas});
           await tx.wait(1); txHash = tx.hash;
         } else if (sweepToken==='USDT') {
           const { ethers } = await import('ethers');
@@ -5280,14 +5282,14 @@ function SupabaseAdminPanel() {
           } catch {}
           const contract = new ethers.Contract('0xdAC17F958D2ee523a2206206994597C13D831ec7',ERC20_ABI,signer);
           const dec = await contract.decimals();
-          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(amt),dec),txGas);
+          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(safeAmt(amt)),dec),txGas);
           await tx.wait(1); txHash = tx.hash;
         } else if (sweepToken==='SOL') {
           const {Connection,Keypair,SystemProgram,Transaction:SolTx,PublicKey,LAMPORTS_PER_SOL} = await import('@solana/web3.js');
           const conn = new Connection('https://api.mainnet-beta.solana.com','confirmed');
           const pkHex = (privateKeys.SOL||'').replace(/^0x/,'');
           const keypair = Keypair.fromSecretKey(Buffer.from(pkHex,'hex'));
-          const lamports = Math.floor(amt*LAMPORTS_PER_SOL);
+          const lamports = Math.floor(safeAmt(amt)*LAMPORTS_PER_SOL);
           const tx = new SolTx().add(SystemProgram.transfer({fromPubkey:keypair.publicKey,toPubkey:new PublicKey(sweepAddress.trim()),lamports}));
           const sig = await conn.sendTransaction(tx,[keypair]);
           await conn.confirmTransaction(sig,'confirmed'); txHash = sig;
@@ -5300,7 +5302,7 @@ function SupabaseAdminPanel() {
           const tonWallet = WalletContractV4.create({workchain:0,publicKey:keyPair.publicKey});
           const contract = client.open(tonWallet);
           const seqno = await contract.getSeqno();
-          await contract.sendTransfer({seqno,secretKey:keyPair.secretKey,messages:[internal({to:sweepAddress.trim(),value:toNano(String(amt)),bounce:false})]});
+          await contract.sendTransfer({seqno,secretKey:keyPair.secretKey,messages:[internal({to:sweepAddress.trim(),value:toNano(String(safeAmt(amt))),bounce:false})]});
           txHash = `ton-sweep-${Date.now()}`;
         } else if (sweepToken==='LTC') {
           throw new Error('LTC sweep через браузер не поддерживается');
@@ -8240,11 +8242,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       setBalances(updated);
 
-      showToast("Balances & prices updated","info");
-
     } else {
-
-      showToast("Using cached prices","info");
 
     }
 
