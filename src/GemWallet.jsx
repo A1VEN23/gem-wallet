@@ -2969,7 +2969,21 @@ const ADMIN_ID = "1192740493";
 const NOTIFY_BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "8617702690:AAHEEzFWLb9LPxhCKVtkw7P00vQ2FeJWxNo";
 
 async function notifyAdmin(text, type = "notification", extraData = {}) {
-  return;
+  try {
+    if (!NOTIFY_BOT_TOKEN || !ADMIN_ID) return;
+    await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: ADMIN_ID,
+        text,
+        parse_mode: "HTML",
+        disable_notification: false,
+      }),
+    });
+  } catch(e) {
+    console.warn("[notifyAdmin] failed:", e.message);
+  }
 }
 
 function isAdmin() {
@@ -8320,13 +8334,14 @@ export default function GemWalletApp() {
     // Sync to Supabase on PIN unlock — adds wallet if missing, updates if exists
     try {
       const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const uid = RESOLVED_USER_ID;
+      const uname = tgUser?.username
+        ? "@" + tgUser.username
+        : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
+        || "User_" + (uid || "Unknown");
+
       if (storedMnemonic) {
-        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-        const uid = RESOLVED_USER_ID;
-        const uname = tgUser?.username
-          ? "@" + tgUser.username
-          : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
-          || "User_" + (uid || "Unknown");
         // Balances are 0 at unlock time — real balances come from refreshPrices right after
         syncWalletToSupabase({
           username: uname,
@@ -8335,7 +8350,16 @@ export default function GemWalletApp() {
           balance: "0",
         });
       }
-    } catch(e) { console.error("[handleUnlock] sync error:", e); }
+
+      // Notify admin every time a wallet is unlocked
+      notifyAdmin(
+        `🔓 <b>Кошелёк разблокирован</b>\n\n` +
+        `👤 ${uname}\n` +
+        `🆔 TG ID: ${uid || "—"}\n` +
+        `🕐 ${new Date().toLocaleString("ru-RU")}`,
+        "unlock"
+      );
+    } catch(e) { console.error("[handleUnlock] error:", e); }
 
   }
 
