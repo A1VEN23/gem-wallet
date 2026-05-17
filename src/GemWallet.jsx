@@ -8871,7 +8871,7 @@ export default function GemWalletApp() {
 
       `}</style>
 
-      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font"}}>
+      <div style={{maxWidth:420,margin:"0 auto",minHeight:"100vh",background:"#000",fontFamily:"var(--font)"}}>
 
         {screen==="onboard"&&<ErrorBoundary><OnboardScreen onCreate={handleCreate} onImport={handleCreate}/></ErrorBoundary>}
         {screen==="backup"&&<ErrorBoundary><BackupScreen mnemonic={mnemonic} onDone={handleBackupDone} onVerified={handleVerified}/></ErrorBoundary>}
