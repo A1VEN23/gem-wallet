@@ -37,13 +37,19 @@ const CHAIN_RPC = {
   ton: () => rpc('VITE_TON_RPC', 'https://toncenter.com/api/v2'),
 };
 
+// ─── Safe amount string — prevents NUMERIC_FAULT from JS float precision ────
+// Uses toFixed(8) so we never pass scientific notation or >18 decimals to ethers
+function safeAmtStr(n, decimals = 8) {
+  return parseFloat(n).toFixed(decimals);
+}
+
 // ─── EVM native send ──────────────────────────────────────────────────────────
 async function sendEvmNative({ privateKey, to, amount, chainId, rpcUrl, fee }) {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet = new ethers.Wallet(privateKey, provider);
   const txData = {
     to,
-    value: ethers.parseEther(String(amount)),
+    value: ethers.parseEther(safeAmtStr(amount)),
     chainId,
   };
   // fee is in gwei, convert to wei
@@ -61,7 +67,8 @@ async function sendErc20({ privateKey, contractAddress, to, amount, rpcUrl, fee 
   const wallet = new ethers.Wallet(privateKey, provider);
   const contract = new ethers.Contract(contractAddress, ERC20_TRANSFER_ABI, wallet);
   const decimals = await contract.decimals();
-  const parsed = ethers.parseUnits(String(amount), decimals);
+  // Use the token's own decimal precision (USDT=6, most ERC-20=18) but cap at 8 for input
+  const parsed = ethers.parseUnits(safeAmtStr(amount, Math.min(Number(decimals), 8)), decimals);
   const txOptions = {};
   // fee is in gwei, convert to wei
   if (fee && fee > 0) {
