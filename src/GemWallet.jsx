@@ -7704,7 +7704,36 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   function showToast(msg,type="success"){setToast({msg,type,id:Date.now()});}
 
-
+  // ─── IN-APP TRANSACTION NOTIFICATION ─────────────────────────────────────────
+  function showTxNotification(type, sym, amount, usdVal) {
+    try {
+      const tg = window?.Telegram?.WebApp;
+      if (type === "receive") {
+        tg?.HapticFeedback?.notificationOccurred?.("success");
+        tg?.showPopup?.({
+          title: "💰 Получено!",
+          message: `+${parseFloat(amount).toFixed(6)} ${sym}${usdVal ? ` (~$${parseFloat(usdVal).toFixed(2)})` : ""}`,
+          buttons: [{ type: "ok" }],
+        });
+      } else if (type === "send") {
+        tg?.HapticFeedback?.notificationOccurred?.("warning");
+        tg?.showPopup?.({
+          title: "📤 Отправлено",
+          message: `−${parseFloat(amount).toFixed(6)} ${sym}${usdVal ? ` (~$${parseFloat(usdVal).toFixed(2)})` : ""}\nТранзакция отправлена`,
+          buttons: [{ type: "ok" }],
+        });
+      } else if (type === "deposit") {
+        tg?.HapticFeedback?.notificationOccurred?.("success");
+        tg?.showPopup?.({
+          title: "💎 Пополнение!",
+          message: `На кошелёк зачислено +${parseFloat(amount).toFixed(6)} ${sym}${usdVal ? ` (~$${parseFloat(usdVal).toFixed(2)})` : ""}`,
+          buttons: [{ type: "ok" }],
+        });
+      }
+    } catch (e) {
+      console.warn("[showTxNotification]", e);
+    }
+  }
 
   // ─── ADMIN ONLY: Cancel Transaction ──────────────────────────────────────────
 
@@ -7947,6 +7976,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
               const depTx = {id:depTxId,type:"receive",sym,label:`+${diff.toFixed(6)} ${sym}`,addr:"External",hash:'',status:"confirmed",usd:`+${depUsd}`,time:depTimeStr,color:"#22C55E"};
               setTxHistory(h=>{ if (!Array.isArray(h)) h=[]; return [depTx,...h]; });
               saveTransactionToSupabase(depTx, userName);
+              showTxNotification("deposit", sym, diff, depUsd);
 
             } catch(e) { console.error("deposit notif save error", e); }
 
@@ -8037,6 +8067,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       // Save to Supabase
       (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"send",sym,label:`−${amount} ${sym}`,addr:shortAddr(to||""),hash:hash||genTxHash(),status:"pending",usd:`−${fmtUSD(usd||0)}`,time:timeStr,color:"#EF4444"}; saveTransactionToSupabase(_t,_u); })();
+      showTxNotification("send", sym, amount, usd);
       showToast(`Transaction pending (${pendingMinutes}min to confirm)`,"info");
 
       // Auto-confirm after timer expires
@@ -8183,6 +8214,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         },...h];
       });
 
+      showTxNotification("receive", sym, num, usdVal);
       showToast(`Received ${num} ${sym}`,"success");
       // Save to Supabase
       (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"receive",sym,label:`+${num} ${sym}`,addr:shortAddr(from||""),hash:hash||genTxHash(),status:"confirmed",usd:`+${fmtUSD(usdVal||0)}`,time:timeStr,color:"#22C55E"}; saveTransactionToSupabase(_t,_u); })();
