@@ -358,13 +358,20 @@ const INITIAL_BALANCES = { ETH: 0, TON: 0, BNB: 0, LTC: 0, ARB: 0, SOL: 0, USDT:
 
 // ─── REAL NETWORK FEES (updated for current market) ─────────────────────────────
 const NETWORK_FEES = {
-  ETH: { low: 10, medium: 20, high: 40 },      // Gwei
-  BNB: { low: 1, medium: 3, high: 5 },         // Gwei
-  ARB: { low: 0.01, medium: 0.1, high: 0.5 },  // Gwei
-  SOL: { low: 1000, medium: 5000, high: 10000 }, // micro-lamports
-  TON: { low: 2000000, medium: 5000000, high: 10000000 }, // nanoton
-  LTC: { low: 10, medium: 25, high: 50 },      // sat/byte
-  USDT: { low: 10, medium: 25, high: 50 }       // Depends on network, but using Gwei as base
+  // ETH mainnet real gas: 2-8 gwei → at $2500 ETH: $0.05-$0.42
+  ETH:  { low: 1,    medium: 3,    high: 8     },  // Gwei
+  // BNB Chain: 1-5 gwei → at $600 BNB: $0.01-$0.06
+  BNB:  { low: 1,    medium: 3,    high: 5     },  // Gwei
+  // Arbitrum L2: 0.01-0.15 gwei → near $0 (L2 is cheap)
+  ARB:  { low: 0.01, medium: 0.05, high: 0.15  },  // Gwei
+  // Solana: base 5000 lamports + priority → ~$0.0002-$0.003
+  SOL:  { low: 1000, medium: 5000, high: 20000 },  // micro-lamports
+  // TON: 0.002-0.01 TON per tx → at $3 TON: $0.006-$0.03
+  TON:  { low: 2000000, medium: 5000000, high: 10000000 }, // nanoton
+  // Litecoin: 3-20 sat/byte, avg 226 bytes → at $85 LTC: $0.006-$0.038
+  LTC:  { low: 3,    medium: 10,   high: 25    },  // sat/byte
+  // USDT ERC-20: same gas as ETH but ~65000 gas limit
+  USDT: { low: 1,    medium: 3,    high: 8     },  // Gwei
 };
 
 const SPEED_ESTIMATES = {
