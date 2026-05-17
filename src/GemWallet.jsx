@@ -7576,9 +7576,9 @@ class ErrorBoundary extends React.Component {
 
             </button>
 
-            <button onClick={()=>handleAction("lock")} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            <button onClick={()=>window.location.reload()} style={{padding:"8px 12px",borderRadius:10,border:"none",background:"#1a1a1a",color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
 
-              <Lock size={16}/> Lock
+              <RotateCcw size={16}/> Retry
 
             </button>
 
@@ -7616,7 +7616,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
   const [error,setError]=useState(null);
 
-  const [isReady,setIsReady]=useState(false);
+  const [isReady,setIsReady]=useState(true);
 
   // Проверка админа — три источника для надёжности
 
