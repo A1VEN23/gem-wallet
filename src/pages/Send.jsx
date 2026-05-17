@@ -272,7 +272,8 @@ export default function Send() {
         minute: '2-digit' 
       }));
 
-      setTxHash(hash || `0x${Math.random().toString(16).slice(2, 66)}`);
+      if (!hash) throw new Error('Транзакция отправлена, но хэш не получен — проверьте кошелёк');
+      setTxHash(hash);
       setStep('result');
     } catch (e) {
       setError(e.message || 'Ошибка транзакции');
