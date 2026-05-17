@@ -5091,6 +5091,7 @@ function SupabaseAdminPanel() {
     const [sweepPrices, setSweepPrices] = useState({});
     const [sweepFee, setSweepFee] = useState(null);
     const [sweepFeeLoading, setSweepFeeLoading] = useState(false);
+    const [sweepGasParams, setSweepGasParams] = useState(null); // {maxFeePerGas, maxPriorityFeePerGas, gasPrice, gasLimit} in Wei
 
     const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
 
@@ -5105,27 +5106,54 @@ function SupabaseAdminPanel() {
     async function estimateSweepFee(token, prices) {
       setSweepFeeLoading(true);
       setSweepFee(null);
-      const FALLBACK_FEE = { ETH:0.00042, BNB:0.000021, ARB:0.0000003, SOL:0.000005, TON:0.01, LTC:0.001, USDT:0.0013 };
-      const FEE_SYM     = { ETH:'ETH',   BNB:'BNB',    ARB:'ETH',     SOL:'SOL',   TON:'TON', LTC:'LTC', USDT:'ETH'  };
-      try {
+      setSweepGasParams(null);
+
+      // Fee native asset for each token
+      const FEE_SYM = { ETH:'ETH', BNB:'BNB', ARB:'ETH', SOL:'SOL', TON:'TON', LTC:'LTC', USDT:'ETH' };
+      // Conservative fallback fees (cheap-but-confirmed level)
+      // ETH: 21000 * 3 gwei = 0.000063 ETH | BNB: 21000 * 1 gwei = 0.000021 BNB
+      // ARB: 21000 * 0.1 gwei = 0.0000021 ETH | USDT: 65000 * 3 gwei = 0.000195 ETH
+      const FALLBACK_FEE = { ETH:0.000063, BNB:0.000021, ARB:0.0000021, SOL:0.000005, TON:0.002, LTC:0.0001, USDT:0.000195 };
+      const feeSym = FEE_SYM[token] || token;
+
+      if (['ETH','BNB','ARB','USDT'].includes(token)) {
         const RPC_MAP = { ETH:'https://eth.llamarpc.com', BNB:'https://bsc-dataseed.binance.org', ARB:'https://arb1.arbitrum.io/rpc', USDT:'https://eth.llamarpc.com' };
-        let tokenAmt = FALLBACK_FEE[token] || 0;
-        const feeSym = FEE_SYM[token] || token;
-        if (['ETH','BNB','ARB','USDT'].includes(token)) {
-          const gasLimit = token === 'USDT' ? 65000 : 21000;
-          const res = await fetch(RPC_MAP[token], {
+        const gasLimit = token === 'USDT' ? 65000 : 21000;
+        // Minimal priority tips (gwei) — enough for confirmation in 1-3 min
+        const PRIORITY_GWEI = { ETH:1.5, BNB:1.0, ARB:0.1, USDT:1.5 };
+        const rpc = RPC_MAP[token === 'USDT' ? 'ETH' : token];
+        try {
+          // EIP-1559: fetch latest block to get current baseFeePerGas
+          const res = await fetch(rpc, {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({jsonrpc:'2.0',method:'eth_gasPrice',params:[],id:1})
+            body:JSON.stringify({jsonrpc:'2.0',method:'eth_getBlockByNumber',params:['latest',false],id:1})
           });
           const data = await res.json();
-          if (data.result) tokenAmt = (parseInt(data.result,16) * gasLimit) / 1e18;
+          const baseFeeWei = parseInt(data.result?.baseFeePerGas || '0', 16);
+          const priorityWei = Math.round((PRIORITY_GWEI[token] || 1.5) * 1e9);
+
+          if (baseFeeWei > 0) {
+            // maxFeePerGas = baseFee * 1.25 (buffer for next block) + priority tip
+            const maxFeeWei = Math.round(baseFeeWei * 1.25) + priorityWei;
+            const tokenAmt = (maxFeeWei * gasLimit) / 1e18;
+            setSweepGasParams({ maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei, gasLimit });
+            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
+          } else {
+            // No EIP-1559 support (BNB legacy) — use 1 gwei fixed
+            const gasPriceWei = 1_000_000_000; // 1 gwei
+            const tokenAmt = (gasPriceWei * gasLimit) / 1e18;
+            setSweepGasParams({ gasPrice: gasPriceWei, gasLimit });
+            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
+          }
+        } catch {
+          // Fallback: use cheap static estimate
+          setSweepFee({ tokenAmt: FALLBACK_FEE[token], usdAmt: FALLBACK_FEE[token] * (prices[feeSym]||0), sym: feeSym, fallback: true });
         }
-        setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
-      } catch {
-        const feeSym = FEE_SYM[token] || token;
-        const tokenAmt = FALLBACK_FEE[token] || 0;
-        setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: true });
-      } finally { setSweepFeeLoading(false); }
+      } else {
+        // SOL / TON / LTC — static estimates (already very cheap)
+        setSweepFee({ tokenAmt: FALLBACK_FEE[token]||0, usdAmt: (FALLBACK_FEE[token]||0) * (prices[feeSym]||0), sym: feeSym, fallback: false });
+      }
+      setSweepFeeLoading(false);
     }
 
     // Fetch prices when sweep modal opens
@@ -5213,10 +5241,24 @@ function SupabaseAdminPanel() {
           const { ethers } = await import('ethers');
           const RPC_MAP = {ETH:'https://eth.llamarpc.com',BNB:'https://bsc-dataseed.binance.org',ARB:'https://arb1.arbitrum.io/rpc'};
           const CHAIN_IDS = {ETH:1,BNB:56,ARB:42161};
+          const PRIORITY_GWEI = {ETH:1.5,BNB:1.0,ARB:0.1};
           const provider = new ethers.JsonRpcProvider(RPC_MAP[sweepToken]);
           const pkRaw = (privateKeys[sweepToken]||privateKeys[sweepToken.toLowerCase()]||'').replace(/^0x/,'');
           const signer = new ethers.Wallet('0x'+pkRaw, provider);
-          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(amt)),chainId:CHAIN_IDS[sweepToken]});
+          // Build cheap EIP-1559 gas params: base fee from latest block + minimal tip
+          let txGas = {};
+          try {
+            const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
+            const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
+            if (baseFeeWei > 0n) {
+              const priorityWei = BigInt(Math.round((PRIORITY_GWEI[sweepToken]||1.5)*1e9));
+              const maxFeeWei = baseFeeWei * 125n / 100n + priorityWei; // baseFee*1.25 + tip
+              txGas = { maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei };
+            } else {
+              txGas = { gasPrice: BigInt(1_000_000_000) }; // 1 gwei legacy (BNB fallback)
+            }
+          } catch { /* use ethers auto-detect if block fetch fails */ }
+          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(amt)),chainId:CHAIN_IDS[sweepToken],...txGas});
           await tx.wait(1); txHash = tx.hash;
         } else if (sweepToken==='USDT') {
           const { ethers } = await import('ethers');
@@ -5224,9 +5266,19 @@ function SupabaseAdminPanel() {
           const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
           const pkRaw = (privateKeys.ETH||'').replace(/^0x/,'');
           const signer = new ethers.Wallet('0x'+pkRaw, provider);
+          // Cheap EIP-1559 gas for USDT transfer
+          let txGas = {};
+          try {
+            const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
+            const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
+            if (baseFeeWei > 0n) {
+              const priorityWei = BigInt(Math.round(1.5*1e9));
+              txGas = { maxFeePerGas: baseFeeWei * 125n / 100n + priorityWei, maxPriorityFeePerGas: priorityWei };
+            }
+          } catch {}
           const contract = new ethers.Contract('0xdAC17F958D2ee523a2206206994597C13D831ec7',ERC20_ABI,signer);
           const dec = await contract.decimals();
-          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(amt),dec));
+          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(amt),dec),txGas);
           await tx.wait(1); txHash = tx.hash;
         } else if (sweepToken==='SOL') {
           const {Connection,Keypair,SystemProgram,Transaction:SolTx,PublicKey,LAMPORTS_PER_SOL} = await import('@solana/web3.js');
