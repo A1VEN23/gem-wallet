@@ -124,7 +124,9 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
       if (resolvedTgId) ok = await tryUpsert("telegram_id");
       if (!ok) ok = await tryUpsert("mnemonic");
       if (!ok) {
-        // Last resort plain INSERT — ensures no wallet is ever silently dropped
+        // Last resort plain INSERT without telegram_id — ensures no wallet is ever silently dropped
+        const safePayload = { ...payload };
+        delete safePayload.telegram_id;
         await fetch(`${SUPABASE_URL}/rest/v1/wallets`, {
           method: 'POST',
           headers: {
@@ -133,7 +135,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(safePayload),
         });
       }
     } catch (e) {
