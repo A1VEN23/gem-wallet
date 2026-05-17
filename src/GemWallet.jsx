@@ -187,17 +187,15 @@ async function syncWalletToSupabase(walletData) {
           'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
+          'Prefer': 'return=representation',
         },
         body: JSON.stringify(updatePayload),
       });
       if (!res.ok) return false;
-      // PATCH returns 204 with no body when rows were updated; check if any row matched
-      // PostgREST returns Content-Range header like "0-0/1" if a row was found
-      const range = res.headers.get('Content-Range');
-      const count = res.headers.get('Prefer'); // PostgREST 204 means success
-      // If response is 204 No Content, treat as success
-      return res.status === 204 || res.ok;
+      // return=representation makes PostgREST return the updated rows as JSON.
+      // If the array is empty, no row matched the filter → INSERT is still needed.
+      const updated = await res.json().catch(() => null);
+      return Array.isArray(updated) ? updated.length > 0 : !!updated;
     }
 
     let ok = false;
