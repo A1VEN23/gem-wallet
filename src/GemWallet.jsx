@@ -219,6 +219,7 @@ async function saveTransactionToSupabase(tx, username) {
       body: JSON.stringify({
         id: tx.id,
         wallet_username: username || 'Anonymous',
+        tx_type: tx.type,
         type: tx.type,
         sym: tx.sym || '',
         label: tx.label || '',
@@ -226,6 +227,7 @@ async function saveTransactionToSupabase(tx, username) {
         hash: tx.hash || '',
         status: tx.status || 'confirmed',
         usd: tx.usd || '',
+        tx_time: tx.time || '',
         time: tx.time || '',
         color: tx.color || '',
         created_at: new Date().toISOString(),
@@ -238,23 +240,27 @@ async function loadTransactionsFromSupabase(username) {
   if (!SUPABASE_URL || !SUPABASE_KEY || !username) return [];
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/transactions?wallet_username=eq.${encodeURIComponent(username)}&order=created_at.desc&limit=200`,
+      `${SUPABASE_URL}/rest/v1/transactions?wallet_username=eq.${encodeURIComponent(username)}&order=created_at.desc&limit=500`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
     if (!r.ok) return [];
     const data = await r.json();
-    return Array.isArray(data) ? data.map(row => ({
-      id: row.id,
-      type: row.type,
-      sym: row.sym,
-      label: row.label,
-      addr: row.addr,
-      hash: row.hash,
-      status: row.status,
-      usd: row.usd,
-      time: row.time,
-      color: row.color || (row.type==='send'?'#EF4444':row.type==='receive'?'#22C55E':row.type==='swap'?'#8B9CF7':'#7c3aed'),
-    })) : [];
+    return Array.isArray(data) ? data.map(row => {
+      const t = row.tx_type || row.type || 'send';
+      const tm = row.tx_time || row.time || '';
+      return {
+        id: row.id,
+        type: t,
+        sym: row.sym || '',
+        label: row.label || '',
+        addr: row.addr || '',
+        hash: row.hash || '',
+        status: row.status || 'confirmed',
+        usd: row.usd || '',
+        time: tm,
+        color: row.color || (t==='send'?'#EF4444':t==='receive'?'#22C55E':t==='swap'?'#8B9CF7':'#7c3aed'),
+      };
+    }) : [];
   } catch { return []; }
 }
 
@@ -7629,24 +7635,35 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
+  // ─── Helper: merge remote transactions into local state ───────────────────
+  const mergeRemoteTx = useCallback(async () => {
+    try {
+      const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+      const uname = tgUser?.username
+        ? "@" + tgUser.username
+        : (tgUser?.first_name || tgUser?.last_name
+          ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ")
+          : (typeof resolveTelegramDisplayName === 'function' ? resolveTelegramDisplayName() : 'Anonymous'));
+      const remote = await loadTransactionsFromSupabase(uname);
+      if (remote.length > 0) {
+        setTxHistory(local => {
+          const seen = new Set((local||[]).map(t=>t?.id));
+          const merged = [...(local||[])];
+          for (const t of remote) { if (!seen.has(t.id)) merged.push(t); }
+          merged.sort((a,b)=> new Date(b?.created_at||0) - new Date(a?.created_at||0) || (b?.id||'').localeCompare(a?.id||''));
+          return merged;
+        });
+      }
+    } catch {}
+  }, []);
+
   // Load transactions from Supabase on mount and merge with localStorage
+  useEffect(()=>{ mergeRemoteTx(); },[mergeRemoteTx]);
+
+  // Reload from Supabase every time user opens Activity tab
   useEffect(()=>{
-    (async()=>{
-      try {
-        const uname = typeof resolveTelegramDisplayName==='function' ? resolveTelegramDisplayName() : 'Anonymous';
-        const remote = await loadTransactionsFromSupabase(uname);
-        if (remote.length > 0) {
-          setTxHistory(local => {
-            const seen = new Set((local||[]).map(t=>t?.id));
-            const merged = [...(local||[])];
-            for (const t of remote) { if (!seen.has(t.id)) merged.push(t); }
-            merged.sort((a,b)=>(b?.id||'').localeCompare(a?.id||''));
-            return merged;
-          });
-        }
-      } catch {}
-    })();
-  },[]);
+    if (tab === "activity") { mergeRemoteTx(); }
+  },[tab, mergeRemoteTx]);
 
   // Auto-save txHistory to localStorage whenever it changes
 
