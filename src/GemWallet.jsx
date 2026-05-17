@@ -5184,9 +5184,7 @@ function SupabaseAdminPanel() {
                   {/* Line 2: TG ID + balance */}
                   <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginTop:2,
                     display:"flex",gap:8,alignItems:"center"}}>
-                    <span>{tgId ? `🆔 ${tgId}` : "🆔 Нет ID"}</span>
-                    <span style={{color:"rgba(255,255,255,0.2)"}}>·</span>
-                    <span>{balUSD>0?`💰 $${balUSD.toFixed(2)}`:"$0"}</span>
+                    <span>{balUSD>0?`💰 ${balUSD.toFixed(2)}`:"$0"}</span>
                   </div>
                 </div>
 
