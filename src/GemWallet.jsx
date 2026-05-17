@@ -8429,9 +8429,11 @@ export default function GemWalletApp() {
 
   useEffect(() => {
 
-    // Telegram WebApp setup
+    // Telegram WebApp setup — set black background before expand() to kill grey flash
     try {
       const tg = window.Telegram?.WebApp;
+      tg?.setBackgroundColor?.("#000000");
+      tg?.setHeaderColor?.("#000000");
       tg?.ready?.();
       tg?.expand?.();
     } catch (e) {
