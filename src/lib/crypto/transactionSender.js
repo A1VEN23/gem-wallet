@@ -30,7 +30,7 @@ function rpc(key, fallback) {
 }
 
 const CHAIN_RPC = {
-  eth: () => rpc('VITE_ETH_RPC', 'https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'),
+  eth: () => rpc('VITE_ETH_RPC', 'https://eth.llamarpc.com'),
   bnb: () => rpc('VITE_BNB_RPC', 'https://bsc-dataseed.binance.org'),
   arb: () => rpc('VITE_ARB_RPC', 'https://arb1.arbitrum.io/rpc'),
   sol: () => rpc('VITE_SOL_RPC', 'https://api.mainnet-beta.solana.com'),
