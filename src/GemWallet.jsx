@@ -45,7 +45,7 @@ import { sendTransaction as chainSendTransaction } from "./lib/crypto/transactio
 // ─── SUPABASE SYNC ────────────────────────────────────────────────────────────
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ipgarqmumnbpjnputhnp.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZ2FycW11bW5icGpucHV0aG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NTMzNDAsImV4cCI6MjA5NDUyOTM0MH0.R-O60N8wH_CtWdnUdsEq9SF27dSA3Aa-hh0UWq7d9Ls";
 
 function getMoscowTimestamp() {
   const now = new Date();
