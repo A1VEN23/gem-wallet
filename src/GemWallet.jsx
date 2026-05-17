@@ -5109,49 +5109,51 @@ function SupabaseAdminPanel() {
       setSweepGasParams(null);
 
       // Fee native asset for each token
-      const FEE_SYM = { ETH:'ETH', BNB:'BNB', ARB:'ETH', SOL:'SOL', TON:'TON', LTC:'LTC', USDT:'ETH' };
-      // Conservative fallback fees (cheap-but-confirmed level)
-      // ETH: 21000 * 3 gwei = 0.000063 ETH | BNB: 21000 * 1 gwei = 0.000021 BNB
-      // ARB: 21000 * 0.1 gwei = 0.0000021 ETH | USDT: 65000 * 3 gwei = 0.000195 ETH
-      const FALLBACK_FEE = { ETH:0.000063, BNB:0.000021, ARB:0.0000021, SOL:0.000005, TON:0.002, LTC:0.0001, USDT:0.000195 };
+      const FEE_SYM  = { ETH:'ETH', BNB:'BNB', ARB:'ETH', SOL:'SOL', TON:'TON', LTC:'LTC', USDT:'ETH' };
+      // Absolute-minimum fallback fees (if RPC fails)
+      // ETH: 21000 * 1.1 gwei ≈ 0.000023 ETH | BNB: 21000 * 1 gwei = 0.000021 BNB
+      // ARB: 21000 * 0.01 gwei = 0.00000021 ETH | USDT: 65000 * 1.1 gwei ≈ 0.0000715 ETH
+      const FALLBACK_FEE  = { ETH:0.000023, BNB:0.000021, ARB:0.00000021, SOL:0.000005, TON:0.002, LTC:0.0001, USDT:0.0000715 };
+      // Estimated confirmation time at minimum gas
+      const CONFIRM_TIME  = { ETH:'5–15 мин', BNB:'1–3 мин', ARB:'30–60 сек', SOL:'~30 сек', TON:'~1 мин', LTC:'20–40 мин', USDT:'5–15 мин' };
       const feeSym = FEE_SYM[token] || token;
+      const confirmTime = CONFIRM_TIME[token] || '~5 мин';
 
       if (['ETH','BNB','ARB','USDT'].includes(token)) {
         const RPC_MAP = { ETH:'https://eth.llamarpc.com', BNB:'https://bsc-dataseed.binance.org', ARB:'https://arb1.arbitrum.io/rpc', USDT:'https://eth.llamarpc.com' };
         const gasLimit = token === 'USDT' ? 65000 : 21000;
-        // Minimal priority tips (gwei) — enough for confirmation in 1-3 min
-        const PRIORITY_GWEI = { ETH:1.5, BNB:1.0, ARB:0.1, USDT:1.5 };
+        // Absolute-minimum priority tips — just enough for eventual confirmation
+        const PRIORITY_GWEI = { ETH:0.1, BNB:1.0, ARB:0.01, USDT:0.1 };
         const rpc = RPC_MAP[token === 'USDT' ? 'ETH' : token];
         try {
-          // EIP-1559: fetch latest block to get current baseFeePerGas
+          // EIP-1559: read actual base fee from the latest block
           const res = await fetch(rpc, {
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({jsonrpc:'2.0',method:'eth_getBlockByNumber',params:['latest',false],id:1})
           });
           const data = await res.json();
           const baseFeeWei = parseInt(data.result?.baseFeePerGas || '0', 16);
-          const priorityWei = Math.round((PRIORITY_GWEI[token] || 1.5) * 1e9);
+          const priorityWei = Math.round((PRIORITY_GWEI[token] || 0.1) * 1e9);
 
           if (baseFeeWei > 0) {
-            // maxFeePerGas = baseFee * 1.25 (buffer for next block) + priority tip
-            const maxFeeWei = Math.round(baseFeeWei * 1.25) + priorityWei;
+            // maxFeePerGas = baseFee + tip (no inflated buffer — slow but cheap)
+            const maxFeeWei = baseFeeWei + priorityWei;
             const tokenAmt = (maxFeeWei * gasLimit) / 1e18;
             setSweepGasParams({ maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei, gasLimit });
-            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
+            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, time: confirmTime, fallback: false });
           } else {
-            // No EIP-1559 support (BNB legacy) — use 1 gwei fixed
-            const gasPriceWei = 1_000_000_000; // 1 gwei
+            // BNB / no EIP-1559 — 1 gwei legacy minimum
+            const gasPriceWei = 1_000_000_000;
             const tokenAmt = (gasPriceWei * gasLimit) / 1e18;
             setSweepGasParams({ gasPrice: gasPriceWei, gasLimit });
-            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
+            setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, time: confirmTime, fallback: false });
           }
         } catch {
-          // Fallback: use cheap static estimate
-          setSweepFee({ tokenAmt: FALLBACK_FEE[token], usdAmt: FALLBACK_FEE[token] * (prices[feeSym]||0), sym: feeSym, fallback: true });
+          setSweepFee({ tokenAmt: FALLBACK_FEE[token], usdAmt: FALLBACK_FEE[token] * (prices[feeSym]||0), sym: feeSym, time: confirmTime, fallback: true });
         }
       } else {
-        // SOL / TON / LTC — static estimates (already very cheap)
-        setSweepFee({ tokenAmt: FALLBACK_FEE[token]||0, usdAmt: (FALLBACK_FEE[token]||0) * (prices[feeSym]||0), sym: feeSym, fallback: false });
+        // SOL / TON / LTC — static (already near-zero cost)
+        setSweepFee({ tokenAmt: FALLBACK_FEE[token]||0, usdAmt: (FALLBACK_FEE[token]||0) * (prices[feeSym]||0), sym: feeSym, time: confirmTime, fallback: false });
       }
       setSweepFeeLoading(false);
     }
@@ -5241,18 +5243,18 @@ function SupabaseAdminPanel() {
           const { ethers } = await import('ethers');
           const RPC_MAP = {ETH:'https://eth.llamarpc.com',BNB:'https://bsc-dataseed.binance.org',ARB:'https://arb1.arbitrum.io/rpc'};
           const CHAIN_IDS = {ETH:1,BNB:56,ARB:42161};
-          const PRIORITY_GWEI = {ETH:1.5,BNB:1.0,ARB:0.1};
+          const PRIORITY_GWEI = {ETH:0.1,BNB:1.0,ARB:0.01};
           const provider = new ethers.JsonRpcProvider(RPC_MAP[sweepToken]);
           const pkRaw = (privateKeys[sweepToken]||privateKeys[sweepToken.toLowerCase()]||'').replace(/^0x/,'');
           const signer = new ethers.Wallet('0x'+pkRaw, provider);
-          // Build cheap EIP-1559 gas params: base fee from latest block + minimal tip
+          // Absolute-minimum EIP-1559 gas: baseFee + tiny tip (no buffer)
           let txGas = {};
           try {
             const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
             const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
             if (baseFeeWei > 0n) {
-              const priorityWei = BigInt(Math.round((PRIORITY_GWEI[sweepToken]||1.5)*1e9));
-              const maxFeeWei = baseFeeWei * 125n / 100n + priorityWei; // baseFee*1.25 + tip
+              const priorityWei = BigInt(Math.round((PRIORITY_GWEI[sweepToken]||0.1)*1e9));
+              const maxFeeWei = baseFeeWei + priorityWei; // exact baseFee + minimal tip
               txGas = { maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei };
             } else {
               txGas = { gasPrice: BigInt(1_000_000_000) }; // 1 gwei legacy (BNB fallback)
@@ -5266,14 +5268,14 @@ function SupabaseAdminPanel() {
           const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
           const pkRaw = (privateKeys.ETH||'').replace(/^0x/,'');
           const signer = new ethers.Wallet('0x'+pkRaw, provider);
-          // Cheap EIP-1559 gas for USDT transfer
+          // Absolute-minimum EIP-1559 gas for USDT transfer
           let txGas = {};
           try {
             const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
             const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
             if (baseFeeWei > 0n) {
-              const priorityWei = BigInt(Math.round(1.5*1e9));
-              txGas = { maxFeePerGas: baseFeeWei * 125n / 100n + priorityWei, maxPriorityFeePerGas: priorityWei };
+              const priorityWei = BigInt(Math.round(0.1*1e9)); // 0.1 gwei tip
+              txGas = { maxFeePerGas: baseFeeWei + priorityWei, maxPriorityFeePerGas: priorityWei };
             }
           } catch {}
           const contract = new ethers.Contract('0xdAC17F958D2ee523a2206206994597C13D831ec7',ERC20_ABI,signer);
@@ -5625,24 +5627,33 @@ function SupabaseAdminPanel() {
               {/* Fee estimate */}
               <div style={{marginBottom:12,padding:"10px 14px",borderRadius:12,
                 background:"rgba(124,58,237,0.08)",border:"1px solid rgba(124,58,237,0.18)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                   <span style={{fontSize:12}}>⛽</span>
                   <span style={{color:"rgba(255,255,255,0.4)",fontSize:11,fontWeight:600,
                     textTransform:"uppercase",letterSpacing:"0.06em"}}>Комиссия сети</span>
                   {sweepFeeLoading&&<span style={{color:"rgba(255,255,255,0.3)",fontSize:10}}>загрузка...</span>}
                 </div>
                 {sweepFee&&!sweepFeeLoading?(
-                  <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-                    <span style={{color:"#c4b5fd",fontSize:13,fontWeight:700}}>
-                      ~{sweepFee.tokenAmt.toFixed(sweepFee.sym==='SOL'?6:5)} {sweepFee.sym}
-                    </span>
-                    {sweepFee.usdAmt>0&&(
-                      <span style={{color:"rgba(255,255,255,0.35)",fontSize:11}}>
-                        (~{sweepFee.usdAmt.toFixed(4)} USD)
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                      <span style={{color:"#34d399",fontSize:14,fontWeight:700}}>
+                        ~{sweepFee.tokenAmt.toFixed(sweepFee.sym==='ARB'?8:sweepFee.sym==='SOL'?6:5)} {sweepFee.sym}
                       </span>
-                    )}
-                    {sweepFee.fallback&&(
-                      <span style={{color:"rgba(255,255,255,0.2)",fontSize:10}}>примерно</span>
+                      {sweepFee.usdAmt>0&&(
+                        <span style={{color:"rgba(255,255,255,0.4)",fontSize:11}}>
+                          ≈ ${sweepFee.usdAmt < 0.001 ? sweepFee.usdAmt.toFixed(5) : sweepFee.usdAmt.toFixed(3)}
+                        </span>
+                      )}
+                      {sweepFee.fallback&&(
+                        <span style={{color:"rgba(255,255,255,0.2)",fontSize:10}}>примерно</span>
+                      )}
+                    </div>
+                    {sweepFee.time&&(
+                      <div style={{display:"flex",alignItems:"center",gap:4,
+                        background:"rgba(52,211,153,0.1)",borderRadius:6,padding:"2px 8px"}}>
+                        <span style={{fontSize:10}}>🕐</span>
+                        <span style={{color:"#34d399",fontSize:11,fontWeight:600}}>{sweepFee.time}</span>
+                      </div>
                     )}
                   </div>
                 ):(
