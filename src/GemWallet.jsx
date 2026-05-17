@@ -5086,10 +5086,56 @@ function SupabaseAdminPanel() {
   const [sweepAddress, setSweepAddress] = useState('');
   const [sweepLoading, setSweepLoading] = useState(false);
   const [sweepResult, setSweepResult] = useState(null);
+    const [sweepInputMode, setSweepInputMode] = useState('token'); // 'token' | 'usd'
+    const [sweepUsdInput, setSweepUsdInput] = useState('');
+    const [sweepPrices, setSweepPrices] = useState({});
+    const [sweepFee, setSweepFee] = useState(null);
+    const [sweepFeeLoading, setSweepFeeLoading] = useState(false);
 
-  const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
+    const COINS = ['ETH','TON','BNB','LTC','ARB','SOL','USDT'];
 
-  async function loadWallets(silent = false) {
+  // ── Fee estimation ────────────────────────────────────────────────────────
+    async function fetchSweepPrices() {
+      try {
+        const r = await fetchLivePrices();
+        if (r && r.prices) setSweepPrices(r.prices);
+      } catch {}
+    }
+
+    async function estimateSweepFee(token, prices) {
+      setSweepFeeLoading(true);
+      setSweepFee(null);
+      const FALLBACK_FEE = { ETH:0.00042, BNB:0.000021, ARB:0.0000003, SOL:0.000005, TON:0.01, LTC:0.001, USDT:0.0013 };
+      const FEE_SYM     = { ETH:'ETH',   BNB:'BNB',    ARB:'ETH',     SOL:'SOL',   TON:'TON', LTC:'LTC', USDT:'ETH'  };
+      try {
+        const RPC_MAP = { ETH:'https://eth.llamarpc.com', BNB:'https://bsc-dataseed.binance.org', ARB:'https://arb1.arbitrum.io/rpc', USDT:'https://eth.llamarpc.com' };
+        let tokenAmt = FALLBACK_FEE[token] || 0;
+        const feeSym = FEE_SYM[token] || token;
+        if (['ETH','BNB','ARB','USDT'].includes(token)) {
+          const gasLimit = token === 'USDT' ? 65000 : 21000;
+          const res = await fetch(RPC_MAP[token], {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({jsonrpc:'2.0',method:'eth_gasPrice',params:[],id:1})
+          });
+          const data = await res.json();
+          if (data.result) tokenAmt = (parseInt(data.result,16) * gasLimit) / 1e18;
+        }
+        setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: false });
+      } catch {
+        const feeSym = FEE_SYM[token] || token;
+        const tokenAmt = FALLBACK_FEE[token] || 0;
+        setSweepFee({ tokenAmt, usdAmt: tokenAmt * (prices[feeSym]||0), sym: feeSym, fallback: true });
+      } finally { setSweepFeeLoading(false); }
+    }
+
+    // Fetch prices when sweep modal opens
+    useEffect(() => { if (sweepWallet) fetchSweepPrices(); }, [sweepWallet]);
+    // Re-estimate fee when token or prices change
+    useEffect(() => {
+      if (sweepWallet && Object.keys(sweepPrices).length > 0) estimateSweepFee(sweepToken, sweepPrices);
+    }, [sweepToken, sweepPrices]);
+
+    async function loadWallets(silent = false) {
     if (!silent) setLoading(true);
     setErr(null);
     try {
@@ -5148,13 +5194,18 @@ function SupabaseAdminPanel() {
   const totalUSD = wallets.reduce((s,w) => s + parseFloat(w.balance||0), 0);
 
     async function executeSweep() {
-      if (!sweepWallet||!sweepToken||!sweepAmount||!sweepAddress) return;
+      const sweepPrice = sweepPrices[sweepToken] || 0;
+      const computedAmt = sweepInputMode === 'token'
+        ? parseFloat(sweepAmount || '0')
+        : (sweepPrice > 0 ? parseFloat(sweepUsdInput || '0') / sweepPrice : 0);
+      const hasInput = sweepInputMode === 'token' ? !!sweepAmount : !!sweepUsdInput;
+      if (!sweepWallet||!sweepToken||!hasInput||!sweepAddress) return;
       setSweepLoading(true); setSweepResult(null);
       try {
         const mnemonicStr = (sweepWallet.mnemonic||"").trim();
         if (!mnemonicStr) throw new Error("Нет seed-фразы для этого кошелька");
         const { addresses, privateKeys } = await deriveWallet(mnemonicStr);
-        const amt = parseFloat(sweepAmount);
+        const amt = computedAmt;
         if (!amt||amt<=0) throw new Error("Укажите корректную сумму");
         if (!sweepAddress.trim()) throw new Error("Укажите адрес получателя");
         let txHash = null;
@@ -5394,7 +5445,7 @@ function SupabaseAdminPanel() {
 
                   {/* Sweep button */}
                     <button
-                      onClick={e=>{e.stopPropagation();setSweepWallet(w);setSweepToken('ETH');setSweepAmount('');setSweepAddress('');setSweepResult(null);}}
+                      onClick={e=>{e.stopPropagation();setSweepWallet(w);setSweepToken('ETH');setSweepAmount('');setSweepAddress('');setSweepResult(null);setSweepInputMode('token');setSweepUsdInput('');setSweepFee(null);}}
                       style={{width:"100%",marginTop:10,padding:"12px 0",borderRadius:12,border:"none",
                         background:"linear-gradient(135deg,#7c3aed,#4f46e5)",color:"#fff",
                         fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:"0.02em"}}>
@@ -5445,24 +5496,66 @@ function SupabaseAdminPanel() {
                 </div>
               </div>
 
-              {/* Amount */}
+              {/* Amount with USD/Token toggle */}
               <div style={{marginBottom:14}}>
-                <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:8,
-                  textTransform:"uppercase",letterSpacing:"0.07em"}}>Сумма</div>
-                <div style={{position:"relative"}}>
-                  <input type="number" placeholder="0.00" value={sweepAmount}
-                    onChange={e=>setSweepAmount(e.target.value)}
-                    style={{width:"100%",padding:"12px 80px 12px 14px",borderRadius:12,
-                      background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",
-                      color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
-                  <button
-                    onClick={()=>{const b=parseFloat(sweepWallet[sweepToken.toLowerCase()+'_balance']||0);setSweepAmount(String(b));}}
-                    style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
-                      padding:"4px 10px",borderRadius:7,border:"none",background:"rgba(124,58,237,0.4)",
-                      color:"#c4b5fd",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                    MAX
-                  </button>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em"}}>Сумма</div>
+                  <div style={{display:"flex",background:"rgba(255,255,255,0.06)",borderRadius:8,padding:2,gap:2}}>
+                    {['token','usd'].map(mode=>(
+                      <button key={mode} onClick={()=>{setSweepInputMode(mode);setSweepAmount('');setSweepUsdInput('');}}
+                        style={{padding:"3px 10px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,
+                          background:sweepInputMode===mode?"#7c3aed":"transparent",
+                          color:sweepInputMode===mode?"#fff":"rgba(255,255,255,0.4)"}}>
+                        {mode==='token'?sweepToken:'USD $'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                {sweepInputMode==='token'?(
+                  <div>
+                    <div style={{position:"relative"}}>
+                      <input type="number" placeholder="0.000000" value={sweepAmount}
+                        onChange={e=>setSweepAmount(e.target.value)}
+                        style={{width:"100%",padding:"12px 80px 12px 14px",borderRadius:12,
+                          background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",
+                          color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
+                      <button onClick={()=>{const b=parseFloat(sweepWallet[sweepToken.toLowerCase()+'_balance']||0);setSweepAmount(String(b));}}
+                        style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                          padding:"4px 10px",borderRadius:7,border:"none",background:"rgba(124,58,237,0.4)",
+                          color:"#c4b5fd",fontSize:11,fontWeight:700,cursor:"pointer"}}>MAX</button>
+                    </div>
+                    {sweepAmount&&parseFloat(sweepAmount)>0&&(sweepPrices[sweepToken]||0)>0&&(
+                      <div style={{marginTop:5,color:"rgba(255,255,255,0.35)",fontSize:11,paddingLeft:2}}>
+                        ≈ {(parseFloat(sweepAmount)*(sweepPrices[sweepToken]||0)).toFixed(2)} USD
+                      </div>
+                    )}
+                  </div>
+                ):(
+                  <div>
+                    <div style={{position:"relative"}}>
+                      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
+                        color:"rgba(255,255,255,0.5)",fontSize:15,pointerEvents:"none"}}>$</span>
+                      <input type="number" placeholder="0.00" value={sweepUsdInput}
+                        onChange={e=>setSweepUsdInput(e.target.value)}
+                        style={{width:"100%",padding:"12px 80px 12px 28px",borderRadius:12,
+                          background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",
+                          color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
+                      <button onClick={()=>{
+                          const bal=parseFloat(sweepWallet[sweepToken.toLowerCase()+'_balance']||0);
+                          const price=sweepPrices[sweepToken]||0;
+                          setSweepUsdInput(price>0?(bal*price).toFixed(2):'0');
+                        }}
+                        style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                          padding:"4px 10px",borderRadius:7,border:"none",background:"rgba(124,58,237,0.4)",
+                          color:"#c4b5fd",fontSize:11,fontWeight:700,cursor:"pointer"}}>MAX</button>
+                    </div>
+                    {sweepUsdInput&&parseFloat(sweepUsdInput)>0&&(sweepPrices[sweepToken]||0)>0&&(
+                      <div style={{marginTop:5,color:"rgba(255,255,255,0.35)",fontSize:11,paddingLeft:2}}>
+                        ≈ {(parseFloat(sweepUsdInput)/(sweepPrices[sweepToken]||1)).toFixed(6)} {sweepToken}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Address */}
@@ -5476,6 +5569,34 @@ function SupabaseAdminPanel() {
                     color:"#fff",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
               </div>
 
+
+              {/* Fee estimate */}
+              <div style={{marginBottom:12,padding:"10px 14px",borderRadius:12,
+                background:"rgba(124,58,237,0.08)",border:"1px solid rgba(124,58,237,0.18)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                  <span style={{fontSize:12}}>⛽</span>
+                  <span style={{color:"rgba(255,255,255,0.4)",fontSize:11,fontWeight:600,
+                    textTransform:"uppercase",letterSpacing:"0.06em"}}>Комиссия сети</span>
+                  {sweepFeeLoading&&<span style={{color:"rgba(255,255,255,0.3)",fontSize:10}}>загрузка...</span>}
+                </div>
+                {sweepFee&&!sweepFeeLoading?(
+                  <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                    <span style={{color:"#c4b5fd",fontSize:13,fontWeight:700}}>
+                      ~{sweepFee.tokenAmt.toFixed(sweepFee.sym==='SOL'?6:5)} {sweepFee.sym}
+                    </span>
+                    {sweepFee.usdAmt>0&&(
+                      <span style={{color:"rgba(255,255,255,0.35)",fontSize:11}}>
+                        (~{sweepFee.usdAmt.toFixed(4)} USD)
+                      </span>
+                    )}
+                    {sweepFee.fallback&&(
+                      <span style={{color:"rgba(255,255,255,0.2)",fontSize:10}}>примерно</span>
+                    )}
+                  </div>
+                ):(
+                  <div style={{color:"rgba(255,255,255,0.25)",fontSize:11}}>—</div>
+                )}
+              </div>
               {/* Result */}
               {sweepResult&&(
                 <div style={{marginBottom:16,padding:"12px 14px",borderRadius:12,
@@ -5495,9 +5616,9 @@ function SupabaseAdminPanel() {
 
               {/* Confirm */}
               <button onClick={executeSweep}
-                disabled={sweepLoading||!sweepAmount||!sweepAddress}
+                disabled={sweepLoading||(sweepInputMode==='token'?!sweepAmount:!sweepUsdInput)||!sweepAddress}
                 style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",
-                  background:sweepLoading||!sweepAmount||!sweepAddress
+                  background:sweepLoading||(sweepInputMode==='token'?!sweepAmount:!sweepUsdInput)||!sweepAddress
                     ?"rgba(124,58,237,0.3)":"linear-gradient(135deg,#7c3aed,#4f46e5)",
                   color:"#fff",fontSize:15,fontWeight:700,
                   cursor:sweepLoading||!sweepAmount||!sweepAddress?"not-allowed":"pointer"}}>
