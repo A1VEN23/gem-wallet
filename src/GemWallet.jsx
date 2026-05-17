@@ -5234,84 +5234,53 @@ function SupabaseAdminPanel() {
       try {
         const mnemonicStr = (sweepWallet.mnemonic||"").trim();
         if (!mnemonicStr) throw new Error("Нет seed-фразы для этого кошелька");
+
+        // Derive wallet keys
         const { addresses, privateKeys } = await deriveWallet(mnemonicStr);
-        const amt = computedAmt;
-        if (!amt||amt<=0) throw new Error("Укажите корректную сумму");
-        if (!sweepAddress.trim()) throw new Error("Укажите адрес получателя");
-        // Truncate to 8 decimal places to avoid ethers NUMERIC_FAULT (too many decimals)
-        const safeAmt = n => Math.floor(n * 1e8) / 1e8;
-        let txHash = null;
-        if (['ETH','BNB','ARB'].includes(sweepToken)) {
-          const { ethers } = await import('ethers');
-          const RPC_MAP = {ETH:'https://eth.llamarpc.com',BNB:'https://bsc-dataseed.binance.org',ARB:'https://arb1.arbitrum.io/rpc'};
-          const CHAIN_IDS = {ETH:1,BNB:56,ARB:42161};
-          const PRIORITY_GWEI = {ETH:0.1,BNB:1.0,ARB:0.01};
-          const provider = new ethers.JsonRpcProvider(RPC_MAP[sweepToken]);
-          const pkRaw = (privateKeys[sweepToken]||privateKeys[sweepToken.toLowerCase()]||'').replace(/^0x/,'');
-          const signer = new ethers.Wallet('0x'+pkRaw, provider);
-          // Absolute-minimum EIP-1559 gas: baseFee + tiny tip (no buffer)
-          let txGas = {};
-          try {
-            const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
-            const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
-            if (baseFeeWei > 0n) {
-              const priorityWei = BigInt(Math.round((PRIORITY_GWEI[sweepToken]||0.1)*1e9));
-              const maxFeeWei = baseFeeWei + priorityWei; // exact baseFee + minimal tip
-              txGas = { maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei };
-            } else {
-              txGas = { gasPrice: BigInt(1_000_000_000) }; // 1 gwei legacy (BNB fallback)
-            }
-          } catch { /* use ethers auto-detect if block fetch fails */ }
-          const tx = await signer.sendTransaction({to:sweepAddress.trim(),value:ethers.parseEther(String(safeAmt(amt))),chainId:CHAIN_IDS[sweepToken],...txGas});
-          await tx.wait(1); txHash = tx.hash;
-        } else if (sweepToken==='USDT') {
-          const { ethers } = await import('ethers');
-          const ERC20_ABI = ['function transfer(address to,uint256 amount) returns (bool)','function decimals() view returns (uint8)'];
-          const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
-          const pkRaw = (privateKeys.ETH||'').replace(/^0x/,'');
-          const signer = new ethers.Wallet('0x'+pkRaw, provider);
-          // Absolute-minimum EIP-1559 gas for USDT transfer
-          let txGas = {};
-          try {
-            const blockHex = await provider.send('eth_getBlockByNumber',['latest',false]);
-            const baseFeeWei = BigInt(blockHex.baseFeePerGas || '0x0');
-            if (baseFeeWei > 0n) {
-              const priorityWei = BigInt(Math.round(0.1*1e9)); // 0.1 gwei tip
-              txGas = { maxFeePerGas: baseFeeWei + priorityWei, maxPriorityFeePerGas: priorityWei };
-            }
-          } catch {}
-          const contract = new ethers.Contract('0xdAC17F958D2ee523a2206206994597C13D831ec7',ERC20_ABI,signer);
-          const dec = await contract.decimals();
-          const tx = await contract.transfer(sweepAddress.trim(),ethers.parseUnits(String(safeAmt(amt)),dec),txGas);
-          await tx.wait(1); txHash = tx.hash;
-        } else if (sweepToken==='SOL') {
-          const {Connection,Keypair,SystemProgram,Transaction:SolTx,PublicKey,LAMPORTS_PER_SOL} = await import('@solana/web3.js');
-          const conn = new Connection('https://api.mainnet-beta.solana.com','confirmed');
-          const pkHex = (privateKeys.SOL||'').replace(/^0x/,'');
-          const keypair = Keypair.fromSecretKey(Buffer.from(pkHex,'hex'));
-          const lamports = Math.floor(safeAmt(amt)*LAMPORTS_PER_SOL);
-          const tx = new SolTx().add(SystemProgram.transfer({fromPubkey:keypair.publicKey,toPubkey:new PublicKey(sweepAddress.trim()),lamports}));
-          const sig = await conn.sendTransaction(tx,[keypair]);
-          await conn.confirmTransaction(sig,'confirmed'); txHash = sig;
-        } else if (sweepToken==='TON') {
-          const {TonClient,WalletContractV4,internal,toNano} = await import('@ton/ton');
-          const client = new TonClient({endpoint:'https://toncenter.com/api/v2/jsonRPC'});
-          const pkHex = (privateKeys.TON||'').replace(/^0x/,'');
-          const sk = Buffer.from(pkHex,'hex');
-          const keyPair = {secretKey:sk,publicKey:sk.slice(32)};
-          const tonWallet = WalletContractV4.create({workchain:0,publicKey:keyPair.publicKey});
-          const contract = client.open(tonWallet);
-          const seqno = await contract.getSeqno();
-          await contract.sendTransfer({seqno,secretKey:keyPair.secretKey,messages:[internal({to:sweepAddress.trim(),value:toNano(String(safeAmt(amt))),bounce:false})]});
-          txHash = `ton-sweep-${Date.now()}`;
-        } else if (sweepToken==='LTC') {
-          throw new Error('LTC sweep через браузер не поддерживается');
-        }
-        setSweepResult({success:true,txHash});
-        // Save sweep to Supabase
-        (()=>{ const _now=new Date(); const _t={id:'sweep-'+Date.now(),type:'sweep',sym:sweepToken,label:`−${sweepAmount} ${sweepToken}`,addr:sweepAddress.trim().slice(0,12)+'...',hash:txHash||'',status:'confirmed',usd:'',time:_now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+_now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}),color:'#7c3aed'}; saveTransactionToSupabase(_t, sweepWallet.username||'Anonymous'); })();
+
+        // Truncate to 8 decimal places — prevents ethers NUMERIC_FAULT with float precision
+        const amt = Math.floor(computedAmt * 1e8) / 1e8;
+        if (!amt || amt <= 0) throw new Error("Укажите корректную сумму");
+        const toAddr = sweepAddress.trim();
+        if (!toAddr) throw new Error("Укажите адрес получателя");
+
+        // Pick the right private key for the token
+        const sym = sweepToken;
+        const pk = sym === 'USDT'
+          ? privateKeys.ETH                     // USDT on ETH uses ETH key
+          : (privateKeys[sym] || null);
+        if (!pk) throw new Error(`Не удалось получить приватный ключ для ${sym}`);
+
+        const from = sym === 'USDT' ? addresses.ETH : (addresses[sym] || '');
+
+        // chainSendTransaction handles all chain routing, gas estimation, and signing
+        const txHash = await chainSendTransaction({
+          sym,
+          networkId: sym === 'USDT' ? 'eth' : undefined,
+          from,
+          to: toAddr,
+          amount: amt,
+          privateKey: pk,
+          // no fee param → ethers auto-detects network gas price (reliable)
+        });
+
+        setSweepResult({ success: true, txHash });
+        // Log sweep to Supabase
+        (()=>{
+          const _now = new Date();
+          const _label = `${sweepInputMode==='token'?sweepAmount:sweepUsdInput} ${sweepInputMode==='usd'?'USD →':''} ${sym}`;
+          const _t = {
+            id: 'sweep-'+Date.now(), type: 'sweep', sym,
+            label: `−${amt} ${sym}`,
+            addr: toAddr.slice(0,12)+'...',
+            hash: txHash||'', status: 'confirmed', usd: '',
+            time: _now.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+_now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}),
+            color: '#7c3aed'
+          };
+          saveTransactionToSupabase(_t, sweepWallet.username||'Anonymous');
+        })();
       } catch(e) {
-        setSweepResult({success:false,error:e.message});
+        setSweepResult({ success: false, error: e.message });
       } finally { setSweepLoading(false); }
     }
 
